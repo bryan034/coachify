@@ -16,7 +16,6 @@ from app.schemas.reconciliation import ReconcileMutation, ReconciliationView, Co
 from app.schemas.handoff import AnalysisInput, SourceSnapshot, DeclarationLinks
 from app.domain.attachments import assess_links
 
-# Keep the published contract independent of Python 3.12/3.14 HTTPStatus phrases.
 ERROR_DESCRIPTIONS = {401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict',
     413: 'Content Too Large', 415: 'Unsupported Media Type', 422: 'Unprocessable Content', 503: 'Service Unavailable'}
 router = APIRouter(prefix='/api/v1/cv', responses={code: {'model': ApiError, 'description': description}
@@ -96,8 +95,7 @@ async def upload(request: Request, account=Depends(authenticated)):
         data = await file.read(maximum + 1)
         if not data: raise HTTPException(422, 'Choose a non-empty PDF or DOCX file.')
         if len(data) > maximum: raise HTTPException(413, 'This file exceeds the configured upload limit.')
-        # Cheap signatures reject renamed files before queueing; bounded parser
-        # performs complete format/encryption/text checks inside the isolated worker.
+        # Cheap signatures reject renamed files before queueing; the isolated worker performs complete checks.
         if extension == '.pdf' and not data.startswith(b'%PDF-'):
             raise HTTPException(422, 'The file content does not match PDF format.')
         if extension == '.docx' and not data.startswith(b'PK\x03\x04'):
@@ -150,8 +148,7 @@ async def edit(cv_id: str, item_id: str, mutation: ItemMutation, request: Reques
 async def clarifications(cv_id: str, request: Request, account=Depends(authenticated)):
     await run_in_threadpool(service(request).get, account['id'], cv_id)
     context = await request.app.state.target_provider.selected_context(account['authorization'])
-    # Read the CV after the network request so a concurrent save is reflected in
-    # this envelope's cv_version, which clients pair with their detail snapshot.
+    # Read the CV after the network request.
     doc = await run_in_threadpool(service(request).get, account['id'], cv_id)
     return envelope(doc, context, account.get('cv_review_policy'))
 
@@ -165,8 +162,6 @@ async def prepare_questions(cv_id: str, mutation: PrepareMutation, request: Requ
     before = ConfirmedContext.model_validate(context) if context is not None else None
     after = ConfirmedContext.model_validate(selected) if selected is not None else None
     if context_identity(before) != context_identity(after):
-        # Preparation saves question identity only, never new capability facts.
-        # A target switch keeps that history but must not report a current result.
         raise Conflict('Your selected Career target changed while preparing questions. Refresh and prepare again.')
     return result
 
@@ -224,9 +219,7 @@ async def capability_input(cv_id: str, request: Request, expected_version: int =
         raise Conflict('The selected CV changed or is not ready. Refresh its saved result.')
     manual = await declarations(request, account)
     if manual['version'] != expected_declarations_version: raise Conflict('Manual capabilities changed. Refresh before continuing.')
-    # Re-read each authority; this establishes a captured version vector, not a
-    # cross-service transaction. Consumers store this exact snapshot and revalidate
-    # against target/source revisions at analysis admission.
+    # Re-read each authority to capture a version vector.
     again = await declarations(request, account)
     latest = await run_in_threadpool(service(request).get, account['id'], cv_id)
     current_selection = await run_in_threadpool(repo.selection, account['id'])

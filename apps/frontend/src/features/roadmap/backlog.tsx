@@ -9,14 +9,14 @@ const range = (start: string, minutes: number) => `${start}–${toClock(toMinute
 const dayLabel = (day: string, today: string) => day === today ? 'Today' : day === addDays(today, 1) ? 'Tomorrow' : `${weekdayName(day)} ${dayOfMonth(day)}${weekStart(day) !== weekStart(today) ? ` ${monthName(day)}` : ''}`;
 const dayText = (day: string, today: string) => day === today ? 'today' : `${weekdayName(day)} ${shortDate(day)}`;
 
-/** Move one task to a free time. Times come from the roadmap service, which checks the final choice again. */
+/** Move one task to a free time. Times come from the roadmap service. */
 export function ReschedulePanel({ session, context, onMoved, onClose }: { session: Session; context: ViewContext; onMoved: (message: string) => void; onClose: () => void }) {
  const { actions, today, version, frozen } = context;
  const [days, setDays] = useState<FreeDay[] | null>(null); const [failed, setFailed] = useState(false);
  const [choice, setChoice] = useState<{ date: string; start: string } | null>(null);
  const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
  const chosen = useRef(choice); chosen.current = choice;
- // Recalculated whenever the saved schedule changes, so a time taken elsewhere is never offered.
+ // Recalculate free times whenever the saved schedule changes.
  useEffect(() => {
   let live = true;
   void actions.freeTimes(session.duration_minutes, session.id).then(value => {

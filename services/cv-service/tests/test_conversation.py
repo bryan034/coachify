@@ -318,8 +318,6 @@ def test_revocation_during_interpretation_preserves_answer_without_applying_clai
 def test_side_question_while_interpreting_does_not_invalidate_facts(harness):
     client, app, *_ = harness
     from dataclasses import replace
-    # Preserve this concurrent transcript/evidence-fencing scenario with two
-    # synthetic owner slots; default one-slot fairness is tested separately.
     app.state.service.model_usage.settings = replace(app.state.settings, model_concurrent_per_owner=2)
     cv, question, chat = source_chat(harness)
     started, release = Event(), Event()
@@ -531,8 +529,6 @@ def test_lost_skip_receipt_replays_original_question_after_resume(harness, monke
     chat = send(client, chat, 'Skip', **({'command': 'skip'} if guided else {}))
     failed = actions(chat, 'route' if guided else 'skip')[-1]
     assert failed['status'] == 'failed'
-    # Resuming clears the answered active topic. A later review can show another
-    # topic; retry must remain bound to the original skip, not the new prompt.
     chat = open_chat(client, cv['id'])
     assert chat['active_question'] is None
     chat = send(client, chat, 'Continue reviewing', command='continue')

@@ -215,7 +215,7 @@ it('does not start an interview in a hidden review after processing finishes',as
  renderWorkspace();fireEvent.change(await screen.findByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));
  await screen.findByRole('progressbar',{name:'Reading your CV'});
  fireEvent.click(screen.getByRole('button',{name:'Save and review later'}));
- complete=true; // Skills Profile checks processing CVs again on its own every few seconds.
+ complete=true;
  await waitFor(()=>expect(cvApi.openConversation).toHaveBeenCalled(),{timeout:5000});
  expect(cvApi.sendMessage).not.toHaveBeenCalled();
  fireEvent.click(within(screen.getByRole('article',{name:`CV ${source.id}`})).getByRole('button',{name:'Review CV'}));
@@ -233,7 +233,6 @@ it('reopens the exact older CV and checks its current question before accepting 
  let refresh!: (value:CvConversation)=>void;
  vi.mocked(cvApi.conversation).mockImplementationOnce(async()=>new Promise(resolve=>{refresh=resolve;}));
  renderWorkspace();
- // An unfinished active CV offers its review on the Skills screen; the library still reaches older CVs.
  expect(await screen.findByRole('button',{name:/(Continue|Start) review/})).toBeVisible();
  fireEvent.click(within(screen.getByRole('article',{name:`CV ${older.id}`})).getByRole('button',{name:'Review CV'}));
  await screen.findByText(question.question);

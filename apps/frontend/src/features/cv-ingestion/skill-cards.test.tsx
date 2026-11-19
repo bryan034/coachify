@@ -39,7 +39,6 @@ it('before a comparison, lists every skill under the backend’s categories with
 
 it('shows only the skills the goal needs with level and target, and the rest behind Show all skills',()=>{
  const detail=cv([{...skill('Python'),canonical_skill_id:'python'},skill('SQL'),skill('Tableau')]);
- // Tableau is rated but not on the goal, so it stays behind Show all skills even if the evaluation thought it relevant.
  const goal=ready({skills:[{name:'Python',canonical_skill_id:'python',priority:'required'},{name:'SQL',priority:'unspecified'}]});
  view(detail,null,null,judged([
   {name:'Python',relevance:'high',competence_score:6,required_score:8},
@@ -47,7 +46,6 @@ it('shows only the skills the goal needs with level and target, and the rest beh
   {name:'Tableau',category:'Data & analytics',relevance:'medium',competence_score:3}]),goal);
  expect(chip('Python')).toHaveTextContent('Python6/8');
  expect(chip('SQL')).toHaveTextContent('SQL8/8');
- // The badge colour says how far the level is from the target: 6/8 is within 2, 8/8 meets it.
  expect(chip('Python').querySelector('.lv')?.className).toBe('lv near');expect(chip('SQL').querySelector('.lv')?.className).toBe('lv met');
  expect(chip('Python')).toHaveClass('important');
  expect(screen.queryByRole('button',{name:/^Tableau/})).not.toBeInTheDocument();

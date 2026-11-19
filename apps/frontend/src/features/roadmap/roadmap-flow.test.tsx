@@ -8,7 +8,6 @@ const session = vi.hoisted(() => ({ account: { id: 'owner-one' }, token: 'synthe
 const api = vi.hoisted(() => vi.fn());
 vi.mock('@/features/profile/profile-provider', () => ({ useProfile: () => session }));
 vi.mock('@/lib/api/roadmap', () => ({ roadmapApi: api, RoadmapError: class extends Error { status = 503; } }));
-// The planner shows the Skills Profile's own counts, not its evidence list (which repeats a skill per source).
 const evaluationApi = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/api/assessment', async original => ({ ...await original<typeof import('@/lib/api/assessment')>(), assessmentApi: evaluationApi }));
 const evaluationStatus = { freshness: 'current', processing: 'idle', completeness: 'complete', evaluated_at: '2030-01-09T00:00:00Z', reasons: [] } as const;

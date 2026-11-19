@@ -6,7 +6,6 @@ services:
       target: development
     environment:
       NODE_ENV: development
-      # Webpack polling detects bind-mount edits reliably on Docker Desktop.
       WATCHPACK_POLLING: "true"
       NEXT_TELEMETRY_DISABLED: "1"
     volumes:

@@ -29,7 +29,7 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  const initialList = await (await account.get('/api/v1/cv')).json();
  expect(initialList.cvs.some((cv:{id:string})=>cv.id===cvId)).toBe(true);
  await openCvReviewTools(page);
- await page.evaluate(() => window.dispatchEvent(new Event('focus'))); // Skills Profile rechecks saved CVs when the window regains focus.
+ await page.evaluate(() => window.dispatchEvent(new Event('focus')));
  const saved = page.getByRole('article', { name: `CV ${cvId}`, exact: true });
  await expect(saved.getByText('Active CV',{exact:true})).toBeVisible();
  await expect.poll(async()=>(await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBe(cvId);
@@ -65,8 +65,6 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  expect(input.items.find((item: { id: string }) => item.id === project.id).description).toBe(project.description);
  expect((await account.get(`/api/v1/cv/${cvId}/capability-input?expected_version=0&expected_selection_version=${selected.version}&expected_declarations_version=${manual.version}`)).status()).toBe(409);
 
- // Re-supply the exact source to the existing CV. The new extraction must keep
- // its correction overlay, source identity and explicit selection.
  await page.getByRole('button', { name: 'Re-upload this source', exact: true }).click();
  await page.getByLabel('CV document', { exact: true }).setInputFiles(source);
  await page.getByRole('button', { name: 'Re-upload same source', exact: true }).click();
@@ -79,8 +77,6 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  expect((await (await account.get('/api/v1/cv')).json()).cvs).toHaveLength(1);
  await openCvReviewTools(page);
 
- // A model boundary failure on a different CV must not replace selected input. Rejected output
- // retries automatically twice, after 20 and 40 seconds, before it is reported as failed.
  await page.getByLabel('CV document', { exact: true }).setInputFiles({ name: 'synthetic-cv.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: readFileSync(path.join(process.cwd(), 'tests/fixtures/synthetic-cv-failure.docx')) });
  await page.getByRole('button', { name: 'Upload CV', exact: true }).click();
  await expect.poll(async () => {
@@ -95,8 +91,7 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  expect((await (await account.get(`/api/v1/cv/${cvId}/clarifications`)).json()).deferred).toBe(true);
 
  await openCvReviewTools(page);
- // Use the real paged API with a small page so the selected older CV is absent
- // from page one. Responses still come from the gateway and MongoDB.
+ // Use the real paged API with a small page so the selected older CV is absent from page one.
  await page.route(/\/api\/v1\/cv(?:\?.*)?$/, route => {
   const url = new URL(route.request().url()); url.searchParams.set('limit', '1');
   return route.continue({url:url.toString()});
@@ -110,8 +105,6 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByRole('button', {name:'Make active',exact:true})).toHaveCount(0);
  await expect(page.getByRole('button', {name:'Show more saved CVs',exact:true})).toHaveCount(0);
 
- // A different authenticated account sees neither the original nor its saved
- // operation, and an unsigned request cannot enumerate sources.
  const otherContext = await browser.newContext({ baseURL: process.env.PROFILE_E2E_BASE_URL });
  try {
   const otherPage = await otherContext.newPage();
@@ -124,8 +117,6 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  } finally { await otherContext.close(); }
  expect((await page.request.get('/api/v1/cv')).status()).toBe(401);
 
- // Delete through the browser against the real gateway/API/MongoDB. Historical
- // Profile declarations remain, while the selected source and its chat disappear.
  const conversationList = await (await account.get(`/api/v1/cv/conversations?cv_id=${cvId}`)).json();
  page.once('dialog', dialog => dialog.accept());
  await page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByRole('button', {name:'Delete CV',exact:true}).click();

@@ -1,9 +1,4 @@
-"""Removes retired planner settings from saved records when the service starts.
-
-New writes cannot contain these fields because PlannerConfig forbids them, so one pass over
-existing records leaves none behind. It is safe to rerun. Workspace versions stay the same
-because the fields never affected a plan, so open tabs do not need to reload.
-"""
+"""Removes retired planner settings from saved records when the service starts. Safe to rerun."""
 RETIRED=('buffer_percent','checkin_day','checkin_time')
 OLD_BLACKOUTS='blackout_dates'
 WORKSPACE_CONFIGS=('planner.config','planner.candidate.config','planner.active.config','planner.outline_candidate.config','planner.outline_active.config')

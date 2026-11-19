@@ -20,7 +20,7 @@ const goalRelevant = (relevance: Relevance | null) => relevance === 'high' || re
 /**
  * The person's skills as chips. Skills that count towards the career goal come first with their level against the role's target;
  * the rest sit behind "Show all skills" at the top. A skill counts when it is a goal skill, one of the smaller skills a goal skill
- * breaks down into, or linked to one by the saved evaluation: the same rule the Career Goal's breakdown uses.
+ * breaks down into, or linked to one by the saved evaluation.
  * Goal skills and smaller skills the person doesn't have yet show with a dotted outline.
  */
 export function SkillsOverview({ token, skills, categories, assessment, comparison, goal, goalRole, onChanged }: {

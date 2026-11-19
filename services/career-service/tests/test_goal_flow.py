@@ -1,4 +1,4 @@
-"""J08/J09 real MongoDB + fake external boundaries; no live provider calls."""
+"""Real MongoDB + fake external boundaries; no live provider calls."""
 import asyncio
 import json
 import os
@@ -102,7 +102,7 @@ def test_no_cv_questions_resume_and_explicit_confirmation(flow):
     draft=start(client)
     assert draft['cv']['mode']=='none' and draft['next_question']=='aspirations'
     first=turn(client,draft).json()
-    assert not first['suggestions'] # AI cannot bypass backend completeness.
+    assert not first['suggestions']
     assert client.get(BASE+'/explorations/'+first['_id'],headers=headers()).json()['answers']==first['answers']
     for _ in range(5): first=turn(client,first).json()
     assert first['context_complete'] and first['suggestions'][0]['role']=='Data analyst'
@@ -146,7 +146,6 @@ def test_confirm_retries_replacement_cancel_noop_and_stale_draft(flow):
     a=client.post(BASE+'/goals/confirm',json=body,headers=headers(key)).json()
     b=client.post(BASE+'/goals/confirm',json=body,headers=headers(key)).json()
     assert a==b and db.career_goals.count_documents({'record_type':{'$ne':'exploration_draft'}})==1
-    # Same actual goal is a no-op, with no replacement needed.
     noop_key=str(uuid4())
     assert client.post(BASE+'/goals/confirm',json={**body,'expected_selection_version':1},headers=headers(noop_key)).json()['selection_version']==1
     assert client.post(BASE+'/goals/confirm',json={**body,'role':'Different','expected_selection_version':1,'replace_current':True},headers=headers(noop_key)).status_code==409
@@ -236,7 +235,6 @@ def test_grounded_partial_context_is_not_complete_and_forged_updates_cannot_publ
     ai.generate=partial;draft=start(client)
     one=turn(client,draft,answer='Maybe something with data.').json()
     assert one['answers']['aspirations']['status']=='partial' and not one['context_complete']
-    # The same model update is not grounded in this new human message.
     failed=turn(client,one,answer='Hello again')
     assert failed.status_code==503
     saved=client.get(BASE+'/explorations/'+draft['_id'],headers=headers()).json()

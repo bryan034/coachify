@@ -31,9 +31,7 @@ def map_legacy_counts(document, source):
         for choice in entry.get('choices', []):
             old, target = choice.get('item_id'), choice.get('target_item_id')
             if target and old != target and old in counts:
-                # Multiple explicitly mapped sources may converge on one item.
-                # Without receipts proving overlap, reserve both allowances
-                # conservatively rather than allowing an accidental third ask.
+                # Explicitly mapped sources converging on one item reserve both allowances, capped at two.
                 counts[target] = min(2, counts.get(target, 0) + counts.pop(old))
     return counts
 
@@ -51,9 +49,7 @@ def migrate_snapshot(document, previous, legacy_counts=None):
         document.setdefault('review_policy_migrations', []).append({
             'from': deepcopy(previous), 'to': deepcopy(current),
             'question_count': len(ids), 'receipt_basis': digest(ids)})
-    # Some older conversations retained a per-item count even when CV receipts
-    # were incomplete. Carry only bounded numeric counts into the CV aggregate
-    # so target-specific preparation cannot forget an already-used allowance.
+    # Carry only bounded numeric legacy counts into the CV aggregate.
     if legacy_counts:
         known = {item['id'] for item in document.get('original_items', [])}
         counts = document.setdefault('review_legacy_counts', {})

@@ -20,7 +20,7 @@ function serve({ctx = {}, value = {}, plan = null as string | null} = {}) {
   : {version: 4, stale: true, result, operation: null, ready: true, issues: [], ...value});
  roadmap.mockResolvedValue({version: 1, active: plan ? {assessment_hash: plan} : null});
 }
-beforeEach(() => { vi.resetAllMocks(); resetAutomaticEvaluations(); path.current = '/jobs'; try { sessionStorage.clear(); } catch { /* jsdom */ } serve(); });
+beforeEach(() => { vi.resetAllMocks(); resetAutomaticEvaluations(); path.current = '/jobs'; try { sessionStorage.clear(); } catch {} serve(); });
 
 it('names what changed between the evaluated and current inputs', () => {
  expect(describeChange(before, {...before, cv_id: 'cv-new'})).toBe('cv');

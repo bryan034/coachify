@@ -203,14 +203,11 @@ def test_assessment_never_rates_above_the_cv_reviews_own_level():
     record = {'attribution': 'personal', 'assistance': 'independent', 'source_kind': 'project', 'reviewed': True,
               'review_facts': [{'field': 'outcome', 'status': 'supported', 'value': 'delivered and deployed'}]}
     assert evidence_level([record]) == 5
-    # The CV review, on the same 1-10 scale, judged this skill lower: the lower level stands.
     assert evidence_level([{**record, 'cv_level': 3}]) == 3
     assert evidence_level([{**record, 'cv_level': 8}]) == 5
-    # Team-only sources cannot lend their CV level.
     assert evidence_level([record, {'attribution': 'team', 'cv_level': 1}]) == 5
     unclear = {'attribution': 'unknown', 'reviewed': True, 'cv_level': 2}
     assert reviewed_estimate([unclear], 5) == 2
-    # Without a Career target the role is assumed to need independent work, or complex work when stated advanced.
     assert role_level({}) == 5 and role_level({'required_proficiency': 'advanced'}) == 7
     assert role_level({'competence_target': {'level': 3}}) == 3
 

@@ -29,12 +29,11 @@ def structured_node(node):
                 except AIError as error:
                     if error.code not in ('invalid_output','incomplete_output'): raise
                     attempt += 1
-                    if attempt > 6:raise  # Never spend tokens indefinitely repairing the same node.
+                    if attempt > 6:raise  # Bounded repair attempts.
                     feedback = {'reason': error.reason or ('incomplete_json' if error.code=='incomplete_output' else 'response_envelope'),
                                 'fields': list(error.fields), 'violations': list(error.violations)}
                     validation_feedback.set(feedback)
-                    # Correction calls each retain the adapter's own HTTP deadline.
-                    # Their duration is outside research's original execution budget.
+                    # Correction calls each retain the adapter's own HTTP deadline, outside research's original budget.
                     if budget is not None and remaining is None:
                         remaining = max(0, budget.when()-asyncio.get_running_loop().time())
                         budget.reschedule(None)

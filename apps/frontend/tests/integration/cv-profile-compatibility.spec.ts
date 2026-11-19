@@ -28,11 +28,8 @@ for (const scenario of cases) {
     await page.getByLabel('Capability description', { exact: true }).fill('I presented a synthetic group project.');
     await page.getByRole('button', { name: 'Add capability', exact: true }).click();
     await expect(page.getByRole('region', {name: 'Manual capabilities', exact: true}).getByText('I presented a synthetic group project.', { exact: true })).toBeVisible();
-    // C07 must not overwrite education, employment, completion or the Profile revision.
     expect(await (await account.get('/api/v1/profile')).json()).toEqual(background);
 
-    // All synthetic accounts share one gateway IP. Pace this extra branch matrix
-    // to the real six-uploads/minute policy instead of relaxing the gateway limit.
     await delay(10_100);
     await page.getByLabel('CV document', { exact: true }).setInputFiles(path.join(process.cwd(), 'tests/fixtures/synthetic-cv.docx'));
     const upload = page.waitForResponse(response => response.url().endsWith('/api/v1/cv/uploads') && response.request().method() === 'POST');
@@ -45,7 +42,7 @@ for (const scenario of cases) {
       return result.cvs[0]?.status;
     }, { timeout: 30_000 }).toBe('ready');
     await openCvReviewTools(page);
-    await page.evaluate(() => window.dispatchEvent(new Event('focus'))); // Skills Profile rechecks saved CVs when the window regains focus.
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     page.once('dialog', dialog => dialog.accept());
     await expect(page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByText('Active CV',{exact:true})).toBeVisible();
     await expect(page.getByLabel('Selected CV', { exact: true })).toContainText(cvId);

@@ -15,7 +15,6 @@ import { errorText } from '@/lib/errors';
 import { ChatSkeleton } from '@/components/ui/workspace-ui';
 export function CareerChat(){
  const params=useSearchParams(),session=useCareerSession(),{token}=useProfile();
- // Clearing the temporary JD after saving must not replace the active chat.
  const [startedWithJD]=useState(()=>!!session.jd||params.get('source')==='jd');
  const [workspace,setWorkspace]=useState<CareerWorkspace>(),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[code,setCode]=useState(''),[loadAttempt,setLoadAttempt]=useState(0);
  useEffect(()=>{if(!token)return;const abort=new AbortController();void careerApi<CareerWorkspace>('/workspace',token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted){setWorkspace(v);setLoaded(true);}}).catch(c=>{if(!abort.signal.aborted){setError(c.message);setCode(errorCode(c));setLoaded(true);}});return()=>abort.abort();},[token,loadAttempt]);
@@ -80,13 +79,11 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
     attachment_text:active.cv.mode==='temporary'?cvText||null:null},abort.signal);
    if(n!==seq.current||abort.signal.aborted)return;
    setDraft(next);draftId.current=next._id;setMessage('');mutation.current=null;
-   // Native history keeps the provider mounted and does not reset consent/composer state.
    if(!requested)window.history.replaceState(null,'','/career-goal/chat');
   }catch(cause){if(n===seq.current&&!abort.signal.aborted){setCode(errorCode(cause));setError(errorText(cause, 'The agent could not respond. Your message is still here; retry.'));}}
   finally{if(n===seq.current){setBusy(false);setPending('');}}
  }
  async function upload(file?:File){
-  // The upload replaces the abort controller, so let the conversation finish loading first.
   if(!file||!token||busy||loading)return;
   if(!file.size||file.size>10*1024*1024){setCode('');setError('Choose a non-empty PDF, DOCX or TXT CV up to 10 MiB.');return;}
   const n=++seq.current;const abort=new AbortController();controller.current?.abort();controller.current=abort;setActivity('Reading your CV attachment…');setBusy(true);setError('');setCode('');

@@ -152,7 +152,6 @@ test('the grouped skill list supports keyboard disclosure, long lists, confirmed
  });
  await page.setViewportSize({width:1440,height:1000});await page.goto('/career-goal');
  await expect(page.locator('#priorities-title')).toHaveText('Skills needed');
- // Skills sit under category headings, most important group first, coloured by importance.
  const rows=page.locator('.ws-skill');
  await expect(rows).toHaveCount(9);
  await expect(page.locator('.ws-cat')).toHaveText(['Product Management','AI']);

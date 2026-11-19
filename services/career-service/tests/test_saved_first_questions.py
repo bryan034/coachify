@@ -55,8 +55,6 @@ def test_missing_salary_searches_once_saves_exact_evidence_and_reuses_it_next_tu
         assert SALARY in first.reply and SALARY in second.reply
         assert len(searches)==1 and len(saved)==1
         assert saved[0][0].quotes==[SALARY] and saved[0][0].value==SALARY
-        # Verified for this employer, role and market: saved as an exact job fact
-        # and answered without a model, on both turns.
         assert saved[0][0].scope=='exact' and '[Source](<https://example.test/salary>)' in first.reply
     asyncio.run(run())
 
@@ -144,7 +142,6 @@ def test_concurrent_question_saves_merge_and_keep_immutable_history(flow):
     assert len(records)==1 and {f.value for f in records[0].question_findings}=={SALARY,'Data Analyst salary in Singapore is SGD 1800 per month.'}
     assert len(research.records.get_research(results[0].id).question_findings) in (1,2)
     assert db.interview_research.count_documents({'question_focus':'compensation'})>=2
-    # Updating the same source must retain earlier quote bindings too.
     save(evidence('Data Analyst salary in Singapore is SGD 1600 per month.'))
     latest=QuestionMemory(repo,research).entries(OWNER,row)[0]
     assert {SALARY,'Data Analyst salary in Singapore is SGD 1600 per month.'}<={f.value for f in latest.question_findings}
@@ -170,7 +167,6 @@ def test_store_refuses_unverified_or_foreign_evidence_and_ignores_legacy_records
     from app.repositories.question_memory import VERIFIED_EVIDENCE
     ingest(flow);wait(flow);client,db,*_=flow;repo=client.app.state.workspace_store;research=client.app.state.research_store
     row=repo.row(OWNER);memory=QuestionMemory(repo,research)
-    # Topical but unscoped excerpts (the old saving rule) are refused by the store.
     foreign=ResearchSource(source_id='au',platform='other',url='https://www.seek.com.au/x',
                            evidence='Data Analyst salary in Sydney is AUD 5000 per month.')
     unscoped=exact_question_findings('compensation',[],{'web0':[foreign.model_dump()]})
@@ -180,7 +176,6 @@ def test_store_refuses_unverified_or_foreign_evidence_and_ignores_legacy_records
     assert memory.entries(OWNER,row)==[]
     record=memory.save(OWNER,row,'compensation',*evidence())
     assert record.generation.prompt_version==VERIFIED_EVIDENCE and len(memory.entries(OWNER,row))==1
-    # Records saved before scope verification existed are no longer served.
     db.interview_research.update_many({'question_focus':'compensation'},{'$set':{'generation.prompt_version':'saved-question-evidence-v1'}})
     assert memory.entries(OWNER,row)==[]
     assert not any(item.get('category')=='question_research' for item in

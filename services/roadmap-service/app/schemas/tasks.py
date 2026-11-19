@@ -85,8 +85,7 @@ class SavedTaskObject(Contract):
 
     @model_serializer(mode='wrap')
     def present_fields_only(self, handler):
-        # Existing histories are sparse dictionaries. Do not add nulls/defaults
-        # when reading them through a typed public response.
+        # Serialize sparse histories without added nulls/defaults.
         serialized=handler(self)
         present=set(self.model_fields_set)
         for name in self.model_fields_set:

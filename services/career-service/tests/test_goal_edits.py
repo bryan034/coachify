@@ -10,7 +10,6 @@ from app.schemas.jd import JDExtraction
 import json
 
 
-# Saved goals always carry a role target; edits must leave untouched skills' targets alone.
 TARGET={'level':6,'basis':'inferred','explanation':'Estimated from the role.'}
 
 

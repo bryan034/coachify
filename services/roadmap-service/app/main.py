@@ -73,13 +73,10 @@ def create_app(store=None,upstream=None,model=None,clock=None):
                     planner_state(row)['outline_candidate']['first_week_error']=error.detail
                 if automatic:
                     # Publish a copy only once both the outline and first week validate.
-                    # A failed activation must not leave a partly accepted plan behind.
                     state=copy.deepcopy(planner_state(row))
                     latest=await app.state.upstream.account(account['token'])
                     if latest['id']!=account['id']:raise Problem('Your account changed during creation.',401,'session')
                     source=await context(latest)
-                    # Existing weeks can already cover the complete roadmap. A failed
-                    # generation still raises above; only a genuine no-op needs no week.
                     accept_outline(state,source,state['outline_candidate']['id'],app.state.clock(),
                         require_first_week=week_prepared or state['active'] is None)
                     latest=await app.state.upstream.account(account['token'])
@@ -88,8 +85,7 @@ def create_app(store=None,upstream=None,model=None,clock=None):
                     if planning_source_changed(source,fresh):
                         raise Problem('Your inputs changed during creation. Retry creating your roadmap.',409,'inputs_changed')
                     active=state['active']
-                    # A failed publication may leave a captured snapshot. A new lease
-                    # must not reuse that attempt's tasks with a newly generated outline.
+                    # A new lease never reuses a failed attempt's tasks.
                     active['id']=str(uuid5(NAMESPACE_URL,account['id']+':roadmap:'+row['pending']['id']+':'+row['pending']['token']))
                     active.update(pace_baseline_id=active['id'],updated_at=stamp(),request_hash=row['pending']['hash'])
                     state['active']=await thread(app.state.store.save_result,account['id'],active)
@@ -126,8 +122,7 @@ def create_app(store=None,upstream=None,model=None,clock=None):
 
     @app.get('/api/v1/roadmaps/dashboard-source',response_model=DashboardSource)
     async def dashboard_source(request:Request,account=Depends(authenticated)):
-        # Unlike workspace and progress, this read never resumes pending work or
-        # queries other source services. Existing snapshots are projected in memory.
+        # This read never resumes pending work or queries other source services.
         row=await thread(app.state.store.load,account['id'])
         active=copy.deepcopy(planner_state(row)['active'])
         if not active:return {'version':row['version'],'active':None,'active_review':None,'task_readiness':{}}
@@ -146,8 +141,7 @@ def create_app(store=None,upstream=None,model=None,clock=None):
 
     async def mutate(body,account,action,operation=None,mark_baseline=False):
         row=await thread(app.state.store.load,account['id']);payload=body.model_dump(mode='json');key=payload['mutation_id']
-        # Existing receipts retain their original fingerprint. New task actions
-        # include their operation so a key cannot replay a different endpoint.
+        # New task actions include their operation in the fingerprint.
         fingerprint=digest({'operation':operation,'payload':payload}) if operation else digest(payload)
         prior=next((r for r in row['receipts'] if r['id']==key),None)
         if prior:

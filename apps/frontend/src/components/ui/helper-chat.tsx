@@ -16,7 +16,7 @@ export function HelperStatus({ children }: { children: ReactNode }) {
  return <p className="helper-status" role="status">{children}</p>;
 }
 
-/** The first thing the helper says: a heading and short paragraphs. Suggested replies follow below it. */
+/** The first thing the helper says: a heading and short paragraphs. */
 export function HelperOpening({ title, children }: { title: string; children: ReactNode }) {
  return <div className="helper-opening"><h3>{title}</h3>{children}</div>;
 }

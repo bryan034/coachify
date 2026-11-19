@@ -56,7 +56,6 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.getByRole('button',{name:'Save background'}).click();
  await expect(page.getByText('Profile saved.')).toBeVisible();
  await page.getByRole('link',{name:'Home',exact:true}).first().click();
- // The saved background shows beside the account in the sidebar; Home no longer repeats it.
  await expect(page.locator('.side-bottom .me')).toContainText('Synthetic College');
  await page.reload();
  await expect(page.locator('.side-bottom .me')).toContainText('Synthetic College');
@@ -82,7 +81,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
    await expect(applicationCheck).toHaveCount(0);
    await employer.close();
    await page.bringToFront();
-   await page.evaluate(()=>window.dispatchEvent(new Event('focus'))); // Playwright keeps every page focused, so returning fires no event of its own.
+   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
    await expect(applicationCheck).toContainText('Did you apply to Synthetic Data Intern at Synthetic Pay?');
    await page.screenshot({path:testInfo.outputPath('jobs-application-check.png')});
    await applicationCheck.getByRole('button',{name:'No',exact:true}).click();
@@ -99,7 +98,6 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.getByRole('button',{name:'Month',exact:true}).click();
  await expect(page.getByRole('button',{name:'Month',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('[aria-label="Month calendar"] .dh')).toHaveCount(7);
- // Calendar shows no add or view-event controls until they work.
  await expect(page.getByRole('button',{name:'+ Add',exact:true})).toHaveCount(0);
  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Skills Profile'}).click();
  await expect(page.getByRole('button',{name:'Upload CV',exact:true})).toBeDisabled();
@@ -110,7 +108,6 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.getByRole('tab')).toHaveCount(0);
  expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||p==='/api/v1/roadmaps/workspace'||p==='/api/v1/career/goals/current'||p==='/api/v1/roadmaps/learning'||p==='/api/v1/roadmaps/dashboard-source'||p.startsWith('/api/v1/jobs/')||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
  expect(apiCalls).toContain('/api/v1/cv/policy');
- // The sidebar stays beside content, and mobile navigation expands on demand.
  const sidebar = await page.locator('.side').boundingBox();
  const main = await page.locator('main').boundingBox();
  expect(sidebar!.x + sidebar!.width).toBeLessThanOrEqual(main!.x);

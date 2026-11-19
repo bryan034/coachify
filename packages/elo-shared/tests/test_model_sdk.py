@@ -38,7 +38,7 @@ def test_sdk_preserves_request_credentials_and_http_client(asynchronous):
     assert json.loads(request.content) == payload
     assert request.extensions['timeout'] == dict(connect=12, read=12, write=12, pool=12)
     assert request.headers['authorization'] == 'Bearer synthetic-secret'
-    assert payload == PAYLOAD  # SDK must not mutate caller input.
+    assert payload == PAYLOAD
 
 
 @pytest.mark.parametrize('asynchronous', [False, True])

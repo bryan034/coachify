@@ -22,8 +22,7 @@ from app.domain.deletion import CvDeletion
 
 logger = logging.getLogger(__name__)
 
-# Only schema-owned locations and known error types may reach logs. Model output,
-# including extra field names and Pydantic messages, is untrusted private data.
+# Only schema-owned locations and known error types may reach logs.
 _ITEM_FIELDS = frozenset({'kind', 'title', 'description', 'explicit', 'evidence', 'skill_names',
     'category', 'proficiency', 'experience_months', 'start_date', 'end_date', 'ongoing',
     'context', 'supporting_items', 'uncertainties'})
@@ -33,10 +32,9 @@ _ERROR_TYPES = frozenset({'missing', 'extra_forbidden', 'literal_error', 'model_
     'bool_type', 'int_type', 'float_type', 'greater_than_equal', 'less_than_equal',
     'finite_number', 'too_short', 'too_long', 'value_error'})
 _MAX_DIAGNOSTIC_ERRORS = 16
-# The saved state itself may be the cause, so these retries start from the document.
+# These retries start from the document.
 _RESTART_AFTER = frozenset({'unexpected_error'})
-# Shared across extraction, repair and semantic checks, including interrupted
-# attempts. Reserving before dispatch bounds work even when a response is lost.
+# Model-call limit shared across extraction, repair and semantic checks, reserved before dispatch.
 _OPERATION_MODEL_CALL_LIMIT = 6
 
 
@@ -91,7 +89,7 @@ class IngestionWorker:
             bump(document, operational=True)
             try: self.repository.replace(candidate, document)
             except Conflict: pass
-            # Repeated interruptions may come from the saved state, so a retry starts clean.
+            # A retry after repeated interruptions starts clean.
             self.repository.extraction_states.discard(document['_id'])
             return None
         operation.pop('retry_at', None)
@@ -119,7 +117,7 @@ class IngestionWorker:
                         or current['operation']['status'] != 'processing'
                         or current['operation']['lease_until'] <= now()):
                     raise StaleExtraction()
-                # Repair can revisit validation; never move the displayed progress backwards.
+                # Never move the displayed progress backwards.
                 previous = current['operation'].get('stage', 'source_read')
                 if PROCESSING_STAGES[previous][0] >= PROCESSING_STAGES[value][0]: return
                 updated = deepcopy(current)
@@ -200,8 +198,7 @@ class IngestionWorker:
                 # A retry keeps the operation and resumes. A reupload or new workflow version starts fresh.
                 thread_id=f"{claimed['operation']['id']}:{WORKFLOW_VERSION}",
                 rewind_rejected=bool(previous_failure and previous_failure['category'] in REJECTED_OUTPUT),
-                # A rejected candidate is no longer retried in full. Salvage
-                # verified portions after its one repair in this same operation.
+                # Salvage verified portions after one repair in this same operation.
                 allow_partial=True)
             with operation_scope(claimed['operation']['id']):
                 result = harness.run(original)
@@ -254,8 +251,7 @@ class IngestionWorker:
         if not error:
             affected = affected_sources(document, items)
             if affected:
-                # No fuzzy/name reassignment of user statements. Keep the usable prior
-                # extraction and retain the candidate for an explicit new-source review.
+                # Keep the usable prior extraction and retain the candidate for an explicit new-source review.
                 document['candidate'] = candidate_for(document, items, metadata, parsed.get('notices', []), other_information=result['other_information'])
                 document['reconciliation'] = [{'item_id': identifier, 'reason': 'Source interpretation changed. Compare the preserved result and candidate before accepting it.'}
                     for identifier in affected]
@@ -335,8 +331,7 @@ class IngestionWorker:
                     entry = self.capacity.entry(claimed['_id'])
                     size = self.files.size(claimed['_id'])
                     self.files.remove(claimed['_id'])
-                    # Physical deletion precedes credit; a crash can overcount
-                    # until recovery, but cannot admit unaccounted original bytes.
+                    # Physical deletion precedes credit.
                     self.capacity.release_bytes(claimed['_id'], entry['generation'] if entry else None, size)
                     updated = deepcopy(claimed)
                     updated['original_available'] = False
@@ -344,8 +339,7 @@ class IngestionWorker:
                     bump(updated, operational=True)
                     self.repository.replace(claimed, updated)
             except Exception:
-                # Advance the cursor even for malformed/oversized legacy records,
-                # filesystem failures or CAS races, so another owner's expiry runs.
+                # Advance the cursor even for malformed records, filesystem failures or CAS races.
                 continue
         self.capacity.cleanup_orphans(timestamp - 3600)
 
@@ -373,7 +367,5 @@ class IngestionWorker:
             try: await asyncio.to_thread(self.run_once)
             except asyncio.CancelledError: raise
             except Exception:
-                # Database/transient filesystem failures leave persisted leases for
-                # recovery. Avoid logging CV content, response bodies or credentials.
                 pass
             await asyncio.sleep(1)

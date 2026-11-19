@@ -15,7 +15,7 @@ from app.schemas.outlines import OutlineDraft, EditOutline
 from app.schemas.roadmap import GeneratePlan, OperationAccepted, PlannerConfig
 from app.schemas.planner import Workspace
 
-# The outline and its first week are written in one operation, so it has a longer budget than a single stage.
+# The outline and its first week are written in one operation.
 OUTLINE_SECONDS=420
 OUTLINE_MODEL_ATTEMPTS=2
 OUTLINE_INSTRUCTIONS='''Create a milestone outline for the user's career goal from the supplied assessment and capacity. Return milestones, prerequisite order, demonstrable outcomes, dates, effort and any beyond-deadline work. No milestone, checkpoint or routine may start before planning_start, even when its first week_start is earlier. Do not create tasks. Also return weeks: one objective for every entry in weekly_capacity through the target date, including rest or contingency weeks, using its week_start. Each objective names the main thing to achieve that week, an expected_outcome the user could observe, estimated_minutes within that week's usable_minutes, the milestone_key it advances (weeks with positive effort must fall inside that milestone's dates; use zero effort for unavailable or post-scope weeks and explain that no additional work is planned) and the gap_ids it works on. A week's objectives for one milestone must not total more than the milestone's estimated_minutes. Later weeks are projections that are refined as the user progresses. Material unknowns must have a diagnostic intent or a confirmation question; do not invent a skill gap. Include routine rules only where the user requested recurring practice; show weekdays, duration, topic progression and difficulty. Keep each combined activity, difficulty and topic title under 12 whitespace-separated words (at most 11), summarising the action. Routine effort is included in its milestone estimate, not additional effort. Keep work within the runway and capacity. Preserve completed work and milestone keys. Exclusions require an exact quote from the user's instruction. Correct all validation errors when supplied.'''
@@ -23,8 +23,7 @@ OUTLINE_INSTRUCTIONS='''Create a milestone outline for the user's career goal fr
 def clamp_to_start(draft,capacity,completed=()):
     """Move unfinished milestones, checkpoints and routines that begin before the planning start up to it.
 
-    Week rows start on the configured week day, so the model often dates the first milestone from a
-    week_start that precedes today or the chosen start date. Milestones with completed work keep their dates.
+    Milestones with completed work keep their dates.
     """
     start=capacity.start;finished={s['milestone_key'] for s in completed};moved=set()
     for milestone in draft.milestones:
@@ -72,8 +71,7 @@ def validate_outline(draft, capacity, assessment, confirmations, completed=(), i
             key=task['milestone_key']
             saved_effort[key]=saved_effort.get(key,0)+task.get('estimated_minutes',0)
             allocated[key]=allocated.get(key,0)+(task['estimated_minutes'] if not task.get('schedule') and task.get('anytime_date') else sum(slot['duration_minutes'] for slot in task.get('schedule',[])))
-    # Estimates cover already accepted work as well as remaining work. Reserve
-    # saved slots in capacity once and validate only the unallocated effort.
+    # Reserve saved slots in capacity once and validate only the unallocated effort.
     for milestone in plan.milestones:
         milestone.estimated_minutes=max(0,milestone.estimated_minutes-allocated.get(milestone.key,0))
     known_ids={task['id'] for task in tasks}
@@ -148,7 +146,6 @@ def outline_reservations(plan):
     return reservations(plan)
 
 def authorized_exclusions(outline):
-    # The saved outline was validated on generation against the user's original message.
     return {(e['requirement_ref'],e['quote']) for e in (outline or {}).get('exclusions',[])}
 
 def draft_from_outline(outline):
@@ -232,7 +229,7 @@ async def prepare_outline(app,row,account,assess,read_context,*,config=None,inst
     state=planner_state(row)
     state['outline_candidate']=build_outline(draft,result,config,report['first_planning_week'],operation_id,attempt,accepted,confirmations,active)
     if partial_review:state['outline_candidate']['partial_review']=partial_review
-    # A week preview belongs to one outline preview, so an older one cannot be accepted with this outline.
+    # A week preview belongs to one outline preview.
     state['week_candidate']=None
     row['assessment']={k:result.get(k) for k in ASSESSMENT_FIELDS}
 
@@ -287,7 +284,7 @@ def accept_outline(state,source,identifier,now,*,require_first_week=False):
         try:accept_week(state,source,week['id'],now)
         except Problem as error:
             if require_first_week:raise
-            # The outline is still what the user reviewed. Only the dated sessions went out of date.
+            # Only the dated sessions went out of date.
             state['week_candidate']=None
             state['week_notice']='Your roadmap is saved, but the first week needs planning again: '+error.detail
     elif week:state['week_candidate']=None
@@ -325,7 +322,7 @@ def register_outline_routes(app,context,mutate,worker):
             if errors:raise Problem(' '.join(e['message'] for e in errors[:3]),422,errors[0]['code'])
             state['outline_candidate']=build_outline(body.outline,original['assessment'],PlannerConfig.model_validate(original['config']),original['first_planning_week'],str(body.mutation_id),0,active,state['confirmations'],state['active'])
             if partial_review:state['outline_candidate']['partial_review']=partial_review
-            # The first-week preview was written for the outline as it was; it is planned again after acceptance.
+            # The first week is planned again after acceptance.
             state['week_candidate']=None
             return row
         return await mutate(body,account,apply,operation='outline.edit:'+identifier)

@@ -24,9 +24,9 @@ def test_name_decides_the_group_when_no_category_is_saved(name, expected):
 
 def test_names_are_matched_whole_and_ignore_case_and_spacing():
     assert skill_group('  PYTHON ') == 'Technical coding'
-    assert skill_group('Going to market') == OTHER_SKILLS  # "go" only counts as the whole name.
-    assert skill_group('Crust baking') == OTHER_SKILLS  # "rust" must not match inside a word.
-    assert skill_group('Email marketing') == 'Business & finance'  # "ai" must not match inside "email".
+    assert skill_group('Going to market') == OTHER_SKILLS
+    assert skill_group('Crust baking') == OTHER_SKILLS
+    assert skill_group('Email marketing') == 'Business & finance'
     assert skill_group('Data cleaning') == 'Data & analytics'
 
 

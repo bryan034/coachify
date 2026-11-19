@@ -1,7 +1,6 @@
 """Keep independently valid Discovery sections; repairs cannot replace accepted data.
 
-Only complete JSON objects enter this collector. It never repairs JSON text, unwraps
-unknown envelopes, or treats schema conformance as evidence of semantic correctness.
+Only complete JSON objects enter this collector.
 """
 from copy import deepcopy
 from dataclasses import dataclass
@@ -54,8 +53,7 @@ class DiscoverySections:
                 continue
             annotation=field.rebuild_annotation()
             limit=(3 if name=='open_questions' else 6) if model==ConversationMemory else 60 if name=='excluded_skills' else 30 if name=='requested_skills' else None
-            # Research items are sections too: one bad listing/skill does not
-            # discard all other items in the response. Collection size stays bounded.
+            # Research items are sections too; collection size stays bounded.
             args=get_args(field.annotation)
             if (get_origin(field.annotation)==list and args and hasattr(args[0],'model_fields')
                 and isinstance(raw,list) and len(raw)<=item_schema.get('maxItems',len(raw))):
@@ -66,8 +64,7 @@ class DiscoverySections:
                 continue
             section=Section(path,TypeAdapter(annotation),item_schema,limit)
             if raw is MISSING and not field.is_required() and not (self.stage=='discovery_extract' and name=='question_refs' and data.get('question')):
-                # Omitted optional updates preserve existing state rather than
-                # implicitly clearing remembered interests or skill edits.
+                # Omitted optional updates preserve existing state.
                 continue
             self._section(section,raw)
 
@@ -156,7 +153,6 @@ class DiscoverySections:
             if data['action']=='REJECT_OUT_OF_SCOPE':
                 return self.model.model_validate({**self.baseline,'action':'REJECT_OUT_OF_SCOPE'})
             if 'action' in self.pending:
-                # Unclassified text cannot bypass the career-only boundary.
                 data.update(action='ANSWER',reply=self.baseline['reply'],question=None,recommendations=[],source_ids=[])
             if 'source_ids' in self.pending:
                 data.update(reply=self.baseline['reply'],question=None,source_ids=[])
@@ -164,8 +160,7 @@ class DiscoverySections:
                 data['action']='ANSWER'
                 data['scope']=self.context.get('scope')
         if self.stage=='discovery_assess':
-            # Missing assessments stay rejected; they are never relabelled as
-            # relevant to fill the sample. Valid assessments remain untouched.
+            # Missing assessments stay rejected; valid assessments remain untouched.
             found={value.ref for value in data['sources']}
             data['sources']=[*data['sources'],*[{'ref':ref,'relevant':False,'score':0,'quote':None}
                 for ref in range(len(self.context.get('sources',[]))) if ref not in found]]

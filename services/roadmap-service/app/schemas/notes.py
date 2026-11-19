@@ -1,7 +1,4 @@
-"""A task's notes document: Word-like text plus inserted checkboxes and single-choice questions.
-
-The document is plain structured data, never HTML, so nothing a user types is ever rendered as markup.
-"""
+"""A task's notes document: Word-like text plus inserted checkboxes and single-choice questions, never HTML."""
 from typing import Annotated, Literal
 from pydantic import Field, StringConstraints, model_validator
 from .base import Contract

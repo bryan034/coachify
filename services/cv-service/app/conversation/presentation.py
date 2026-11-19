@@ -20,8 +20,7 @@ def review_reply(text):
     return re.sub(r' +([,.;:!?])', r'\1', re.sub(r' {2,}', ' ', text)).strip()
 
 
-# Side answers are not question receipts. Publish only bounded declarative
-# prose, rejecting obvious direct and indirect requests for new CV evidence.
+# Publish only bounded declarative side answers, rejecting requests for new CV evidence.
 _SIDE_REQUEST = re.compile(
     r'\b(?:please|tell|share|provide|describe|clarify|elaborate|submit|supply|'
     r'give|list|write|state|specify|indicate|identify|answer|send|record|'

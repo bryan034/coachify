@@ -67,23 +67,17 @@ def _charge(subject, calls_limit):
         elif watermark:
             day = watermark[0]
         if not watermark or day > watermark[0]:
-            # Keep a watermark even when only searches are charged today.
             conn.execute("INSERT OR IGNORE INTO daily_usage(subject,day,calls,units) VALUES('deployment',?,0,0)", (day,))
         used = conn.execute('SELECT calls FROM daily_usage WHERE subject=?', (subject,)).fetchone()
         if calls_limit is not None and (used[0] if used else 0) >= calls_limit:
             reset = datetime.fromisoformat(day).replace(tzinfo=timezone.utc) + timedelta(days=1)
             raise ModelBudgetExceeded('owner', max(1, math.ceil((reset - now).total_seconds())))
-        # Keep the legacy column so existing ledgers retain their call counts.
         conn.execute('INSERT INTO daily_usage(subject,day,calls,units) VALUES(?,?,1,0) '
                      'ON CONFLICT(subject) DO UPDATE SET calls=calls+1', (subject, day))
 
 
 def reserve_provider_call(owner, payload):
-    """Charge one attempt to the account before dispatch.
-
-    All services use the same Docker volume. An uncertain commit never permits a
-    dispatch. Charges are retained on errors because the provider may have billed them.
-    """
+    """Charge one attempt to the account before dispatch; charges are retained on errors."""
     owner_hash = _owner_hash(owner)
     output = next((payload[k] for k in ('max_tokens', 'max_completion_tokens', 'max_output_tokens') if k in payload), None)
     if type(output) is not int or output < 1:

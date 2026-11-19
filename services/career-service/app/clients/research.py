@@ -13,9 +13,7 @@ class ResearchProvider(Protocol):
     async def collect(self,context:ResearchContext)->list[ResearchSource]|ResearchBatch:
         """Fetch permitted public API evidence for this context, or raise GoalError.
 
-        Adapters must respect API access/licensing rules, avoid private context,
-        verify provenance/reliability and assign report_group only when common
-        report origin/independence is established. Provider summaries stay labelled as AI synthesis, separate from source excerpts.
+        Provider summaries stay labelled as AI synthesis, separate from source excerpts.
         """
         ...
 

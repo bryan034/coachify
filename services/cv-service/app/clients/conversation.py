@@ -60,7 +60,6 @@ def interview_model_context(context):
     result = {key: value for key, value in context.items() if key not in omit}
     focus = context.get('focused_source')
     if focus:
-        # Facts and exact quotes are already present under evidence_index.
         result['focused_source'] = {key: focus[key] for key in (
             'id', 'kind', 'title', 'description', 'provenance', 'evidence', 'skill_ids', 'skill_claims',
             'start_date', 'end_date', 'ongoing', 'context', 'support_uncertain', 'validation_issue',

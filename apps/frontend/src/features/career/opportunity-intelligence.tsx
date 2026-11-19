@@ -43,7 +43,7 @@ const fieldTitles:Record<string,string>={recruitment_stages:'Stages',application
 function FindingLabels({finding}:{finding:IntelligenceFinding}){
  return <>{finding.conflict_group&&<span className="finding-flag intelligence-conflict">Conflicting reports</span>}</>;
 }
-/** Renders **bold** key terms as <strong>; everything else stays escaped text, so model output cannot inject markup. */
+/** Renders **bold** key terms as <strong>; everything else stays escaped text. */
 export const Rich=({text}:{text:string})=><>{text.split(/\*\*([^*]+)\*\*/).map((part,i)=>i%2?<strong key={i}>{part}</strong>:part.replaceAll('*',''))}</>;
 /** Fact tiles are already bold, so their key-term markers are dropped. */
 const plain=(text:string)=>text.replaceAll('*','');
@@ -70,7 +70,7 @@ function interviewBody({findings,generated,src}:{findings:IntelligenceFinding[];
  const numbers=[...new Set(findings.map(f=>f.round_number).filter((n):n is number=>n!=null))].sort((a,b)=>a-b);
  // Without rounds, the questions and preparation slots belong to the whole process.
  const otherGeneral=general.filter(f=>!headline.includes(f)&&(numbers.length>0||!slotFields.includes(f.field)));
- // Sources may skip round numbers (e.g. only rounds 1 and 4 are reported), so rounds are shown by position; n stays the source key.
+ // Rounds are shown by position; n stays the source key.
  const rounds=numbers.map((n,index)=>{const items=findings.filter(f=>f.round_number===n);return {n,position:index+1,name:items.find(f=>f.round_name)?.round_name||`Round ${index+1}`,items};});
  const fact=(field:string)=>{const finding=headline.find(f=>f.field===field);if(finding)return {field,value:finding.value,finding,made:false};
   const made=generated.items.find(item=>item.round_number==null&&item.field===field);return {field,value:made?.value??'',finding:undefined,made:!!made};};
@@ -238,7 +238,6 @@ export function OpportunityIntelligence({goalId,version,selectionVersion,roleCar
  const states=keys.map(key=>results[key]).filter((v):v is NonNullable<typeof v>=>!!v);
  const researchedAt=states.map(v=>v.researched_at).filter((v):v is string=>!!v).sort().at(-1);
  const pending=states.some(v=>['pending','running'].includes(v.status));
- // Outcome banners are replaced by AI-made fills and the Estimated chips; only the general-target note remains.
  const notices:string[]=[];
  if(states.some(v=>v.status==='not_applicable'))notices.push('No company is specified, so employer-specific research was skipped.');
  const done=!!data&&!pending&&!running;
@@ -265,14 +264,13 @@ export function OpportunityIntelligence({goalId,version,selectionVersion,roleCar
    if(view.status==='missing'){if(abort.signal.aborted)return;setDigesting(true);
     view=await careerApi<RoleSummaryView>(url,token,{method:'POST',signal:abort.signal,body:JSON.stringify({expected_version:version})});}
    if(!abort.signal.aborted)setDigest(view.summary);
-  }catch{/* Cards keep their sentence bullets when the summary is unavailable. */}
+  }catch{}
   finally{if(!abort.signal.aborted)setDigesting(false);}})();
   return()=>abort.abort();
  },[section,token,done,goalId,version,researchId]);
  const currentDigest=digest&&digest.research_id===researchId&&digest.goal_version===version?digest:null;
  const generated={items:suggestions&&suggestions.research_id===researchId&&suggestions.goal_version===version?suggestions.items:[],busy:suggesting,error:suggestError};
 
- // Citations are numbered while the body renders, so the body is built before the header and Sources list read the count.
  const cites=citations(),anchor=section==='interview'?'i-src':'a-src';
  const refsFor=(ids:string[]):Ref[]=>ids.map(id=>sources.find(source=>source.source_id===id)).filter((source):source is ResearchSource=>!!source)
   .flatMap(source=>{const link=sourceLink(source.url);return link?[{href:link.url,label:source.title||source.platform}]:[];});

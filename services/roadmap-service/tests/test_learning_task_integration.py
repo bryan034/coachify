@@ -54,7 +54,7 @@ def test_split_task_is_counted_once_for_completion_and_sessions_still_count_sepa
     assert result['steps'][0]['state']=='done'
     assert result['steps'][0]['sessions_total']==2
     assert result['steps'][0]['sessions_completed']==2
-    assert plan==original  # The read does not rewrite the saved projection.
+    assert plan==original
     task['status']='in_progress'
     result=learning_view(plan,NOW)
     assert result['steps'][0]['state']=='in_progress'
@@ -116,8 +116,6 @@ def test_relink_and_unlink_move_completed_split_sessions_to_the_current_requirem
     assert (initial['python']['state'],initial['python']['sessions_completed'])==('done',2)
     assert (initial['sql']['state'],initial['sql']['sessions_total'])==('not_scheduled',0)
 
-    # The immutable source assignment still points at Python; the user's edit
-    # is authoritative for both task state and session-based progress.
     task['requirement_refs']=['job:sql']
     task['overrides']=['requirement_refs']
     before=copy.deepcopy(plan)
@@ -140,7 +138,6 @@ def test_inferred_gap_without_requirement_retains_legacy_link_until_explicit_unl
     plan['milestones'][0]['gap_ids']=['inferred']
     plan['assignments']=plan['assignments'][:1]
     plan['assignments'][0]['gap_id']='inferred'
-    # A legacy saved plan has no canonical tasks and must retain its progress.
     assert learning_view(plan,NOW)['steps'][0]['state']=='done'
     task=ensure_tasks(plan)[0]
     assert learning_view(plan,NOW)['steps'][0]['state']=='done'
@@ -222,7 +219,6 @@ def test_missing_or_stale_requirement_provenance_is_not_current_learning():
         changed[field]='different'
         step=learning_view(changed,NOW)['steps'][0]
         assert (step['state'],step['sessions_total'],step['completed_minutes'])==('not_scheduled',0,0)
-    # A stale inferred source gap is not fallback evidence either.
     task['requirement_refs']=[]
     task['requirement_source_hash']='stale'
     step=learning_view(plan,NOW)['steps'][0]
@@ -254,7 +250,6 @@ def test_ambiguous_milestone_only_legacy_task_has_no_inferred_skill():
     plan['milestones'][0]['gap_ids']=['python','sql']
     plan['assignments']=plan['assignments'][:1]
     assert plan['assignments'][0]['gap_id'] is None
-    # A historical session-only snapshot keeps the original read behavior.
     legacy=learning_view(plan,NOW)
     assert [(step['state'],step['sessions_completed']) for step in legacy['steps']]==[('done',1),('done',1)]
     task=ensure_tasks(plan)[0]

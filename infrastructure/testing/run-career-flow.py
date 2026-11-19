@@ -1,8 +1,6 @@
 """Run browser -> gateway -> services -> MongoDB with explicit synthetic settings.
 
-Never loads deployment env files. The disposable project is always removed unless
---keep is selected. It verifies finite fixture model behaviour with controlled
-empty public retrieval. This is not a live-model or live-search test.
+The disposable project is always removed unless --keep is selected.
 """
 import argparse
 from datetime import datetime, timezone
@@ -93,8 +91,7 @@ def run(args):
                     cwd=ROOT/'apps/frontend',env=env,check=False)
                 logs=subprocess.run([*compose,'logs','--no-color','--since',since,'career-service'],cwd=ROOT,env=env,
                     capture_output=True,text=True,check=False)
-                # Retain only content-free diagnostics. Never retain raw provider
-                # output, request bodies, account tokens or arbitrary service logs.
+                # Retain only content-free diagnostics.
                 diagnostics=[line.split(' | ',1)[-1] for line in logs.stdout.splitlines()
                     if re.search(r'\b(?:ai_usage stage=|structured_recovery node=|operation_failed operation_id=)',line)]
                 report['attempts'].append({'mode':mode,'model':env['CAREER_LLM_MODEL'],'attempt':attempt,

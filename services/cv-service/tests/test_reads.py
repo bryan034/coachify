@@ -26,6 +26,5 @@ def test_saved_cv_read_is_owner_scoped_and_read_only(harness):
     assert response.json()['skills'][0]['proficiency'] is None
     assert all(field not in response.json() for field in ('user_id', 'file_url', 'source_text', 'original_path'))
     assert response.headers['cache-control'] == 'no-store'
-    # Uploads use the explicit /uploads contract, never a generic record-write API.
     assert client.post('/api/v1/cv', json={}).status_code == 405
     assert app.state.repository.get('owner-a', cv['id']) == before

@@ -1,4 +1,4 @@
-/* Shared processing screens: Career Goal "Skills needed" and Roadmap generating. Mirrors the design mockups. */
+/* Shared processing screens: Career Goal "Skills needed" and Roadmap generating. */
 .processing-card{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:24px;color:var(--ink);margin-bottom:18px}
 .processing-card.dark{background:var(--fill);border-color:var(--fill);color:var(--on-fill);border-radius:20px;padding:24px 26px}
 .processing-card>h2{margin:0;font-size:22px;font-weight:600;letter-spacing:-.01em}

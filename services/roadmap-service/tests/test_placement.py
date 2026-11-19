@@ -22,10 +22,8 @@ def test_work_longer_than_a_session_is_split_into_even_sessions():
 
 def test_sessions_never_exceed_the_limit_and_each_is_followed_by_ten_minutes_per_hour():
     assert times(placer().place(150))==[('14','18:00',50),('14','19:00',50),('14','20:00',50)]
-    # A full hour earns ten minutes, so two hours need 2h10 of window.
     assert times(placer().place(120))==[('14','18:00',60),('14','19:10',60)]
     assert times(placer(break_minutes_per_hour=0).place(180))==[('14','18:00',60),('14','19:00',60),('14','20:00',60)]
-    # 90-minute sessions with a 15-minute break between them.
     long=placer(preferred_session_minutes=90,blocks=[{**EVENING,'duration_minutes':240}])
     assert times(long.place(180))==[('14','18:00',90),('14','19:45',90)]
 
@@ -36,7 +34,6 @@ def test_work_that_cannot_fit_is_not_half_placed():
 
 def test_saved_sessions_keep_a_break_on_both_sides():
     saved=[{'date':'2030-01-14','start_time':'19:00','duration_minutes':60}]
-    # 18:00 for an hour would run into the saved session's start; after it, 20:10 leaves only 50 minutes.
     split=placer(saved).place(60)
     assert sum(slot['duration_minutes'] for slot in split)==60
     assert all(slot['duration_minutes']<=60 for slot in split)
@@ -49,7 +46,6 @@ def test_extra_time_is_used_only_when_study_blocks_are_full_and_spreads_over_qui
     extra=placer(allow_overflow=True)
     first=[times(extra.place(60))[0] for _ in range(2)]
     assert first==[('14','18:00',60),('14','19:10',60)]
-    # The block has 40 minutes left, too short for an hour, so the next sessions go to extra time on the quietest days.
     later=[times(extra.place(60))[0] for _ in range(3)]
     assert later==[('15','09:00',60),('16','09:00',60),('17','09:00',60)]
     assert placer().place(60) and placer(blocks=[]).place(60) is None
@@ -85,8 +81,6 @@ def test_the_week_target_is_the_agreed_hours_unless_less_can_be_placed_and_says_
     assert busy['target_minutes']==240 and [r['code'] for r in busy['reasons']]==['saved_work']
 
 def test_capacity_search_is_bounded_by_daily_limits_and_occupied_rest_days():
-    # A long session setting and impossible weekly target used to repeat thousands
-    # of unproductive scans, blocking the synchronous workspace response.
     plan=placer(allow_overflow=True,blocks=[],preferred_session_minutes=480,
         weekly_minutes=10080,max_daily_minutes=60,rest_days_per_week=6)
     calls=0;find=plan.find

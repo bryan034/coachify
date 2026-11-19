@@ -5,7 +5,6 @@ import { assessmentApi } from '@/lib/api/assessment';
 vi.mock('@/lib/api/assessment', async original => ({...await original<typeof import('@/lib/api/assessment')>(), assessmentApi: vi.fn()}));
 const api = vi.mocked(assessmentApi);
 const current = {version: 7, stale: false, result: null, operation: null, ready: true, issues: []};
-/** A bare consumer of the hook: what the page components read from it. */
 function View({token = 'synthetic'}: {token?: string}) {
  const c = useComparison(token);
  return <section>

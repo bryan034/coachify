@@ -50,8 +50,7 @@ def validate_cv_match(match, name, authorization):
                     and source.get("attribution", "unknown") in {"personal", "unknown"}
                     for source in skill["sources"])
         else:
-            # Compatibility for older source responses: only an explicit, standalone
-            # skill with its canonical identity can establish the relationship.
+            # Older source responses: only an explicit, standalone skill with its canonical identity establishes the relationship.
             supported = (item.get("kind") == "skill" and skill_id(item.get("title", "")) == canonical
                 and canonical in item.get("skill_ids", []) and item.get("provenance", "explicit") == "explicit"
                 and not item.get("support_uncertain"))

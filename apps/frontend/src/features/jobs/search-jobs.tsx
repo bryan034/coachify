@@ -83,7 +83,6 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
  useEffect(()=>{
   if(!keywords){setSites([]);return;}
   const controller=new AbortController();
-  // These links are optional, so a failure only hides them and never interrupts the search.
   externalSearches(token,keywords,controller.signal).then(setSites).catch(()=>{if(!controller.signal.aborted)setSites([]);});
   return ()=>controller.abort();
  },[token,keywords]);

@@ -26,7 +26,6 @@ MAX_QUESTION_SEARCHES = 3
 
 def question_queries(title, focus, terms=None):
     # Only a bounded public subject produced by the router crosses the search boundary.
-    # Raw messages, history and resolved_question never become search queries.
     from app.domain.questions import blocked_task
     if terms:
         if not re.fullmatch(r'[A-Za-z][A-Za-z -]{2,99}', terms) or blocked_task(terms) or re.search(
@@ -65,7 +64,7 @@ async def research_question(request, title, focus, check, *, query=None):
             sources = normalize_sources(await collect(context, query))[:6]
             break
         except SearchAllowanceExceeded:
-            raise  # A daily allowance does not reset within this chat turn.
+            raise
         except SourceRateLimit as error:
             observer = quota_progress.get()
             if observer is None or attempt == 3:

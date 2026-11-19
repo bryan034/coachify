@@ -1,7 +1,7 @@
 import { addDays, weekDates, weekStart } from './roadmap-calendar';
 import type { PlanMilestone, PlannedRoadmap, Planner, PlannerConfig, Session } from './types';
 
-/** Display arithmetic for the roadmap views. The roadmap service owns the schedule and validates every saved time. */
+/** Display arithmetic for the roadmap views. */
 
 export const toMinutes = (clock: string) => { const [hour, minute] = clock.split(':').map(Number); return hour * 60 + minute; };
 export const toClock = (minutes: number) => { const value = Math.min(Math.max(minutes, 0), 1439); return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
@@ -130,7 +130,7 @@ export function progressBars(sessions: Session[], today: string, measure: 'tasks
  }
  const bars: Bar[] = []; const current = weekStart(today);
  const first = weekStart(planStart < today ? planStart : today); const last = weekStart(planEnd > today ? planEnd : today);
- // Five weeks around today keep the chart readable on any plan length.
+ // Five weeks around today.
  const from = [first, addDays(current, -14)].sort()[1], to = [last, addDays(from, 28)].sort()[0];
  for (let monday = from; monday <= to; monday = addDays(monday, 7)) {
   const items = sessions.filter(item => item.date >= monday && item.date <= addDays(monday, 6));

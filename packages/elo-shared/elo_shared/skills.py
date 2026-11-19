@@ -1,4 +1,4 @@
-"""One bundled registry for all producers. Unknown names never acquire guessed IDs."""
+"""One bundled skill registry for all producers."""
 import json
 import unicodedata
 from pathlib import Path

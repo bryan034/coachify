@@ -37,8 +37,7 @@ def register_task_routes(app,context,mutate):
             view['unscheduled_minutes']=max(0,task['estimated_minutes']-sum(s['duration_minutes'] for s in slots))
             result.append(view)
         source=await context(account,tolerate_unavailable=True)
-        # Keep the existing booleans for compatibility, while distinguishing a
-        # missing/incomplete input snapshot from a verified matching snapshot.
+        # Distinguish a missing/incomplete input snapshot from a verified matching snapshot.
         if source.get('availability')=='unavailable':freshness='unavailable'
         elif source.get('ready') is not True or not source.get('input_hash'):freshness='not_ready'
         elif not plan.get('assessment_hash'):freshness='unavailable'

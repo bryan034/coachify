@@ -39,7 +39,6 @@ def test_self_ratings_do_not_inflate_or_override_evidence():
 
 
 def test_independence_and_outcomes_do_not_change_the_understanding_level():
-    # The level rates understanding; a failed or AI-assisted delivery says nothing against it.
     record={'attribution':'personal','assistance':'supervised','review_facts':[{'field':'outcome','status':'supported','value':'The deployment failed.'}]}
     assert evidence_level([record],10)==5
 

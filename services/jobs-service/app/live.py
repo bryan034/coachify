@@ -25,8 +25,7 @@ class LiveJobs:
         self._flight = None
 
     def read(self, query=None):
-        # All routes share public board data, never owner-specific application records.
-        # Keep only an active operation: completed results are not cached.
+        # Keep only an active operation; completed results are not cached.
         with self._lock:
             leader = self._flight is None
             if leader:
@@ -82,7 +81,6 @@ class LiveJobs:
             if any(not any(re.search(term['search_terms']['$regex'], word) for word in row['search_terms']) for term in query.get('$and', [])):
                 return False
             dates = query.get('posted_at', {})
-            # Retrieval time is not evidence of a posting date.
             if dates and row['posted_at_estimated']:
                 return False
             return not (('$gte' in dates and row['posted_at'] < dates['$gte']) or ('$lt' in dates and row['posted_at'] >= dates['$lt']))

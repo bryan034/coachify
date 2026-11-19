@@ -47,8 +47,6 @@ class QuestionStore:
         if not identifier:return supplemented({})
         linked=self.research.linked(owner,str(row['goal_id']),current=True)
         if identifier not in linked:
-            # Old owned research must not hide current JD facts or leak into an
-            # answer about the revised goal. Foreign references still fail.
             if identifier in self.research.linked(owner,str(row['goal_id'])):return supplemented({})
             raise GoalError('Research reference was not found for this goal.',404)
         fields={'research_status':1,'sources.source_id':1,'sources.url':1,'sources.title':1}
@@ -57,7 +55,7 @@ class QuestionStore:
         if topic in ('interview_skills','preparation','overview'):fields['skills']=1
         if include_evidence and topic in ('interview_skills','preparation','overview'):
             fields.update({'sources.evidence':1,'summaries.summary_id':1,'summaries.claims':1})
-        # Parent projection subsumes nested skill fields; Mongo rejects path collisions.
+        # Parent projection subsumes nested skill fields.
         if 'skills' in fields:
             fields={k:v for k,v in fields.items() if not k.startswith('skills.')}
         research=self.research.records.database.interview_research.find_one({'_id':ObjectId(identifier)},fields)

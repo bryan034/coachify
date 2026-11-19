@@ -31,8 +31,6 @@ def test_task_freshness_distinguishes_current_stale_and_unready_without_writes()
         changed = client.get(URL, headers=H).json()
         assert changed['freshness'] == 'stale' and changed['stale'] is True
 
-        # A reachable service with missing inputs is not a verified current plan,
-        # even when it still reports the old matching hash.
         source.hash = 'hash1'
         source.ready = False
         missing = client.get(URL, headers=H).json()

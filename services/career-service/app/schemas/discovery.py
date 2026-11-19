@@ -110,8 +110,6 @@ class SourceAssessment(Contract):
     @model_validator(mode='before')
     @classmethod
     def ignore_model_metadata(cls, value):
-        # Older provider output may still include these. Neither determines
-        # validity; companies are owned by retrieval and kind is not assessed.
         return {k:v for k,v in value.items() if k not in ('kind','company')} if isinstance(value,dict) else value
 
 class SourceAssessments(Contract):

@@ -92,8 +92,6 @@ export function JobReviewChat(){
   async function load(){try{
    const value=await retryCareerRead(()=>careerApi<OpportunityView>(`/goals/${goal!._id}/opportunity-research?research_id=${workspace!.research_id}`,token!,{signal:abort.signal}),abort.signal,()=>setConnectionIssue(true));
    if(abort.signal.aborted)return;setConnectionIssue(false);setResearch(value);
-   // A versioned report can be an early snapshot with pending categories even
-   // when that snapshot itself is marked finished. Keep reading until usable.
    if(reportPending(value))timer=setTimeout(()=>void load(),2000);
   }catch(c){if(!abort.signal.aborted){setConnectionIssue(false);reportError(c,'Could not load research.');}}}
   void load();return()=>{abort.abort();clearTimeout(timer);};
@@ -142,7 +140,6 @@ export function JobReviewChat(){
  // A starter prompt fills the composer; Enter then sends it like a typed message.
  function choosePrompt(prompt:string){setMessage(prompt);requestAnimationFrame(()=>{const box=composer.current;if(box){box.focus();box.setSelectionRange(prompt.length,prompt.length);}});}
  function removeQueued(id:string){queue.current=queue.current.filter(item=>item.id!==id);failedJobs.current.delete(id);setTurns(current=>current.filter(turn=>turn.id!==id));setQueueRevision(value=>value+1);}
- // Waiting messages stay out of the transcript until elo starts answering them.
  const isQueued=(turn:{id:string;reply:string|null;failed?:boolean})=>turn.reply===null&&!turn.failed&&turn.id!==pendingTurn;
  const queuedTurns=turns.filter(isQueued);
  useEffect(()=>{
@@ -152,7 +149,6 @@ export function JobReviewChat(){
   job.session=workspace.session_id;
   const abort=new AbortController();sending.current=true;controller.current=abort;
   setPendingTurn(job.id);setPendingMessage(job.input);setBusy(true);setError('');setCode('');setFailedMessage('');
-  // Build queued turns only when dispatched, after any preceding edit/reply.
   job.body??=JSON.stringify({session_id:workspace.session_id,expected_version:goal.version,message:job.input,mode:refining.current?'refine':'question',conversation:turnsRef.current.filter(turn=>turn.reply!==null).slice(-1).flatMap(turn=>[{role:'user',content:turn.message},{role:'assistant',content:turn.reply}])});
   void careerOperation<{reply:string;workspace?:CareerWorkspace;edit_status?:string}>('/workspace/messages',token,{method:'POST',signal:abort.signal,headers:{'Idempotency-Key':job.key},body:job.body},operationProgress)
    .then(result=>{if(!abort.signal.aborted){if(refining.current&&result.edit_status==='saved')setRefinementDone(true);if(result.workspace)receive(result.workspace,true);setResearchRetry(value=>value+1);setTurns(current=>current.map(turn=>turn.id===job.id?{...turn,reply:result.reply,failed:false}:turn));setRetryAt(null);failedJobs.current.delete(job.id);failedTurn.current=null;}})

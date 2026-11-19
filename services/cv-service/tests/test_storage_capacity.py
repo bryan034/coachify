@@ -178,7 +178,6 @@ def test_expired_generation_cannot_release_resupplied_bytes(harness):
     with app.state.files.lock(cv['id']), pytest.raises(CapacityUnavailable):
         app.state.service.capacity.release_bytes(cv['id'], old)
     assert app.state.service.capacity.entry(cv['id'])['bytes'] == len(docx())
-    # A stale cleanup query must re-read expiry and cannot remove the new original.
     original_query = app.state.repository.cleanup_candidates
     app.state.repository.cleanup_candidates = lambda timestamp, after=None: [stale_candidate]
     try: app.state.worker.cleanup()

@@ -22,7 +22,6 @@ async function openDraft(){
 }
 async function startPollingClock(){
  vi.useFakeTimers();
- // Refresh once under the clock so subsequent polling and expiry timers are controlled too.
  await act(async()=>{fireEvent.click(screen.getByText('Validate session'));});
 }
 let failedLogout=false;

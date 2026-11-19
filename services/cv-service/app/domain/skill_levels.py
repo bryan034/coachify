@@ -2,9 +2,8 @@
 
 Levels use the shared 1-10 understanding scale and are read pessimistically: a skill the review
 did not clarify is assumed basic or not understood rather than left unrated. Only conflicting
-or unverified evidence is labelled uncertain. This is independent of any career goal. Reviews are stored beside the CV and overlaid on read,
-so they never change effective evidence, fingerprints or interview memory. A review applies only
-while the evidence it was judged from is unchanged.
+or unverified evidence is labelled uncertain. Reviews are stored beside the CV and overlaid on read,
+and apply only while the evidence they were judged from is unchanged.
 """
 from copy import deepcopy
 from pydantic import BaseModel, ConfigDict, Field
@@ -153,8 +152,7 @@ def apply_skill_level_reviews(document, items):
         if review and source['fingerprint'] == review['fingerprint']:
             levels = {level['skill_id']: level for level in review['levels']}
         elif finished:
-            # A completed review can outlive a failed provider call. Show conservative
-            # assumptions without persisting them, so the model can still retry later.
+            # After a failed provider call, show conservative assumptions without persisting them.
             levels = {claim['skill_id']: assumed_level(source, claim['skill_id'])
                       for claim in item.get('skill_claims', [])
                       if claim['skill_id'] in source['skills'] and not claim.get('skill_level')}

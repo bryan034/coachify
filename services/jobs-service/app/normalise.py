@@ -79,8 +79,7 @@ def bounded(value, limit):
 
 
 def excerpt(text):
-    # Prefer role-specific sections over employer introductions. Preserve the original
-    # visible wording rather than generating requirements not supplied by the board.
+    # Prefer role-specific sections over employer introductions.
     section = re.search(r'(?im)(?:^|[.!?]\s+)(?:what you(?:’|\x27)ll do|what you will do|responsibilities|requirements|qualifications|about (?:the|this) role)\s*[:\n]', text)
     if section: text = text[section.start():].lstrip()
     text = PHONE.sub('[phone removed]', EMAIL.sub('[email removed]', text))
@@ -90,7 +89,7 @@ def excerpt(text):
 
 
 def terms(*priority, description=''):
-    """Title and employer terms always survive the cap; description terms are sorted, so word order is not retained."""
+    """Title and employer terms always survive the cap; description terms are sorted."""
     def split(value):
         normal = unicodedata.normalize('NFKC', value).casefold()
         return [t for t in (m.rstrip('.') for m in TERM.findall(normal)) if 0 < len(t) <= MAX_TERM_LENGTH]
@@ -101,7 +100,7 @@ def terms(*priority, description=''):
 
 
 def query_terms(value):
-    """Search keeps symbols such as C++ and C#, which MongoDB text indexes would discard."""
+    """Search terms that keep symbols such as C++ and C#."""
     return list(dict.fromkeys(terms(value)))[:8]
 
 
@@ -146,7 +145,7 @@ def safe_url(value):
 
 
 def job_link(value):
-    """A link the user pasted. It is stored and shown, never fetched, so no request ever goes to this host."""
+    """A link the user pasted; it is stored and shown, never fetched."""
     if not safe_url(value):
         return None
     parsed = urlsplit(value.strip())
@@ -158,7 +157,7 @@ def job_link(value):
 
 
 def timestamp(value):
-    """Provider dates become UTC at millisecond precision, which is what BSON retains."""
+    """Provider dates as UTC at millisecond precision."""
     try:
         if isinstance(value, bool):
             return None

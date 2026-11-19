@@ -1,9 +1,7 @@
 """Model-judged category, goal relevance and competence for every profile skill.
 
-The judgement reads the reviewed evidence (CV skill claims with their review answers,
-application levels and attribution, plus Profile declarations) and the goal's skill
-requirements. Every judgement is validated against the supplied references before it
-is saved; a batch that still fails after one repair is left out rather than guessed.
+Every judgement is validated against the supplied references before it is saved;
+a batch that still fails after one repair is left out.
 """
 from app.domain import OutputProblem
 from app.schemas import SkillBatch
@@ -101,8 +99,6 @@ def validate_skill_batch(output, skills, requirement_refs, evidence, requirement
         if own_level is not None:refs=list(dict.fromkeys(refs+reviewed))
         score = own_level if own_level is not None else item.competence_score
         if score is None and not refs:
-            # Unknown personal ownership still has the explicitly requested
-            # provisional project baseline; it is not a model-verified capability.
             refs=[ref for ref in sorted(own) if evidence[ref].get('source_kind') in {'project','experience'}
                 and (evidence[ref].get('attribution')=='unknown' or evidence[ref].get('support_uncertain'))
                 and evidence_level([evidence[ref]])==3]
@@ -206,8 +202,8 @@ def find_skill(evidence, name, canonical_skill_id=None):
 
 
 async def reevaluate_skill(model, snapshot, saved_outcomes, skill):
-    """Judge one skill from its own evidence. Only this skill, the goal's requirements and the CV's
-    experience summaries reach the model; the rest of the person's skills are never sent."""
+    """Judge one skill from its own evidence; only this skill, the goal's requirements and the CV's
+    experience summaries reach the model."""
     goal = _goal({**snapshot, 'requirements': snapshot['requirements']}, saved_outcomes)
     refs = {r['ref'] for r in goal['requirements']}
     context = {'goal': goal, 'experiences': _experiences(snapshot['evidence']), 'skills': [skill]}

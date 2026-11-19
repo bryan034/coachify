@@ -1,7 +1,6 @@
 """Development-only "start afresh": delete one account's data from a service database.
 
-Never active outside APP_ENV=development. Shared caches without an owner field (for example job postings)
-and the collections a service names in `keep` are left alone."""
+Shared caches without an owner field and the collections a service names in `keep` are left alone."""
 import os
 
 OWNER_FIELDS = ('user_id', 'owner', 'account_id')

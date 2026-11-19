@@ -34,7 +34,6 @@ def update_attachment(target, attached, fingerprint, timestamp):
     if previous == attached and previous_fingerprint == fingerprint:
         return False
     if same_source(previous, attached) and fingerprint is not None and previous_fingerprint == fingerprint:
-        # An unrelated CV write changes its document version, not this relationship.
         return False
     history = target.setdefault("attachment_history", [])
     if len(history) >= 100:

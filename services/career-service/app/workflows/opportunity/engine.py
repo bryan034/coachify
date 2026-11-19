@@ -38,13 +38,12 @@ def select_evidence(sources,budget):
     encoding=tiktoken.get_encoding('o200k_harmony')
     def size(values):
         serialized=json.dumps([s.model_dump(mode='json') for s in values])
-        # AIInput.context is bounded to 40,000 characters. Reserve room for
-        # public identity, field guidance and already validated findings too.
+        # Leave room within the bounded AIInput context for identity, guidance and validated findings.
         if len(serialized)>24000:return budget+1
         return len(encoding.encode(serialized,disallowed_special=()))
     selected=[]
     for index,source in enumerate(sources):
-        # Reserve a fair share for later sources instead of dropping them whole.
+        # Reserve a fair share for later sources.
         allowance=size(selected)+max(0,(budget-size(selected))//(len(sources)-index))
         low,high=0,len(source.evidence)
         best=None
@@ -122,7 +121,7 @@ class OpportunityEngine:
         return {'results':{k:v for k,v in job['categories'].items() if v['status'] not in ('pending','running')}}
 
     async def generate(self,job,stage,data,validate=None):
-        # Bounded schema repair for this pipeline; never inherit unbounded legacy recovery.
+        # Bounded schema repair for this pipeline.
         step=stage+'_'+fingerprint(data)[:24]
         prior=job.get('model_recovery',{}).get(step,{})
         invalids=prior.get('invalid_responses',0)
@@ -163,7 +162,7 @@ class OpportunityEngine:
         plan=await self.generate(job,'opportunity_plan',{'opportunity':job['public'],'recruitment_year':now().year,'previous_queries':job.get('history',{})})
         queries=planned_queries(plan,self.settings.max_searches,job['public'])
         if job.get('prefetched'):
-            # Successful paid prefetch stays first, so evaluation resumes its exact query.
+            # Successful paid prefetch queries stay first.
             queries={category:list(dict.fromkeys([*job.get('queries',{}).get(category,[]),*queries[category]]))[:self.settings.max_searches] for category in CATEGORIES}
         await thread(self.store.update,job['_id'],job['worker_token'],queries=queries,queries_planned=True)
         return {}
@@ -182,7 +181,7 @@ class OpportunityEngine:
         try:
             rounds=0 if job.get('evaluation_complete',{}).get(category) else min(self.settings.max_searches,1+self.settings.max_followups)
             for index in range(rounds):
-                # A paid retrieval is saved before evaluation, so quota/restart retries reuse it.
+                # Save a paid retrieval before evaluation.
                 if index>=len(history):
                     query=queries[index] if index<len(queries) else None
                     if not query:break
@@ -197,7 +196,7 @@ class OpportunityEngine:
                                         sources=await self.source.collect_opportunity_query(ResearchContext.model_validate(job['context']),query)
                             break
                         except (GoalError,TimeoutError) as error:
-                            # Retry only transient network/server errors, never credentials/parameters/billing.
+                            # Retry only transient network/server errors.
                             retryable=isinstance(error,TimeoutError) or any(v in str(error).casefold() for v in ('timed out','connect','temporarily unavailable'))
                             if not retryable or attempt==self.settings.retries:raise
                             await asyncio.sleep(.5*2**attempt)
@@ -207,8 +206,7 @@ class OpportunityEngine:
                 # Quota pauses resume the unfinished evaluation, not earlier successful ones.
                 if history[index] in evaluated:continue
                 if not evidence:continue
-                # Keep useful passages even when a richer source exceeds the model
-                # evidence allowance without discarding all useful source text.
+                # Keep useful passages within the model evidence allowance.
                 selected=select_evidence(evidence,self.settings.evidence_tokens)
                 if not selected:break
                 def validate(output):
@@ -220,7 +218,7 @@ class OpportunityEngine:
                 model_calls+=1
                 try:output=await self.generate(job,'opportunity_structure',context,validate)
                 except AIError as error:
-                    # One unusable round must not end the category: record it and try the next search.
+                    # Record an unusable round and try the next search.
                     if error.code not in ('invalid_output','incomplete_output'):raise
                     round_error=error.code;evaluated.append(history[index])
                     await thread(self.store.update,job['_id'],job['worker_token'],**{f'evaluated.{category}':evaluated})
@@ -257,7 +255,7 @@ class OpportunityEngine:
         except (GoalError,TimeoutError,ValueError) as error:
             error_code='source_timeout' if isinstance(error,TimeoutError) else 'source_unavailable'
             logger.warning('category=%s error_code=%s exception_type=%s',category,error_code,type(error).__name__)
-        # Every round failed validation and nothing was kept: report it as before rather than as "not found".
+        # Every round failed validation and nothing was kept: report the round error.
         if round_error and not findings and not error_code and not pending:error_code=round_error
         findings,retained=retain_useful(category,findings,evidence,relevant_ids)
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'retained_sources.{category}':[s.model_dump(mode='json') for s in retained]})
@@ -278,11 +276,10 @@ class OpportunityEngine:
         return {'results':{category:result.model_dump(mode='json')}}
 
     async def quality(self,state):
-        # Revalidate persisted branch values; missing citations can never reach summary/storage.
+        # Revalidate persisted branch values.
         job=await self.job(state);categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
         for key,result in categories.items():
-            # Each category is checked against its own saved sources only, so a page that another
-            # category also cites cannot have this category's quoted text merged away.
+            # Check each category against its own saved sources only.
             sources=category_sources(job,key)
             valid=[f for f in result.findings if all(s in sources and whitespace(q) in whitespace(sources[s].evidence or '') for s,q in zip(f.source_ids,f.quotes))]
             if len(valid)!=len(result.findings):
@@ -298,8 +295,7 @@ class OpportunityEngine:
         job=await self.job(state);categories={k:CategoryResult.model_validate(v) for k,v in state['results'].items()};facts=summary_input(categories)
         if not facts or any(v.status=='pending' for v in categories.values()):return {'summary':{}}
         await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':'preparing_summary'}})
-        # Display the structuring model's wording verbatim; overview references
-        # are selected locally so no additional model can rewrite or block it.
+        # Display the structuring model's wording verbatim; overview references are selected locally.
         ids=list(dict.fromkeys(f['id'] for f in facts))
         considerations=[f['id'] for f in facts if f['scope']!='exact' or f['confidence'] in ('low','insufficient_evidence') or f['conflict_group']]
         summary=Summary(overview_refs=ids[:3],key_takeaway_refs=ids[3:9],consideration_refs=considerations[:6])
@@ -310,11 +306,11 @@ class OpportunityEngine:
         """Rate the level the role needs in each goal skill from the validated findings.
 
         The model decides each level, guided by elo's weighted reference score for the skill.
-        Optional enrichment: any model failure leaves the weighted reference targets in place.
+        Any model failure leaves the weighted reference targets in place.
         """
         job=await self.job(state);skills=job.get('skills') or []
         categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
-        # Rebuilding a cached report's summary researched nothing new: keep its saved ratings, spend no call.
+        # Rebuilding a cached report's summary keeps its saved ratings.
         if not skills or not job.get('requested') or any(v.status=='pending' for v in categories.values()):return {}
         findings=[{k:f[k] for k in ('id','category','field','value','confidence','scope')} for f in summary_input(categories)]
         public=job['public'];ids={f['id'] for f in findings}
@@ -324,8 +320,7 @@ class OpportunityEngine:
             output=await self.generate(job,'opportunity_skill_levels',data,lambda value:validated_skill_levels(value,skills,ids))
             levels=validated_skill_levels(output,skills,ids)
         except Exception as error:
-            # Never let this enrichment fail or re-run the research: an unhandled error here would
-            # make durable recovery repeat the whole job. Cancellation still propagates.
+            # Enrichment failures are logged and skipped; cancellation still propagates.
             logger.warning('node=opportunity_skill_levels skipped error_code=%s',getattr(error,'code',type(error).__name__))
             levels=[]
         await thread(self.store.update,job['_id'],job['worker_token'],skill_levels=levels)
@@ -421,7 +416,7 @@ class OpportunityEngine:
                 await thread(self.app.state.workspace_store.phase,job['owner'],job['session'],job['run'],phase,
                     error='Research is waiting for the AI allowance and will resume automatically.' if quota else 'Research is retrying automatically.' if retry_transient else 'Research could not finish. Your goal and available findings remain saved.',
                     error_code=code,retry_after=max(1,min(3600,error.retry_after or 61)) if quota else None)
-            except GoalError:pass  # A replaced workspace must not receive this run's error.
+            except GoalError:pass
         finally:
             if cache and cache.get('token'):await thread(self.store.research.fail,context,cache['token'],'partial')
             await thread(self.store.release,identifier,token)
@@ -447,7 +442,7 @@ class OpportunityEngine:
             message=('The previous AI service wait will resume automatically.' if job.get('limit_scope')=='user' else 'The model provider requested a cooldown. Research will resume automatically.') if waiting and code=='rate_limited' else 'The search provider is rate limited; research will resume automatically.' if waiting and code=='source_rate_limited' else 'Interview research is still pending.' if waiting else 'Some research categories could not finish. Available findings remain readable.'
             await thread(self.app.state.workspace_store.phase,job['owner'],job['session'],job['run'],phase,research_id=record.id,
                 error=None if phase in ('ready','researching') else message,error_code=None if phase in ('ready','researching') else code or 'research_unavailable',retry_after=retry,limit_scope=job.get('limit_scope'),provider=job.get('provider'))
-        except GoalError:pass  # A replacement goal cannot be overwritten by this historical run.
+        except GoalError:pass
 
     async def close(self):
         self.stopping=True;self.sweeper.cancel()

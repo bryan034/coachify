@@ -56,7 +56,7 @@ def test_multiple_guided_questions_keep_current_goal_until_a_complete_edit_and_r
     replay=send(flow,initial,'London',key)
     assert replay.status_code==200 and replay.json()['edit_status']=='saved' and len(seen)==3
     assert send(flow,initial,'Singapore',key).status_code==409
-    assert ready['current']['goal']['requirements_need_review']  # Earlier requirements were not silently re-certified.
+    assert ready['current']['goal']['requirements_need_review']
 
 
 def test_skill_change_is_automatically_applied_with_user_provenance(flow):

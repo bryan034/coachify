@@ -7,6 +7,7 @@ elo is a career-readiness planner for users in Singapore. This file is the worki
 - Use the current checkout. Check Git status and branch before editing; preserve unrelated contributors' changes. Never push directly to `main`; if on `main`, suggest a new branch and implement on a separate one.
 - Follow the requested scope and existing conventions. Avoid unrelated refactoring or new dependencies. Discuss material architecture changes, breaking APIs and destructive migrations before proceeding unless already authorised.
 - Do not invent requirements or present placeholders as implemented features. Label unimplemented work.
+- Do not add comments by default. Only comment where it describes what a critical function or non-obvious piece of logic does. Never use comments to explain or justify a design choice, record history, or restate the code.
 - Commit or push only when asked.
 
 ## Architecture at a glance

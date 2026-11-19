@@ -55,7 +55,7 @@ function useResults(cv: CvDetail) {
     category: groups[skill.skill_id] ?? skill.category ?? 'Other', subgroup: subgroups[skill.skill_id] ?? '',
    };
   });
-  // Skills you removed in review are no longer extracted, so they come back from the item list.
+  // Skills removed in review come back from the item list.
   cv.items.filter(item => item.kind === 'skill' && item.removed && !seen.has(item.title.toLowerCase())).forEach(item => skills.push({
    id: item.id, name: item.title, itemIds: [item.id], origin: 'rem', category: 'Removed', subgroup: '', note: review?.skill_notes[item.id],
   }));

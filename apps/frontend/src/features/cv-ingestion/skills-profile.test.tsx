@@ -67,10 +67,8 @@ it('shows a saved partial profile and its uncertainty without inventing a skill 
  render(<ResumePreview/>);
  expect(await screen.findByText('Saved profile')).toBeVisible();
  expect(screen.getByText('Weekly reports')).toBeVisible();
- // The CV review owns the named regions for these kinds, so the summary columns must not add a second one.
  expect(screen.queryByRole('region',{name:'Work and internships'})).not.toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:/^Data processing/}));
- // Talk it through opens on the skill. Without a goal comparison there is no target and no level is invented.
  expect(within(screen.getByRole('dialog',{name:'Data processing'})).getByText(/I couldn’t find enough in your CV to rate this/)).toBeVisible();
  expect(screen.queryByText('Advanced')).not.toBeInTheDocument();
  expect(cvApi.openConversation).not.toHaveBeenCalled();

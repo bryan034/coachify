@@ -40,7 +40,6 @@ async def generate(goal_id:str,body:SuggestCommand,request:Request,account=Depen
     goal=await owned_goal(request,account,goal_id)
     if goal.version!=body.expected_version:raise GoalError('The current career goal changed. Reload before generating.')
     finished,record=await research_state(request,account,goal)
-    # Gaps are only known once research stops adding findings.
     if not finished:raise GoalError('Interview research is still running. Suggestions are generated when it finishes.')
     if not body.refresh:
         saved=await prep.read_saved(request,account,goal,record)

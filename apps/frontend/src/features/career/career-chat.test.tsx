@@ -715,7 +715,6 @@ it('queues multiple messages and dispatches them with the latest goal version an
  }
  expect(box).toHaveValue('');expect(box).toBeEnabled();
  expect(api.mock.calls.filter(([path])=>path==='/workspace/messages')).toHaveLength(1);
- // Waiting messages sit above the composer, not in the transcript, until elo starts answering them.
  const waiting=screen.getByRole('list',{name:'Queued messages'});
  expect(within(waiting).getAllByRole('listitem').map(item=>item.querySelector('.agent-queued-text')!.textContent)).toEqual(['What skills matter?','What should I practise?']);
  expect(within(screen.getByRole('log')).queryByText('What skills matter?')).not.toBeInTheDocument();

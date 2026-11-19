@@ -9,13 +9,11 @@ def main():
     logging.disable(logging.CRITICAL)
     if sys.platform=='linux':
         import resource
-        # Chromium reserves a very large virtual address space; the static parser's
-        # RLIMIT_AS cannot apply here. Container memory/PID/tmp limits remain in force.
         resource.setrlimit(resource.RLIMIT_CPU,(12,12))
         resource.setrlimit(resource.RLIMIT_FSIZE,(8*1024*1024,8*1024*1024))
     try:
         import fcntl
-        # One renderer per service container, within the existing two-import admission.
+        # One renderer per service container.
         with open('/tmp/elo-browser-preview.lock','a') as lock:
             try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError:raise ValueError('Another JavaScript preview is loading. Try again shortly, paste the description or upload a document.') from None

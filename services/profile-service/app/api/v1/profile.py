@@ -22,7 +22,6 @@ def repository(request: Request):
 
 @router.get("/auth-config", response_model=AuthConfigView)
 def auth_config(request: Request):
-    # Describes the validated server mode; this endpoint cannot change authentication.
     settings = request.app.state.auth_settings
     return {"mode": settings.mode, "email_password_enabled": True,
             "google_enabled": settings.mode == "google" and bool(settings.google_client_id), "email_verification_required": True,

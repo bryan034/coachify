@@ -1,8 +1,6 @@
 """Bounded OpenAI SDK Chat Completions adapter for configured inference providers.
 
-No retrieval, source persistence, automatic provider fallback or frontend key.
 Only numeric token usage, fixed stage names and attempt counts are logged.
-Callers own authenticated context, disclosure, operation state and publication.
 """
 from __future__ import annotations
 
@@ -289,7 +287,7 @@ class AIError(Exception):
         self.input_count=input_count if type(input_count) is int and input_count>=0 else None
         self.retry_after = math.ceil(retry_after) if isinstance(retry_after, (int, float)) and math.isfinite(retry_after) and retry_after >= 0 else None
         self.code, self.retryable = code, retryable
-        super().__init__(code)  # Never include provider bodies, prompts or credentials.
+        super().__init__(code)
 
 
 @dataclass
@@ -368,7 +366,7 @@ def compact_request(request):
     try:
         goal = JDExtraction.model_validate(json.loads(request.context)['career_goal'])
     except (ValueError, KeyError, TypeError):
-        return request  # Existing defensive budget checks still apply.
+        return request
     content = goal.model_dump(mode='json', exclude_none=True, exclude_defaults=True)
     content.pop('job_url', None)
     for index, skill in enumerate(content['skills']):
@@ -376,7 +374,6 @@ def compact_request(request):
             skill.pop(key, None)
         if request.stage in ('jd_edit','workspace_chat'):
             skill['ref'] = str(index)
-        # Explanation needs the interpreted meaning, not repeated provenance excerpts.
         if request.stage == 'jd_chat' and skill.get('context'):
             skill.pop('evidence', None)
     for condition in content.get('non_skill_requirements', []):
@@ -391,7 +388,7 @@ def compact_request(request):
 
 
 def record_usage(raw, stage, attempt, provider_attempt):
-    """Allowlist numeric provider counters only. Never log source or provider text."""
+    """Allowlist numeric provider counters only."""
     if stage not in MODEL_OUTPUTS:
         return
     try:
@@ -437,7 +434,6 @@ class AIAdapter:
         self.settings, self.client = settings, client
         self.sdk = model_client(settings, client) if client is not None else None
         self.clock, self.sleep = clock, sleep
-        # Production routes every Career stage through this shared adapter.
 
     async def _current(self, operation, request, current_revision, current_versions):
         if operation.status == 'cancelled':
@@ -452,7 +448,6 @@ class AIAdapter:
             raise AIError('stale_input', True)
 
     def _require_followup_time(self, deadline):
-        # A follow-up needs time for a complete generation, not just connection setup.
         minimum = min(20.0, self.settings.timeout_seconds * 0.75)
         if deadline - self.clock() < minimum:
             raise AIError('timeout', True)
@@ -496,8 +491,6 @@ class AIAdapter:
                             progress = quota_progress.get()
                             if error.code != 'rate_limited' or progress is None:
                                 raise
-                            # Keep the unfinished model call in this graph node. Waiting
-                            # consumes neither an output correction nor execution time.
                             delay = max(1, error.retry_after or 60)
                             remaining = max(0, budget.when() - asyncio.get_running_loop().time())
                             started = self.clock()
@@ -505,9 +498,7 @@ class AIAdapter:
                             quota_reason.set({'limit_scope':error.limit_scope,'provider':error.provider})
                             progress(delay)
                             try:
-                                # A long provider cooldown must not retain an
-                                # obsolete workspace's slot until the whole wait
-                                # expires. Recheck without issuing provider calls.
+                                # Recheck staleness during a long provider cooldown without issuing provider calls.
                                 waiting = delay
                                 while waiting > 0:
                                     pause = min(5, waiting)
@@ -518,8 +509,7 @@ class AIAdapter:
                                 deadline += self.clock() - started
                                 budget.reschedule(asyncio.get_running_loop().time() + remaining)
                                 progress(None)
-                # Compatibility JD calls retain one bounded correction. Live
-                # LangGraph nodes own recovery; failed response bodies are never reused.
+                # JD extraction compatibility calls retain one bounded correction.
                 attempts = 2 if request.stage == 'jd_extraction' and not recover_responses.get() else 1
                 for attempt in range(attempts):
                     try:
@@ -594,7 +584,6 @@ class AIAdapter:
                             proposals = None
                             if output.edit_requested:
                                 self._require_followup_time(deadline)
-                                # Still the same user operation and timeout.
                                 edit_request = request.model_copy(update={'stage': 'jd_edit'})
                                 edit_payload = self._payload(edit_request)
                                 edit_raw = await complete(edit_payload, stage='jd_edit', attempt=1, owner=operation.owner)
@@ -616,8 +605,6 @@ class AIAdapter:
                     except AIError as error:
                         if error.code != 'invalid_output' or attempt + 1 >= attempts:
                             raise
-                        # A correction is another complete generation. Do not start
-                        # one that is likely to be disconnected by our own deadline.
                         self._require_followup_time(deadline)
                         await self._current(operation, request, current_revision, current_versions)
                         feedback = {'reason': error.reason or 'response_envelope', 'fields': error.fields}
@@ -626,8 +613,7 @@ class AIAdapter:
                             'Correct the listed check; use faithful JD interpretations, use each skill name once, and supply every required field. '
                             'Keep JSON compact; use short evidence/context sentences without losing requirements. '
                             'Do not invent facts. Safe validation feedback: '+json.dumps(feedback)}]}
-            # No awaits between this last stale check and returning. Persistence
-            # must revalidate exact snapshots and use immutable/idempotent writes.
+            # No awaits between this last stale check and returning.
             await self._current(operation, request, current_revision, current_versions)
             operation.status = 'succeeded'
             return Generated(output, Generation(provider=self.settings.provider, model=self.settings.model,
@@ -728,7 +714,7 @@ class AIAdapter:
 
         request = compact_request(request)
         if request.stage in DISCOVERY_PROMPTS:
-            # Actual token estimates for Discovery; never silently cut evidence.
+            # Actual token estimates for Discovery.
             input_budget=min(input_budget,32768)
         request = self._fit_request(request, instructions, schema_bytes, input_budget,response_format=response_format)
         messages = [{'role': 'system', 'content': instructions},
@@ -744,24 +730,19 @@ class AIAdapter:
 
         def fits(candidate):
             messages = messages_for(candidate)
-            # JD admission counts the full provider prompt and grammar, including
-            # schema-in-prompt JSON mode and any repair feedback. Bytes are not
-            # tokens; the unchanged source must fit alongside reserved output.
+            # JD admission counts the full provider prompt and grammar against the input budget.
             size = input_tokens({'messages':messages,'response_format':response_format}) if request.stage in DISCOVERY_PROMPTS or request.stage in JD_OUTPUT_TOKENS or request.stage in ('goal_summary','interview_prep','role_summary','opportunity_structure') else sum(len(message['content'].encode()) for message in messages) + schema_bytes
             return size <= input_budget, size
 
         current = request
         if request.stage == 'discovery_turn':
             # History has its own 8K allowance within the full request budget.
-            # Never trim current input, saved understanding, memory or facts.
             _, base_size = fits(request.model_copy(update={'conversation': request.conversation[-1:]}))
             input_budget = min(input_budget, base_size + 8192)
         while True:
             fits_budget, size = fits(current)
             if fits_budget:
                 return current
-            # Passage refs must identify exactly what the model saw. Never
-            # silently shorten text after constructing its evidence catalogue.
             if current.stage == 'discovery_turn' and len(current.conversation) > 1:
                 # Prefer complete exchanges and keep the newest user input intact.
                 remove_count = 2 if len(current.conversation) > 2 and current.conversation[0].role == 'user' and current.conversation[1].role == 'assistant' else 1
@@ -839,8 +820,7 @@ class AIAdapter:
         return json.dumps(value, ensure_ascii=False, separators=(',', ':'))
 
     async def _rejection(self, response):
-        # Error prose may echo prompts/keys. Only fixed codes/field names leave
-        # this boundary.
+        # Only fixed codes/field names leave this boundary.
         data=bytearray()
         async for chunk in response.aiter_bytes():
             data.extend(chunk)
@@ -868,8 +848,6 @@ class AIAdapter:
                     error=await self._rejection(response)
                     raise error
                 if status == 429:
-                    # Let the caller retry after the provider's cooldown. Automatic
-                    # immediate retries consume quota and may exceed our turn timeout.
                     try:
                         retry_after = float(response.headers.get('retry-after', 'nan'))
                     except ValueError:
@@ -908,7 +886,7 @@ class AIAdapter:
             if message.get('tool_calls') or message.get('refusal') or not isinstance(message['content'], str):
                 raise AIError('invalid_output', True, reason='response_envelope')
             content=message['content'].strip()
-            # Remove only an enclosing Markdown fence. No guessing, fact repair or second API call.
+            # Remove only an enclosing Markdown fence.
             if content.startswith('```') and content.endswith('```'):
                 lines=content.splitlines()
                 if len(lines)>=3 and lines[0].strip().casefold() in ('```','```json') and lines[-1].strip()=='```':
@@ -932,8 +910,6 @@ class AIAdapter:
                 cooldown = min(max(cooldown, 1), 3600) if math.isfinite(cooldown) else 30
             except (ValueError, TypeError):
                 cooldown = 30
-            # This is a body-level failure under HTTP 200. Do not call its
-            # embedded code an HTTP status, or feed it into output repair.
             diagnostic = {'provider': self.settings.provider, 'http_status': 200,
                           'fields': [error.parameter] if error.parameter else []}
             raise AIError(code, code in ('rate_limited', 'unavailable'),

@@ -5,10 +5,8 @@ A passage is *verified* only when every check passes: it names the target market
 no other-country signal. It names the saved employer, contains each core role word,
 addresses the question focus (a salary needs an actual amount) and the router's
 search subject; and it is not stale. Only verified passages may be saved as job
-facts. Everything else, including passages about another country (for example the
-office a Singapore-listed role is actually based in), is an unverified candidate
-that may inform an answer, labelled with its market, but is never saved. Checks
-are lexical and conservative: a missed match costs recall, never correctness.
+facts. Everything else is an unverified candidate that may inform an answer,
+labelled with its market, but is never saved.
 """
 import re
 from dataclasses import dataclass, field
@@ -19,7 +17,7 @@ SINGAPORE = 'singapore'
 MAX_AGE_DAYS = 3 * 365
 
 LOCAL = re.compile(r'\bsingapore(?:an)?\b|\bSGD\b|\bS\$|\bSG\$', re.I)
-# Currencies other than SGD. Bare "$" stays neutral: Singapore postings use it too.
+# Currencies other than SGD; bare "$" stays neutral.
 FOREIGN_CURRENCY = re.compile(
     r'\b(?:AUD|USD|GBP|EUR|INR|MYR|HKD|NZD|CAD|IDR|CNY|RMB|JPY|KRW|THB|VND|AED|CHF)\b'
     r'|(?:\bA|\bAU|\bUS|\bHK|\bNZ|\bC|\bCA|\bNT)\$|£|€|₹|¥|₩|₱|\bRM(?=\s?\d)|\bRs\.?(?=\s?\d)|\bRp\.?(?=\s?\d)', re.I)
@@ -89,8 +87,7 @@ def target_place(goal):
 def related_places(goal, texts=()):
     """Other places the saved goal itself names, e.g. a base office in the JD.
 
-    A role listed in one market can be based in another; these places widen
-    search and give the answer model context. They never verify a passage.
+    These widen search and give the answer model context; they never verify a passage.
     """
     place = target_place(goal)
     bases, mentioned = [], []
@@ -203,8 +200,7 @@ def verify(focus, url, title, passage, goal, *, terms=None, published=None, toda
     asked = bool(words) and any(re.search(r'\b' + re.escape(stem(w)), text, re.I) for w in words)
     if words and not asked and not scope_only:
         reasons.append('question')
-    # The router's specific subject (e.g. "housing allowance") satisfies the topic;
-    # without one, the focus vocabulary must match. Salaries always need an amount.
+    # The router's specific subject satisfies the topic; otherwise the focus vocabulary must match. Salaries always need an amount.
     pattern = TOPIC.get(focus)
     if not scope_only and (not (asked or (pattern and re.search(pattern, text, re.I))) or (focus == 'compensation' and not AMOUNT.search(text))):
         reasons.append('topic')

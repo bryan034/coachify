@@ -23,7 +23,6 @@ def test_every_week_through_the_deadline_needs_an_objective_even_after_scope_end
     assert codes(outline(),require_weeks=True)=={'week_missing'}
     assert codes(outline(weeks=[objective()]),require_weeks=True)=={'week_missing'}
     both=[objective(),objective('2030-01-14')]
-    # The full journey includes a zero-effort contingency week after the milestone.
     assert codes(outline(weeks=both),require_weeks=True)=={'week_missing'}
     assert codes(outline(weeks=[*both,objective('2030-01-21',estimated_minutes=0)]),require_weeks=True)==set()
     assert 'week_repeated' in codes(outline(weeks=[*both,objective()]))
@@ -47,13 +46,10 @@ def test_milestone_structure_errors():
     assert 'prerequisite_order' in codes(outline(milestones=order))
 
 def test_milestone_effort_must_fit_capacity_through_its_window_alone_and_together():
-    # Wednesday's 90 minutes are all that exist before Monday the 14th.
     assert 'milestone_capacity_exceeded' in codes(outline(milestones=[milestone(projected_end='2030-01-13',estimated_minutes=91)]))
     assert 'milestone_capacity_exceeded' not in codes(outline(milestones=[milestone(projected_end='2030-01-13',estimated_minutes=90)]))
-    # Each fits its own window, but both share the same 690 minutes.
     shared=[milestone('m1',estimated_minutes=400,projected_end='2030-01-27'),milestone('m2',estimated_minutes=400,projected_start='2030-01-09',projected_end='2030-01-27')]
     assert 'milestone_capacity_exceeded' in codes(outline(milestones=shared))
-    # Breaks are part of capacity: 60 + 10 break leaves 20 minutes, too short for a session.
     assert 'milestone_capacity_exceeded' in codes(outline(milestones=[milestone(projected_end='2030-01-13',estimated_minutes=90)]),config=settings(break_minutes_per_hour=10))
 
 def test_gap_labels_follow_the_assessment():
@@ -76,7 +72,6 @@ def test_material_unknown_needs_a_diagnostic_intent_or_a_confirmation_question()
     assert 'unresolved_material_unknown' in codes(outline(gaps=[gap(),gap('sql',**unknown,resolution='confirm_experience')]))
     asked=gap('sql',**unknown,resolution='confirm_experience',confirmation_question='Have you written SQL joins for a project?')
     assert codes(outline(gaps=[gap(),asked]))==set()
-    # The diagnostic task itself is required when the first week is planned.
     assert codes(outline(gaps=[gap(),gap('sql',**unknown,resolution='diagnostic')]))==set()
     assert codes(outline(gaps=[gap(),gap('sql',**unknown)]),confirmations={'sql':{'answer':'not_sure'}})==set()
 

@@ -1,7 +1,4 @@
-"""Keep the prompt's worked example compatible with the real evidence checks.
-
-These synthetic responses verify the contract, not live model compliance.
-"""
+"""Keep the prompt's worked example compatible with the real evidence checks."""
 from copy import deepcopy
 import json
 import httpx

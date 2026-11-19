@@ -36,7 +36,6 @@ describe('skipping review topics', () => {
   expect(within(current).getByText('Now · question 2 of 3')).toBeVisible();
   expect(within(within(rail).getByText('Coachify').closest('li')!).getByText('Skipped · CV used as written')).toBeVisible();
   expect(within(rail).getByText(/% of your experience reviewed/)).toBeVisible();
-  // Covered topics cannot be skipped; a skipped topic offers review instead.
   expect(within(rail).queryByRole('button', {name: 'Skip Business Analyst — Synapxe'})).not.toBeInTheDocument();
   expect(within(rail).queryByRole('button', {name: 'Skip Coachify'})).not.toBeInTheDocument();
   fireEvent.click(within(rail).getByRole('button', {name: 'Skip Analyst — SEA Bridge'}));

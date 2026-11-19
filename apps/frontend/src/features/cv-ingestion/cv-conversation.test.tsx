@@ -31,7 +31,6 @@ describe('saved CV conversation', () => {
   const composer=screen.getByRole('textbox',{name:'Message elo'});
   fireEvent.change(composer,{target:{value:'My next draft'}});
   expect(composer).toHaveValue('My next draft');
-  // Typing stays open while elo works; sending is held until the saved turn finishes.
   expect(composer).toBeEnabled();
   fireEvent.keyDown(composer,{key:'Enter'});
   expect(cvApi.sendMessage).not.toHaveBeenCalled();

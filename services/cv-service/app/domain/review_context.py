@@ -18,7 +18,6 @@ def evidence_for(item):
     facts = deepcopy(unique_facts(item.get('review_evidence', [])))
     keys = {fact_key(f) for f in facts}
     for claim in item.get('skill_claims', []):
-        # Legacy extraction/interpretation already validated these attributes.
         refs = [{'source_id': e['id'], 'quote': e['excerpt']} for e in claim.get('evidence', [])][:3]
         if not refs: continue
         for field, attribute in [('personal_contribution', 'attribution'), ('assistance', 'assistance')]:

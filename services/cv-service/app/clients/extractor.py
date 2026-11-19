@@ -15,6 +15,26 @@ from app.domain.extraction_errors import ExtractionFailure
 from app.clients.extraction_schema import extraction_schema
 from app.clients.provider_errors import provider_failure, classified_provider_failure
 
+
+# TEMP-DEBUG (uncommitted; remove after diagnosis): truncated provider error fields only.
+import logging as _tmp_logging
+def _tmp_debug_provider_error(label, error):
+    try:
+        if isinstance(error, (bytes, bytearray)):
+            error = json.loads(error)
+        if isinstance(error, list) and len(error) == 1: error = error[0]
+        if isinstance(error, dict) and isinstance(error.get('error'), dict): error = error['error']
+        if not isinstance(error, dict):
+            _tmp_logging.getLogger('uvicorn.error').warning('TEMP-DEBUG %s non-dict error type=%s', label, type(error).__name__); return
+        meta = error.get('metadata') if isinstance(error.get('metadata'), dict) else {}
+        raw = meta.get('raw')
+        raw = raw if isinstance(raw, str) else json.dumps(raw)[:300] if raw is not None else None
+        _tmp_logging.getLogger('uvicorn.error').warning('TEMP-DEBUG %s code=%r type=%r provider=%r message=%r raw=%r',
+            label, error.get('code'), error.get('type'), meta.get('provider_name'),
+            str(error.get('message'))[:200], (raw or '')[:300])
+    except Exception as exc:
+        _tmp_logging.getLogger('uvicorn.error').warning('TEMP-DEBUG %s unparseable (%s)', label, type(exc).__name__)
+
 PROMPT_VERSION = 'cv-extraction-14'
 SCHEMA_VERSION = '7'
 REPAIR_INSTRUCTIONS = '''
@@ -70,8 +90,7 @@ EXAMPLE = {
          'proficiency': 'native', 'evidence': [{'block_id': 'example2', 'excerpt': 'English (native)'}]},
     ]},
 }
-# The worked response must include the same full property set required by the
-# provider's strict schema, including explicit nulls and empty default lists.
+# The worked example includes the full property set, with explicit nulls and empty lists.
 EXAMPLE['extraction'] = Extraction.model_validate(EXAMPLE['extraction']).model_dump()
 
 
@@ -154,8 +173,7 @@ class Extractor:
         if not self.configured:
             raise ExtractionFailure('CV extraction is not configured. Ask the administrator to configure the CV model, then retry this saved upload.',
                                     'model_request', 'not_configured')
-        # Main's full decoder schema remains authoritative. JSON-only mode
-        # needs the schema in prose; strict mode receives it in response_format.
+        # JSON-only mode puts the schema in the prompt; strict mode sends it in response_format.
         schema_in_prompt = self.response_mode == 'json_object'
         decoding_schema = extraction_schema()
         response_format = ({'type': 'json_schema', 'json_schema': {'name': 'cv_extraction', 'strict': True, 'schema': decoding_schema}}
@@ -193,6 +211,8 @@ class Extractor:
                             raise ExtractionFailure('The model response exceeded the safe processing limit. Retry this upload.', stage, 'response_too_large')
             stage = 'response_decode'
             result = json.loads(data)
+            if isinstance(result, dict) and (result.get('error') is not None or (isinstance(result.get('choices'), list) and result['choices'] and isinstance(result['choices'][0], dict) and result['choices'][0].get('error') is not None)):  # TEMP-DEBUG
+                _tmp_debug_provider_error(f'{usage_stage} http=200 envelope', result.get('error') or result['choices'][0].get('error'))  # TEMP-DEBUG
             raise_for_completion_error(result)
             if not isinstance(result, dict):
                 raise ExtractionFailure(unavailable, stage, 'invalid_response')
@@ -211,11 +231,11 @@ class Extractor:
                              'response_mode': self.response_mode}
         except ModelResponseError as exc:
             failure = classified_provider_failure(exc.reason, exc.parameter, stage)
-            # Permanent credit exhaustion cannot recover via the worker's
-            # temporary-rate-limit retry loop. This flag stays in memory.
+            # Credit exhaustion disables automatic retries.
             failure.auto_retry_allowed = not exc.quota_exhausted
             raise failure from None
         except httpx.HTTPStatusError as exc:
+            _tmp_debug_provider_error(f'{usage_stage} http={exc.response.status_code}', exc.response.content)  # TEMP-DEBUG
             raise provider_failure(exc.response, stage) from None
         except httpx.TimeoutException:
             raise ExtractionFailure(unavailable, stage, 'timeout') from None

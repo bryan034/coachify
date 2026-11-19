@@ -36,8 +36,6 @@ def test_differently_worded_sources_can_corroborate_one_finding():
     findings,rejected=supported_claims(output,'internship_insights',sources)
     assert rejected==0 and findings[0].quotes==quotes and findings[0].source_ids==['0','1']
     assert findings[0].value=='The mentor was supportive and offered guidance.'
-    # Values are now semantic rather than literal extracts; the engine performs
-    # a separate meaning check before publishing any paraphrase.
     output=StructuredFindings(findings=[claim(value='The mentor offered helpful support.')])
     findings,_=supported_claims(output,'internship_insights',sources)
     assert findings[0].value=='The mentor offered helpful support.'
@@ -59,8 +57,6 @@ def test_generation_and_storage_share_finding_constraints(changes,path,issue):
 
 
 def test_finding_storage_errors_preserve_reason_and_claim_path():
-    # Defensive validation of older/constructed provider objects must retain
-    # repair instructions even when normal generation validation was bypassed.
     from app.ai.opportunity_contracts import Claim
     source=ResearchSource(source_id='a',platform='other',url='https://example.test/a',evidence='A supportive mentor.')
     output=StructuredFindings.model_construct(findings=[Claim.model_construct(**claim(scope='company_wide'))])
@@ -168,7 +164,6 @@ def test_structured_wording_is_saved_without_another_model_pass(opportunity_flow
     assert result['categories']['interview_intelligence']['findings'][0]['value']==text
     assert calls.count('opportunity_structure')==5
     job=flow[1].research_contexts.find_one({'kind':'opportunity_job'})
-    # The only model stages are planning, structuring and the skill-level rating; nothing rewrites the wording.
     assert set(job['metrics'])=={'opportunity_plan','opportunity_structure','opportunity_skill_levels'}
 
 
@@ -187,7 +182,6 @@ def test_committed_edit_recovers_after_activation_is_interrupted(opportunity_flo
     key=headers()['Idempotency-Key'];digest='synthetic-chat-digest'
     app.state.review_store.save(goal['_id'],'11111111-1111-4111-8111-111111111111',key,
         SaveReview(expected_version=goal['version'],content=content),chat_receipt={'hash':digest})
-    # A read repairs workflow metadata without rolling the committed goal back.
     recovered=flow[0].get(BASE,headers=headers()).json()
     assert recovered['revision']==goal['version']+1 and recovered['current']['goal']['summary']=='Persisted before activation.'
     assert app.state.workspace_store.chat_replay('11111111-1111-4111-8111-111111111111',key,digest,workspace['session_id'])
@@ -209,7 +203,6 @@ def test_unsupported_numbers_in_structured_wording_get_precise_repair_feedback(o
 def test_older_workspace_adopts_current_goal_before_editing(opportunity_flow):
     flow=opportunity_flow;ingest(flow);workspace,_,_=research(flow)
     goal=workspace['current']['goal'];owner='11111111-1111-4111-8111-111111111111'
-    # An older deployment selected a separate intake record. Its content is obsolete.
     retired=ObjectId();flow[1].career_goals.insert_one({'_id':retired,'user_id':owner,'record_type':'requirement_review','content':{'role':'Obsolete role'}})
     flow[1].career_state.update_one({'_id':owner},{'$set':{'workspace.review_id':str(retired),'workspace.revision':3}})
     current=flow[0].get(BASE,headers=headers()).json()
@@ -246,7 +239,6 @@ def test_same_extract_with_different_summaries_keeps_one_stable_finding():
     result=dedupe_findings('interview_intelligence',[first,later])
     assert len(result)==1 and result[0].finding_id==first.finding_id
     assert result[0].quotes==[text]
-    # Growing corroboration must not change the ID and allow the original back in.
     additional=first.model_copy(update={'finding_id':'f'+'a'*16,'source_ids':['b'],'confidence':'low'})
     result=dedupe_findings('interview_intelligence',[*result,additional,first])
     assert len(result)==1 and result[0].finding_id==first.finding_id

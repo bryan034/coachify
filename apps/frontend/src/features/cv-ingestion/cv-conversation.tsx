@@ -18,7 +18,7 @@ const statusLabel: Record<ConversationAction['status'], string> = {
 };
 const mergeMessages = (older: ConversationMessage[], newer: ConversationMessage[]) => [...new Map([...older, ...newer].map(message => [message.id, message])).values()].sort((a, b) => a.sequence - b.sequence);
 const hasOutstandingAction = (message: ConversationMessage) => message.actions.some(action => ['pending','awaiting_confirmation','needs_source','failed'].includes(action.status));
-const maxHistoryPages = 13; // A bounded 500-message segment contains at most thirteen 40-message pages.
+const maxHistoryPages = 13;
 const readableField = (field: string) => ({experience_months: 'Experience in months', start_date: 'Start date', end_date: 'End date', ongoing: 'Still ongoing'}[field] ?? field.replaceAll('_', ' '));
 
 function ActionCard({action, busy, readOnly, decide, review = false}: {review?: boolean; action: ConversationAction; busy: boolean; readOnly: boolean; decide: (id: string, decision: Omit<ConversationDecision, 'mutation_id' | 'expected_revision'>) => void}) {
@@ -121,8 +121,6 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    page.messages.forEach(message => covered.add(message.id));
    if (page.next_before !== null && page.next_before >= before) throw new Error('Could not finish checking earlier actions. Check saved messages again.');
   }
-  // Mutation responses and polling contain only the latest page. Refresh loaded
-  // older action cards explicitly, including lease expiry at the same revision.
   let outstanding = current.current?.messages.filter(message => hasOutstandingAction(message) && !covered.has(message.id)) ?? [];
   while (valid() && outstanding.length && pages < maxHistoryPages) {
    const anchor = outstanding[outstanding.length - 1];
@@ -213,8 +211,6 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
   if (!active || busy || unavailable || resumeBlocked || active.id !== newestId.current || !text.trim() || (unconfirmedMessage && !recovering)) return;
   if (!recovering && (active.read_only || active.messages.some(message => message.actions.some(action => action.status === 'pending')))) return;
   if (Array.from(text).length > active.limits.max_message_chars) {setError(`Keep your message within ${active.limits.max_message_chars} characters. Your draft is still here.`); return;}
-  // An interrupted response may already be saved. Other sends must not replace
-  // its original receipt, revision or segment before that outcome is resolved.
   const attempt = previousAttempt ?? {conversationId: active.id, body: {expected_revision: active.revision, mutation_id: crypto.randomUUID(), text, ...(command ? {command} : {}), ...(itemId ? {item_id: itemId} : {})}};
   messageAttempts.current.set(signature, attempt);
   if (command === 'review_topic') setReopening(true);
@@ -323,7 +319,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
  const awaitingFirstQuestion = uploadedReview && autoReview && !autoStarted.current && !hasReviewHistory &&
   !conversation?.active_question && !unfinished && !error && conversation?.purpose !== null;
  const blocked = Boolean(busy || unavailable || resumeBlocked || awaitingFirstQuestion || unconfirmedMessage || !conversation || conversation.read_only || historical);
- // Typing never waits on the AI. A message sent while elo is working is held and sent once it is free.
+ // A message sent while elo is working is held and sent once it is free.
  const [queued, setQueued] = useState(false);
  const working = Boolean(busy) || pending || awaitingFirstQuestion;
  const canType = !(unavailable || resumeBlocked || !conversation || conversation.read_only || historical || unconfirmedMessage);
@@ -414,7 +410,6 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
   <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
   <div className="cv-chat-composer-wrap">
    {(error || unconfirmedMessage) && <div role="alert" className="cv-error"><p>{unconfirmedMessage ? 'We couldn’t confirm your last message was sent.' : error}</p>
-    {/* One action per failure. Resending reuses the same message ID, so it also confirms a send that did arrive. */}
     {unconfirmedMessage ? <button type="button" className="btn ghost sm" disabled={Boolean(busy) || unavailable || historical || resumeBlocked} onClick={() => void send(unconfirmedMessage.text, unconfirmedMessage.command, unconfirmedMessage.item_id)}>Try again</button>
     : conversation && <button type="button" className="btn ghost sm" disabled={Boolean(busy)} onClick={() => uploadedReview ? void checkSavedReview() : void refresh().then(() => setError('')).catch(cause => setError(errorText(cause, 'Could not refresh saved messages.')))}>Check saved messages</button>}
    </div>}

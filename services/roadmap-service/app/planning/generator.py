@@ -57,8 +57,6 @@ def protected_tasks(plan):
         t.get('origin')=='user' or t.get('overrides') or t.get('removed') or
         t.get('status') in ('in_progress','completed') or t.get('history') or t.get('notes')]
     # Preserve both prerequisites and dependants, including their identities.
-    # A removed prerequisite must remain visible as a blocker, not cause the
-    # dependant itself to disappear in a regenerated plan.
     ids={t['id'] for t in protected}
     while True:
         linked={t['id'] for t in tasks if t['id'] in ids or ids.intersection(t.get('prerequisites',[]))}
@@ -68,12 +66,7 @@ def protected_tasks(plan):
     return [t for t in tasks if t['id'] in ids]
 
 def reserved_sessions(plan,now):
-    """Capacity occupied by completed sessions and protected saved schedules.
-
-    The old assignment projection excludes personal tasks with no milestone and
-    represents one multi-slot task as several sessions. Count each slot once,
-    without treating a reservation as a completion or fabricating a milestone.
-    """
+    """Capacity occupied by completed sessions and protected saved schedules; each slot counts once."""
     completed=completed_sessions(plan)
     reserved=[dict(s) for s in completed]
     seen={s['id'] for s in completed}

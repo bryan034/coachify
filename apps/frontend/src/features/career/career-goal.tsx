@@ -24,9 +24,7 @@ const MAX_TEXT = 8_000, MAX_FILE = 10 * 1024 * 1024;
 const BLOCKED_SITE = 'could not be extracted from this website';
 const empty = (): Record<Method,Draft> => ({text:{text:''},url:{text:''},document:{text:''}});
 
-// Extraction runs as a server-side Career operation. This tab remembers its request
-// (body + idempotency key) so leaving and returning reconnects to the same operation
-// instead of starting another one. Records expire and are scoped to the account.
+// Pending extraction request (body + idempotency key), remembered per tab and account to reconnect to the same server-side operation.
 const PENDING='elo-career-extraction', PENDING_TTL=2*60*60*1000;
 type PendingExtraction={owner:string;body:string;key:string;method:Method;draft:Draft;at:number};
 export function pendingExtraction(owner:string):PendingExtraction|null{
@@ -34,11 +32,11 @@ export function pendingExtraction(owner:string):PendingExtraction|null{
   const value=JSON.parse(window.sessionStorage.getItem(PENDING)||'null') as PendingExtraction|null;
   if(value&&value.owner===owner&&Date.now()-value.at<PENDING_TTL&&typeof value.body==='string'&&typeof value.key==='string'&&methods.some(m=>m.id===value.method)&&typeof value.draft?.text==='string')return value;
   if(value)window.sessionStorage.removeItem(PENDING);
- }catch{/* unavailable storage: extraction still finishes server-side */}
+ }catch{}
  return null;
 }
-function rememberExtraction(value:PendingExtraction){try{window.sessionStorage.setItem(PENDING,JSON.stringify(value));}catch{/* in-page only */}}
-function forgetExtraction(){try{window.sessionStorage.removeItem(PENDING);}catch{/* nothing stored */}}
+function rememberExtraction(value:PendingExtraction){try{window.sessionStorage.setItem(PENDING,JSON.stringify(value));}catch{}}
+function forgetExtraction(){try{window.sessionStorage.removeItem(PENDING);}catch{}}
 
 export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
  const { token, account } = useProfile(); const owner=account?.id||'';
@@ -56,9 +54,7 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
  const active = methods.find(m=>m.id===method)!; const draft=drafts[method];
  const count=Array.from(draft.text).length; const tooLong=count>MAX_TEXT;
  const hasWork=Boolean(url||file||Object.values(drafts).some(d=>d.text));
- // While extracting, the description is already with Career, so leaving loses nothing.
  const work = useRef(hasWork); work.current=hasWork&&!extracting;
- // Unmounting only stops polling; the server keeps extracting.
  useEffect(()=>()=>{request.current++;controller.current?.abort();extractController.current?.abort();},[]);
  // Reconnect once per mount to an extraction started before the user left.
  useEffect(()=>{if(resume&&token)void runExtraction(resume.body);},[token]);
@@ -116,7 +112,6 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
   finally{if(!abort.signal.aborted)setExtracting(false);}
  }
  function clear(){if(hasWork&&!window.confirm('Clear this temporary input and preview?'))return;request.current++;controller.current?.abort();setBusy(false);setError('');setDrafts(p=>({...p,[method]:{text:''}}));if(method==='url')setUrl('');if(method==='document'){setFile(undefined);if(input.current)input.current.value='';}}
- // Show the same processing screen as the goal conversation from the moment extraction starts.
  if(extracting){
   const steps:ProcessingStep[]=[
    {label:'Read the job description',state:'now',note:extractWait?'Waiting to resume':'Extracting your career goal'},

@@ -30,14 +30,11 @@ test('manual-only chat persists without a fake CV and recovers saved failed mess
   expect((await (await account.get('/api/v1/cv')).json()).cvs).toHaveLength(0);
   const before = await readChat(account, null); await page.reload();
   await page.getByRole('button', {name: /^Update through chat/}).click();
-  // The saved transcript is visible before the refreshed question is ready.
   await expect(page.getByRole('button', {name: 'Skip this question', exact: true})).toBeEnabled();
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   await expect(page.getByRole('list',{name:'Saved conversation messages'})).toContainText('What can you share about your work?');
   const resumed = await readChat(account, null);
   expect(resumed.active_question?.question).toContain('What can you share about your work?');
-  // Publishing changes Profile's revision; reopening asks the current question
-  // again while preserving every saved factual turn and its action receipts.
   expect(resumed.messages.slice(0, before.messages.length)).toEqual(before.messages);
   expect(resumed.messages.filter(message => message.role === 'user' && message.text === manualMessage)).toHaveLength(1);
   await sendChat(page, 'SYNTHETIC_CHAT_PROVIDER_FAILURE');
@@ -91,7 +88,6 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
   const correction = page.getByRole('article', {name: 'Review this correction', exact: true});
   await expect(correction.getByRole('button', {name: 'Save change', exact: true})).toBeEnabled();
   const project = before.items.find((item: {kind: string}) => item.kind === 'project');
-  // A separate writer changes the record after the proposal, before its confirmation.
   const edited = await page.request.patch(`/api/v1/cv/${cvId}/items/${project.id}`, {headers: account.headers,
     data: {mutation_id: crypto.randomUUID(), expected_version: before.version, action: 'update', title: 'Newer project title'}});
   expect(edited.ok()).toBeTruthy(); const newer = await cv();
@@ -101,7 +97,6 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
   await saveChange.click();
   const response = await decision;
   if (response.status() === 409) {
-    // A pending review refresh may change the conversation revision before the source check runs.
     const detail = 'The conversation changed. Refresh and review this action again.';
     expect(await response.json()).toEqual({detail});
     await expect(page.getByRole('alert').filter({hasText: detail})).toBeVisible();
@@ -117,8 +112,6 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
 test('a legacy multi-source message reports partial failure and retries only the unfinished action', async ({page}) => {
   test.setTimeout(120_000);
   const {account, cvId} = await setupChatScenario(page);
-  // Legacy pending actions retain their original semantic-verification/retry path.
-  // Interview answers now use an admitted interpretation without that second model call.
   const opened=await page.request.post('/api/v1/cv/conversations',{headers:account.headers,
     data:{cv_id:cvId,mutation_id:crypto.randomUUID()}});
   expect(opened.ok()).toBeTruthy();

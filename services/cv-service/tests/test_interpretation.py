@@ -126,8 +126,6 @@ def test_pending_answer_is_durable_before_provider_and_recoverable(harness):
 def test_newer_answer_fences_late_interpretation(harness):
     client, app, *_ = harness
     from dataclasses import replace
-    # Exercise two overlapping synthetic responses under an explicitly larger
-    # owner limit; the default one-call guard has separate admission coverage.
     app.state.service.model_usage.settings = replace(app.state.settings, model_concurrent_per_owner=2)
     cv, question, path = project_question(harness)
     newer_text = 'I only observed Python and SQL work.'
@@ -299,8 +297,6 @@ def test_same_canonical_rename_preserves_clarified_values_and_applies_explicit_c
     saved = answered.json()
     assert saved['skills'][0]['experience_months'] == 6
     assert saved['skills'][0]['proficiency'] == 'basic joins'
-    # The form includes current values; unchanged values are intentionally absent
-    # from the stored patch and must survive the title's canonical-identity match.
     renamed = client.patch(f"/api/v1/cv/{cv['id']}/items/{question['item_id']}", json=mutation(
         saved['version'], action='update', title='sql', proficiency='basic joins', experience_months=edited_months))
     assert renamed.status_code == 200, renamed.text
@@ -370,13 +366,11 @@ def test_newer_answer_overrides_older_correction_without_later_dates_reasserting
     assert python['sources'][0]['evidence_type'] == 'user_clarified'
     q = next(q for q in saved['clarifications'] if q['id'] == question['id'])
     assert q['reconciliation_required'] is False
-    # Date-only correction leaves the contribution answer editable.
     changed = client.put(path, json=mutation(saved['version'], action='answer',
         answer='I wrote Python for six months with my tutor, as explained. My teammate wrote SQL.'))
     assert changed.status_code == 200, changed.text
     assert next(s for s in changed.json()['skills'] if s['skill_id'] == 'skill:python')['experience_months'] == 6
     assert changed.json()['effective_version'] == saved['effective_version']
-    # A later correction to the source still supersedes and invalidates that answer.
     changed_source = client.patch(item_path, json=mutation(changed.json()['version'], action='update',
         description='This description changes which work belonged to me.'))
     assert changed_source.status_code == 200, changed_source.text
@@ -533,8 +527,6 @@ def test_concurrent_same_key_invokes_provider_once(harness, monkeypatch, operati
         try:
             assert entered.wait(5), 'One winning invocation should reach the provider.'
             finished, _ = wait(futures, timeout=3, return_when=FIRST_COMPLETED)
-            # The loser replays the saved pending receipt while the winner alone
-            # waits on the provider. Without the token both block and this fails.
             assert len(finished) == 1
             receipt = next(iter(finished)).result()
             assert next(q for q in receipt['clarifications'] if q['id'] == question['id'])['interpretation_status'] == 'pending'
@@ -562,8 +554,6 @@ def test_live_pending_lease_blocks_fresh_retries_and_expiry_allows_recovery(harn
 
     client, app, *_ = harness
     from dataclasses import replace
-    # This lease-fencing case deliberately overlaps two synthetic calls. Keep
-    # that scenario explicit while production defaults allow one per account.
     app.state.service.model_usage.settings = replace(app.state.settings, model_concurrent_per_owner=2)
     cv, question, path = project_question(harness)
     entered, release = Event(), Event()

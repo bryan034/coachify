@@ -22,7 +22,6 @@ async def assessment_input(request:Request,account=Depends(owner)):
         raise GoalError('The selected goal changed during input assembly. Reload and retry.')
     data=calibrated_goal(goal,record).model_dump(mode='json',by_alias=True)
     for skill in data['skills']: skill.update(identity(skill['name'],skill['category']))
-    # Mapping/importance uncertainty is an assessment outcome, not an empty goal.
     ready=bool(goal.skills or goal.non_skill_requirements) and goal.generation is not None and not goal.requirements_need_review
     return jsonable_encoder({'ready':ready,'reason':None if ready else 'Finish extracting and reviewing the goal requirements.',
         'goal':data,'selection_version':first['selection_version'],

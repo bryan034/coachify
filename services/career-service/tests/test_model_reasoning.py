@@ -48,8 +48,6 @@ def test_every_stage_routes_to_the_same_model_adapter(stage):
                 assert request.stage==stage and operation.stage==stage
                 return self.settings.model
         adapter=RecordingAdapter()
-        # Routing does not mutate requests; stage-specific contracts are tested by
-        # the real adapter flows and by the research conversion below.
         from types import SimpleNamespace
         assert await ModelRouter(adapter,adapter).generate(SimpleNamespace(stage=stage),Operation('synthetic','1',stage))=='openai/gpt-4o-mini'
     asyncio.run(run())
@@ -60,7 +58,6 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
     async def run():
         fields=FIELDS[category]
         assert set(FIELD_GUIDANCE[category])==set(fields)
-        # Each field has distinguishable synthetic evidence, never real user data.
         passages={field:f'Example interns report {field.replace("_"," ")} detail {i}.' for i,field in enumerate(fields)}
         if 'compensation' in passages:passages['compensation']='Example interns receive SGD 1500 per month.'
         for field in ('historical_cohort','offer_acceptance'):
@@ -106,7 +103,6 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
         restored=OpportunityReport.model_validate_json(report.model_dump_json())
         assert restored==report and len(calls)==2
         assert all(f.source_ids==[sources[0].source_id] and f.quotes[0] in sources[0].evidence for f in findings)
-        # Provider schema success alone cannot authorise an alias or forged quote.
         for changes in ({'field':'salary'},{'quotes':['Invented interview detail.']}):
             invalid=StructuredFindings(findings=[result.data.findings[0].model_copy(update=changes)])
             with pytest.raises(AIError):supported_claims(invalid,category,selected,public)

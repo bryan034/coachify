@@ -41,10 +41,7 @@ def retain_useful(category,findings,sources,relevant_ids=()):
 def merge_sources(saved,fresh):
     """Present fresh URLs first while preserving previously cited text within each page.
 
-    pool() appends a repeated URL's new text and then cuts at the excerpt limit. Listing saved
-    sources first means that cut can only remove the newest text, never an earlier cited passage.
-    Reorder the merged pages afterwards so follow-up evaluation prioritises new results;
-    this order is also checkpointed for quota/restart retries.
+    Saved sources are pooled first, then the merged pages are reordered so new results come first.
     """
     merged=pool([*saved,*fresh])
     priority={s.source_id:index for index,s in enumerate(pool(fresh))}

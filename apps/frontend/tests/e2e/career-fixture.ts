@@ -2,7 +2,6 @@ import {test as base} from '@playwright/test';
 import {blankPlanner, workspace} from '../fixtures/roadmap-workspace';
 import {policy} from '../fixtures/cv';
 
-// The shared change banner and adjacent pages read these services even in a Career-only scenario.
 export const test = base.extend({
   page: async ({page}, use) => {
     const evaluation = {freshness: 'missing', processing: 'idle', completeness: null, evaluated_at: null, reasons: []};
@@ -25,7 +24,6 @@ export const test = base.extend({
   },
 });
 
-// Shared synthetic API fixtures project one goal and separate progress/evidence reads.
 type Json=Record<string,any>;
 const reports=new Map<string,Json>();
 let latest:Json|undefined;

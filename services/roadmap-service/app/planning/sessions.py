@@ -283,7 +283,7 @@ def save_session(plan,capacity,source,session_id,changes,allow_overlap=False):
             place(task,index,day,new_start,new_minutes,update_estimate='duration_minutes' in changes and new_minutes!=minutes)
     record_edit(task,previous)
     if had_original and not task.get('original'):
-        # Back to the generated wording, so a later revision may rewrite it again.
+        # Back to the generated wording.
         task['overrides']=[name for name in task.get('overrides',[]) if name not in ('title','completion_outcome')]
     if 'notes' in changes and changes['notes'] is not None and task.get('notes')!=changes['notes']:
         task['notes']=changes['notes'];task['notes_updated_at']=stamp()

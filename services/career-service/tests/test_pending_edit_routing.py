@@ -16,7 +16,7 @@ def test_pending_edit_answers_do_not_enter_question_or_public_research_routing(c
     request=NS(app=NS(state=NS(ai=NS(context_enabled=context_enabled),workspace_store=NS(),research_store=NS())))
     row={'workspace':{'edit_draft':{'intent':'Change the goal location','question':'Which city?','version':1}}}
     result=asyncio.run(focused_chat(request,'owner',row,NS(message=message)))
-    assert result is None  # The caller continues through validated edit_goal.
+    assert result is None
 
 
 @pytest.mark.parametrize('context_enabled',[False,True])

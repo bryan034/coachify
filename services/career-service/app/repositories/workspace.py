@@ -57,7 +57,6 @@ class WorkspaceStore:
         command=SaveGoal(target_type=review.target_type,role=review.content.role,field=review.content.field,company=review.content.company,
             location=review.content.location,seniority_level=review.content.seniority_level,job_url=review.content.job_url,employment_type=review.content.employment_type,
             review_id=review.id,expected_review_version=review.version,expected_selection_version=row.get('version',0),replace_current=True)
-        # Canonical goals already contain the validated edits; intake alone builds a goal.
         from app.schemas.analysis import CareerGoal
         if review.base_goal_id==review.id:
             goal=CareerGoal.model_validate({k:v for k,v in self.reviews._row(review.id,owner).items() if k in CareerGoal.model_fields or k=='_id'})

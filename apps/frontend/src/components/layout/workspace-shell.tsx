@@ -27,7 +27,7 @@ export function pageTitle(pathname: string) {
  if (pathname === '/profile' || pathname.startsWith('/profile/')) return 'My profile';
  return [...nav, ...more].find(item => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label ?? 'elo';
 }
-/** The top page of the section the user is in; the logo returns there rather than always to Home. */
+/** The top page of the section the user is in. */
 export function sectionHome(pathname: string) {
  if (pathname.startsWith('/settings')) return '/settings';
  if (pathname === '/profile' || pathname.startsWith('/profile/')) return '/profile';
@@ -39,8 +39,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
  const menuButton = useRef<HTMLButtonElement>(null);
  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
  const home = sectionHome(pathname);
- // Already on the section page but inside one of its views (such as a CV review in the query string): clear the view
- // through a history entry, which the page restores from like the browser's Back button.
+ // Inside one of the section page's views: clear the view through a history entry, like the browser's Back button.
  const goHome = (event: MouseEvent<HTMLAnchorElement>) => {
   if (pathname !== home || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
@@ -48,9 +47,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   window.scrollTo?.({ top: 0 });
  };
  const { profile, account, mode, token, signOut, loading, configError, loadError, sessionChecking, sessionError } = useProfile();
- // While a session is being rechecked, nothing private is reachable: the guard locks the page and the shell hides its links.
  const locked = Boolean(sessionChecking || sessionError);
- // Full-screen chats keep their composer at the bottom, so the phone tab bar steps aside.
  const chatRoute = pathname.startsWith('/career-goal/chat') || pathname.startsWith('/career-goal/discovery');
  const status = statuses.find(s => s.id === profile?.occupational_status)?.label;
  const year = profile?.current_study_year && profile.school_category ? studyYearLabel(profile.school_category, profile.current_study_year) : null;

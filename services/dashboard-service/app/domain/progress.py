@@ -24,8 +24,7 @@ def slots_in_period(task,start,end):
 
 def counts(tasks):
     total=len(tasks);completed=sum(t.get('status')=='completed' and not t.get('definition_review_required') for t in tasks)
-    # An invalidated completion remains visible as completed, but does not count
-    # towards progress until its definition is confirmed again.
+    # An invalidated completion stays visible as completed but does not count towards progress.
     in_progress=sum(t.get('status')=='in_progress' for t in tasks)
     not_started=sum(t.get('status')=='not_started' for t in tasks)
     review=sum(t.get('status')=='completed' and bool(t.get('definition_review_required')) for t in tasks)

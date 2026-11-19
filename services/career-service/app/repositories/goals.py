@@ -1,8 +1,6 @@
-"""J08/J09 atomic private draft updates and explicit, idempotent selection.
+"""Atomic private draft updates and explicit, idempotent selection.
 
-No MongoDB transactions/topology requirement. Confirmed revisions are inserted
-before selection CAS; a losing writer may leave an unselected historical goal,
-but can never replace the winner or erase its target.
+Confirmed revisions are inserted before selection CAS.
 """
 import hashlib
 import json

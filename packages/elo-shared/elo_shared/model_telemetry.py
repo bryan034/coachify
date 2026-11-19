@@ -1,7 +1,6 @@
 """Content-free, best-effort measurements for model requests.
 
-Only allowlisted numeric usage and identifiers enter logs. Provider bodies and
-prompts are held only until the response is consumed and are never logged.
+Only allowlisted numeric usage and identifiers enter logs.
 """
 import hashlib
 import json
@@ -28,8 +27,7 @@ def fingerprint(value):
 
 @contextmanager
 def operation_scope(identifier, *, inherit=False):
-    # The caller's durable ID is never logged; hash it into a scoped opaque ID.
-    # IDs supplied here must be random application operation IDs, not owner IDs.
+    # Hash the caller's operation ID into a scoped opaque ID.
     opaque = (_operation_id.get() if inherit and _operation_id.get() is not None else
               fingerprint('elo-model-operation:' + identifier) if isinstance(identifier, str) and identifier else None)
     token = _operation_id.set(opaque)
@@ -135,11 +133,9 @@ class Measurement:
             pass
         finally:
             self.body.clear()
-        # The event contains only the allowlisted fields above, never body text.
         try:
             logger.info('model_usage %s', json.dumps(event, separators=(',', ':')))
         except Exception:
-            # Instrumentation must never change the request outcome.
             pass
 
     def wrap_sync(self, response):

@@ -91,7 +91,6 @@ def test_outline_preview_edit_and_accept_are_versioned_and_preserve_work():
         response=client.patch(path,json={'expected_version':state['version'],'mutation_id':str(uuid4()),'outline':edited},headers=H)
         assert response.status_code==200,response.text
         state=response.json();candidate=state['planner']['outline_candidate']
-        # The first-week preview was written for the outline as it was, so it is planned again after acceptance.
         assert state['planner']['week_candidate'] is None
         path='/api/v1/roadmaps/planner/outlines/'+candidate['id']+'/accept'
         body={'expected_version':state['version'],'mutation_id':str(uuid4())}
@@ -168,7 +167,6 @@ def test_chat_revision_refines_outline_without_legacy_tasks():
         state=finish(client)
         assert state['operation']['status']=='succeeded',state['operation']
         assert state['planner']['outline_candidate']['summary']=='Revised outline.'
-        # The revision is an outline preview only: the accepted week and its task are untouched and not written again.
         assert len(state['planner']['active']['editable_tasks'])==1 and state['planner']['week_candidate'] is None
         assert model.schemas==[OutlineDraft,WeekDraft,ChatTurn,OutlineDraft]
 

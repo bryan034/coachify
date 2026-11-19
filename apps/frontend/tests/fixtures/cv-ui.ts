@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-/** An empty saved transcript keeps older boundary journeys focused on their original behavior. */
+/** Mocks an empty saved transcript. */
 export async function mockEmptyConversation(page: Page) {
   await page.route('**/api/v1/assessments/**', route => route.fulfill({json:{version:0,stale:false,ready:false,model_available:true,result:null,operation:null,issues:[]}}));
   const saved = new Map<string, object>();
@@ -21,7 +21,7 @@ export async function mockEmptyConversation(page: Page) {
   });
 }
 
-/** Saved CVs sit beside the upload panel; just confirm the list is showing. */
+/** Confirms the saved CV list is showing. */
 export async function openCvLibrary(page: Page) {
   await expect(page.getByLabel('Selected CV', {exact:true})).toContainText(/No active CV yet|Active CV:/);
   await expect(page.getByRole('heading', {name:'Your CVs', exact:true})).toBeVisible();
@@ -31,8 +31,6 @@ export async function openCvReviewTools(page: Page) {
   await expect(page.locator('.cv-workspace')).toHaveAttribute('aria-busy','false');
   const review = new URL(page.url()).searchParams.get('review');
   if (review) {
-    // Finish an already-started turn before editing the same CV version. If
-    // extraction is still running, leaving the review prevents auto-start.
     if (await page.getByRole('region',{name:'CV conversation',exact:true}).count()) {
       await expect(page.getByRole('textbox',{name:'Message elo',exact:true})).toBeEnabled({timeout:35_000});
       await expect(page.locator('.cv-chat-action-pending')).toHaveCount(0,{timeout:35_000});
@@ -48,6 +46,5 @@ export async function openCvReviewTools(page: Page) {
   await expect(page.getByText('Loading saved CVs…', {exact: true})).toHaveCount(0);
   const tools=page.getByRole('button',{name:'Review details and corrections',exact:true});
   if(await tools.count()&&await tools.getAttribute('aria-expanded')==='false')await tools.click();
-  // The Skills Profile no longer has a "CV details and corrections" section.
   await expect(page.locator('summary').filter({hasText: 'CV details and corrections'})).toHaveCount(0);
 }

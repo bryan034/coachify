@@ -85,7 +85,7 @@ def post(client,path,state,**body):
     assert response.status_code==200,response.text
     return response.json()
 def configure(client,state=None,**changes):
-    # Ten-minute breaks, as a new account has: Wednesday's 90 minutes then hold one 60-minute session.
+    # Ten-minute breaks, as a new account has.
     return post(client,'/config',state or read(client),config=settings(**{'break_minutes_per_hour':10,**changes}))
 def generate(client,state,allow_partial=False):
     """Outline and first week in one operation."""
@@ -131,13 +131,11 @@ def test_one_generation_previews_the_whole_outline_and_the_first_week_and_one_ac
         assert state['operation']['status']=='succeeded',state['operation']
         planner=state['planner']
         assert model.schemas==['OutlineDraft','WeekDraft'] and planner['active'] is None and 'candidate' not in planner
-        # Every week has a projected objective; only the first has tasks, and none of it is active yet.
         assert [(w['week_start'],w['status'],w['tasks_total']) for w in planner['weeks']]==[('2030-01-07','open',0),('2030-01-14','projected',0),('2030-01-21','projected',0)]
         assert all(w['objective'] and w['expected_outcome'] and w['milestone_key']=='m1' for w in planner['weeks'])
         preview=planner['week_candidate']
         assert preview['outline_id']==planner['outline_candidate']['id'] and preview['week_start']=='2030-01-07'
         assert [(t['title'],t['schedule']) for t in preview['tasks']]==[('Write one tested endpoint',[{'date':'2030-01-09','start_time':'19:00','duration_minutes':60}])]
-        # Wednesday's 90 minutes can hold 80 study minutes in shorter sessions, and the partial week is explained.
         assert (preview['target']['weekly_minutes'],preview['target']['target_minutes'])==(300,80)
         assert [r['code'] for r in preview['target']['reasons']]==['partial_week','remaining_scope']
         row=planner['preview_sessions'][0]
@@ -152,7 +150,6 @@ def test_one_generation_previews_the_whole_outline_and_the_first_week_and_one_ac
         assert [b['week_start'] for b in planner['week_blocks']]==['2030-01-07']
         assert [(w['status'],w['tasks_total'],w['planned_minutes']) for w in planner['weeks']]==[('planned',1,60),('projected',0,0),('projected',0,0)]
         assert (planner['week_planning']['action'],planner['week_planning']['available'],planner['week_planning']['reason'])==('plan_next',False,'waiting')
-        # A lost response is retried with the same key and changes nothing.
         retry=client.post(path,headers=H,json=body)
         assert retry.status_code==200 and retry.json()['planner']['active']['id']==active['id'] and len(model.contexts)==2
 
@@ -235,26 +232,21 @@ def test_next_week_carries_unfinished_work_once_and_proposes_later_changes_for_r
         state=plan_week(client,read(client),'2030-01-14',feedback={'workload':'too_light','note':'I could do more.'})
         assert state['operation']['status']=='succeeded',state['operation']
         sent=model.sent('WeekDraft')[-1]
-        # The model plans from what actually happened: nothing done, one task unfinished, and the user's feedback.
         assert [t['task_id'] for t in sent['progress']['unfinished']]==[first['id']] and sent['feedback']['workload']=='too_light'
         assert sent['last_week']=={'tasks_planned':1,'tasks_completed':0,'minutes_planned':60,'minutes_completed':0,'average_difficulty':None,'average_confidence':None}
         assert sent['objective']['week_start']=='2030-01-14' and 'date' not in str(sent['progress'])
         planner=state['planner'];preview=planner['week_candidate']
-        # Nothing is applied by a preview.
         assert planner['active']['editable_tasks']==[first] or planner['active']['editable_tasks'][0]['schedule']==first['schedule']
         entry=preview['carryover'][0]
         assert (entry['task_id'],entry['action'],entry['proposed_action'],entry['adjusted'])==(first['id'],'carry','carry',False)
         assert entry['schedule']==[{'date':'2030-01-14','start_time':'19:00','duration_minutes':60}] and entry['previous_schedule']==first['schedule']
         placed={t['generated_key']:[(s['date'],s['start_time'],s['duration_minutes']) for s in t['schedule']] for t in preview['tasks']}
-        # Study blocks fill in date order, each session followed by its ten-minute break.
         assert placed=={'b1':[('2030-01-16','19:00',60)],'b2':[('2030-01-19','10:00',60)],'b3':[('2030-01-19','11:10',60)],'b4':[('2030-01-14','20:10',30)]}
         assert preview['objective_changes'][0]['previous']['objective']=='Advance Build a Python API' and preview['objective_changes'][0]['reason']==change['reason']
         assert sorted(row['title'] for row in planner['preview_sessions'])==sorted(['Write one tested endpoint','Add a second endpoint','Validate request bodies','Return clear errors','Tidy the README'])
-        # A second click cannot start a duplicate preview; the first request's own retry is safe.
         again=request(client,'/weeks/generate',state,week_start='2030-01-14',feedback={'workload':'too_light','note':'I could do more.'})
         assert again.status_code==409 and again.json()['code']=='week_preview_exists'
         state=accept_week(client,state);planner=state['planner'];tasks=planner['active']['editable_tasks']
-        # The unfinished task moved; it was not copied.
         assert len(tasks)==5 and [t['id'] for t in tasks].count(first['id'])==1
         moved=next(t for t in tasks if t['id']==first['id'])
         assert moved['schedule']==entry['schedule'] and moved['status']=='not_started'
@@ -278,17 +270,15 @@ def test_each_unfinished_task_gets_a_reviewed_decision_that_the_user_can_change(
         state=plan_week(client,read(client),'2030-01-14')
         assert state['operation']['status']=='succeeded',state['operation']
         preview=state['planner']['week_candidate']
-        # The model dropped one and said nothing about the other, which then follows the user's default.
         assert [(c['title'],c['action']) for c in preview['carryover']]==[('First','drop'),('Second','carry')]
         assert 'your setting for unfinished work' in preview['carryover'][1]['reason']
         state=post(client,'/weeks/'+preview['id']+'/carryover',state,decisions=[{'task_id':first['id'],'action':'defer'}])
         entry=state['planner']['week_candidate']['carryover'][0]
         assert (entry['action'],entry['proposed_action'],entry['reason'])==('defer','drop','Your choice.')
-        assert len(model.sent('WeekDraft'))==2  # the user's choice needs no model call
+        assert len(model.sent('WeekDraft'))==2
         state=accept_week(client,state);tasks={t['title']:t for t in state['planner']['active']['editable_tasks']}
         assert (tasks['First']['schedule'],tasks['First']['removed'],tasks['First']['deferred_week'])==([],False,'2030-01-14')
         assert tasks['First']['history'][-1]['event']=='deferred' and tasks['Second']['schedule'][0]['date']=='2030-01-14'
-        # Deferred work is offered again the next week, and carried work is capped at half the weekly hours.
         clock.now=SUNDAY+timedelta(days=7)
         state=read(client);assert state['planner']['week_planning']['unfinished_count']==4
         state=plan_week(client,state,'2030-01-21')
@@ -357,7 +347,6 @@ def test_schedule_settings_apply_from_the_next_week_and_shape_settings_need_the_
     clock=Clock()
     with client_for(spread_model(),clock=clock) as client:
         state=sunday_preview(client,clock,None)
-        # A new study time is a scheduling rule: no outline review, but the open preview was placed without it.
         state=configure(client,state,blocks=[*SPREAD,{'day':1,'start_time':'07:00','duration_minutes':60}],blackouts=[])
         assert 'settings' not in {s['kind'] for s in state['planner']['signals']}
         response=request(client,'/weeks/'+state['planner']['week_candidate']['id']+'/accept',state)
@@ -382,7 +371,6 @@ def test_revising_an_accepted_week_replaces_only_untouched_future_tasks():
         state=plan_week(client,state,'2030-01-14',revision=True)
         assert state['operation']['status']=='succeeded',state['operation']
         preview=state['planner']['week_candidate']
-        # Carried work has history and the renamed task is the user's edit, so only the untouched tasks are replaced.
         assert sorted(preview['replaced_task_ids'])==sorted(before[key]['id'] for key in ('b2','b3','b4')) and preview['revision']==2
         state=accept_week(client,state);after={t['generated_key']:t for t in state['planner']['active']['editable_tasks']}
         assert set(after)=={'a1','b1','r1','r2','r3'} and after['b1']['title']=='Add the orders endpoint' and after['a1']==before['a1']
@@ -421,7 +409,6 @@ def test_saved_backup_blocks_months_and_legacy_previews_stay_readable():
         state=read(client);view=state['planner']
         assert len(view['config']['blocks'])==4 and 'use_backup' not in view['config'] and 'candidate' not in view
         assert view['month_blocks'][0]['month']=='2030-01'
-        # Every week of the accepted month already counts as planned, so nothing is offered for planning.
         assert view['week_planning']['action'] is None
         assert [w['status'] for w in view['weeks']]==['planned','planned','planned']
 

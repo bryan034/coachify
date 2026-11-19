@@ -123,14 +123,11 @@ def test_stale_confirm_noop_and_lost_response_replay(flow):
     goal=goal_view(first)['goal'];restored=goal_view(client.get(BASE+'/goals/'+goal['_id'],headers=headers()))
     noop=save(client,restored,restored['content']);assert noop.status_code==200,noop.text
     assert goal_view(noop)['goal_id']==goal['_id'] and db.career_goals.count_documents({'record_type':'requirement_review'})==0
-    # A no-op still reserves its idempotency key against a changed retry.
     noop_key=headers();noop_body={'expected_version':restored['version'],'content':restored['content']}
     path=BASE+'/goals/'+goal['_id']+'/review'
     assert client.patch(path,json=noop_body,headers=noop_key).status_code==200
     noop_body['content']['company']='A different edit'
     assert client.patch(path,json=noop_body,headers=noop_key).status_code==409
-    # Returning to the same effective content keeps the selected goal revision,
-    # while acknowledging the exact latest review version for UI readback.
     edit=changed['content'];edit['skills'][0]['context']='A temporary refinement.'
     newer=goal_view(save(client,changed,edit))
     edit['skills'][0]['context']='SQL for reporting.'

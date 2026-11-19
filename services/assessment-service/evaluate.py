@@ -1,8 +1,7 @@
-"""Opt-in live semantic evaluation against labelled synthetic cases; no env files.
+"""Opt-in live semantic evaluation against labelled synthetic cases.
 
 Operator sets RUN_LIVE_ASSESSMENT_EVAL=1 and ASSESSMENT_LLM_API_KEY explicitly.
-Reports case IDs and statuses only. This small diagnostic set is not a population
-accuracy benchmark; expand reviewed cases for the intended users and jobs.
+Reports case IDs and statuses only.
 """
 import asyncio
 import json

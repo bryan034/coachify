@@ -18,7 +18,7 @@ def public_job_url(value):
     try:
         if not ipaddress.ip_address(host).is_global:return None
     except ValueError:pass
-    # The public research context never needs tracking/access parameters or fragments.
+    # Strip query and fragment.
     return urlunsplit((parsed.scheme,parsed.netloc,parsed.path,'',''))
 
 
@@ -87,8 +87,7 @@ def validate_claims(output,category,sources,public=None):
             if ref<0 or ref>=len(sources):raise citation_error(index,'refs','source_index_out_of_range')
             if whitespace(quote) not in whitespace(sources[ref].evidence or ''):
                 raise citation_error(index,'quotes','quote_not_in_source')
-        # New provider claims select a complete passage. Legacy internal claims
-        # retain the existing full-excerpt numeric validation contract.
+        # New provider claims select a complete passage; legacy claims use the full excerpt.
         evidence='\n'.join(item.quotes if output._passage_bound else [sources[ref].evidence or '' for ref in item.refs])
         numeric_support(item.value,evidence,index)
         values=item.model_dump(exclude={'refs'})
@@ -112,7 +111,7 @@ def validate_claims(output,category,sources,public=None):
 
 
 def compatibility(categories,sources=()):
-    """Keep existing interview chat/read consumers working without another model call."""
+    """Keep existing interview chat/read consumers working."""
     skills=[];stages=[]
     for finding in categories['interview_intelligence'].findings:
         if finding.field=='recruitment_stages':
@@ -161,8 +160,7 @@ def validated_skill_levels(output,skills,finding_ids):
 
 
 def summary_input(categories):
-    # Interleave categories so the bounded summary cannot lose later categories
-    # when interview/internship evidence fills the first sixty slots.
+    # Interleave categories in the bounded summary.
     return [{'id':f.finding_id,'category':category,'field':f.field,'value':plain_text(f.value),'confidence':f.confidence,'scope':f.scope,'conflict_group':f.conflict_group}
             for index in range(max((len(result.findings) for result in categories.values()),default=0))
             for category,result in categories.items() if index<len(result.findings)
@@ -170,11 +168,7 @@ def summary_input(categories):
 
 
 def dedupe_findings(category,findings):
-    """Merge repeated identities before comparing presentation wording.
-
-    Keep the first identity stable when citations grow, so later occurrences of
-    the same extract cannot reappear under an ID discarded during an earlier merge.
-    """
+    """Merge repeated identities before comparing presentation wording; the first identity stays stable."""
     ranks={'insufficient_evidence':0,'low':1,'medium':2,'high':3}
     def combine(old,finding):
         pairs=dict(zip(old.source_ids,old.quotes))

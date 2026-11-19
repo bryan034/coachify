@@ -1,7 +1,7 @@
 """Agent-led CV interview orchestration with durable, retryable stages.
 
 The harness commits validated evidence before asking the agent for its next
-interview action. Memory and decision policy have independent, inspectable modules.
+interview action.
 """
 import logging
 import re
@@ -75,8 +75,7 @@ class InterviewHarness:
             or prior.get('review_policy'))
         policy = effective_policy(saved_policy or account.get('cv_review_policy'))
         retained = route.get('_interview_plan')
-        # Finish an already-admitted v1 question with its original receipt and
-        # CAS fence before upgrading. A subsequent turn performs the upgrade.
+        # Finish an already-admitted v1 question with its original receipt before upgrading.
         if saved_policy and saved_policy != policy and not retained:
             def migrate(current):
                 migrate_snapshot(current, saved_policy, prior.get('question_counts', {}))
@@ -90,8 +89,7 @@ class InterviewHarness:
         memory = reconcile_memory(conversation, document)
         memory.pop('previous_review_policy', None)
         if previous_policy and previous_policy.get('scope') == 'section' and not retained:
-            # Reopen only material job/project gaps that the old shared section
-            # allowance exhausted. Preserve explicit skips and genuine coverage.
+            # Reopen only material job/project gaps the old shared section allowance exhausted.
             from app.clarification.service import group_counts
             _, previous_counts = group_counts(document, previous_policy)
             reopened = False
@@ -131,8 +129,7 @@ class InterviewHarness:
                                        for item in effective_items(document))
                 if (existing and existing['status'] == 'unanswered' and not existing.get('reconciliation_required')
                         and source_available):
-                    # The CV write succeeded before the policy upgrade, but the
-                    # conversation reply was interrupted. Reuse its receipt.
+                    # Reuse the receipt of a CV write whose conversation reply was interrupted.
                     recovered = deepcopy(retained['memory'])
                     recovered['review_policy'] = policy
                     recovered = reconcile_memory({**conversation, 'interview_memory': recovered}, document)
@@ -147,9 +144,7 @@ class InterviewHarness:
                     return await self.publish(account, identifier, route['id'], token, recovered,
                                               reply, active, retained['targets'])
                 if existing:
-                    # Another flow answered or skipped the already-issued
-                    # question. Its old mutation key belongs to that receipt;
-                    # acknowledge it without attempting another publication.
+                    # Another flow answered or skipped the issued question: acknowledge it without publishing.
                     recovered = deepcopy(retained['memory'])
                     recovered['review_policy'] = policy
                     recovered['focus_item_id'] = None
@@ -158,9 +153,7 @@ class InterviewHarness:
                         ('That question was already answered or skipped. Your saved review is up to date; continue when ready.'
                          if existing['status'] in {'answered', 'skipped'} else
                          'Your source changed after that question was saved. Your review is retained; continue with the latest evidence.'), None, [])
-                # A different operation migrated/changed the question ledger
-                # or evidence before this proposal was published. Drop only
-                # that unissued proposal and plan against the latest state.
+                # Drop an unissued proposal made stale by another operation and plan against the latest state.
                 def clear_stale(current):
                     action = action_in(current, route['id'])
                     service.check_lease(action, token)
@@ -202,8 +195,7 @@ class InterviewHarness:
             if active:
                 document = await self.skip_active(account, conversation, document, route, token, memory)
                 conversation = {**conversation, 'active_question': None}
-                # With nothing left to ask here, close the topic now rather than
-                # leaving the planner focused on a source it cannot question.
+                # Nothing left to ask here: close the topic now.
                 source = next((i for i in effective_items(document) if i['id'] == active['item_id'] and not i['removed']), None)
                 if source and not clarification_context(source, evidence_for(source))['clarification_targets']:
                     memory['coverage'][source['id']] = {'item_id': source['id'], 'status': 'reviewed_with_gaps', 'evidence_refs': []}
@@ -277,8 +269,6 @@ class InterviewHarness:
             result = InterviewTurn.model_validate(evaluated['result'])
             if result.intent == 'side_question' and (result.topic_relevant or is_side_question(route['_text'])):
                 # Side replies do not create an evidence-question receipt.
-                # Preserve a declarative model answer only if it contains no
-                # obvious request for additional information.
                 text = route['_text'].casefold()
                 reply = safe_side_answer(result.reply) if result.topic_relevant else None
                 if not reply:
@@ -297,7 +287,7 @@ class InterviewHarness:
                 return await self.no_progress(app, account, conversation, document, route, token, memory, active)
             for note in result.memory_notes:
                 if note.source_id != 'answer' or note.quote not in route['_text']:
-                    continue  # Ignore unusable optional notes without blocking the answer.
+                    continue
                 entry = {'source_id': route.get('_message_id', route['_turn_id']), 'quote': note.quote}
                 if entry not in memory['notes']: memory['notes'].append(entry)
             memory['notes'] = memory['notes'][-24:]
@@ -316,7 +306,7 @@ class InterviewHarness:
                 actions = []
                 for index, proposal in enumerate(result.actions):
                     if proposal.excerpt not in route['_text']:
-                        proposal.excerpt = route['_text']  # Anchor the action to the saved answer, not a model paraphrase.
+                        proposal.excerpt = route['_text']  # Anchor the action to the saved answer.
                     if proposal.item_id and proposal.item_id not in items: raise ValueError('The interview referred to another source.')
                     if any(i not in items for i in proposal.candidate_item_ids): raise ValueError('Invalid source choice.')
                     if proposal.question_id and (proposal.question_id not in questions or
@@ -345,8 +335,6 @@ class InterviewHarness:
             latest = service.get(owner, identifier)
             remaining = [action_in(latest, a) for a in ids if action_in(latest, a)['status'] != 'saved']
             if remaining:
-                # Interpretation succeeded. Recovery belongs to each evidence
-                # action, not a duplicate failed routing card for the same turn.
                 notes = memory['notes']
                 memory = reconcile_memory(latest, service.cv.get(owner, latest['cv_id']))
                 memory['notes'] = notes
@@ -398,8 +386,7 @@ class InterviewHarness:
             if (target not in memory.get('deferred_topics', {})
                     or memory['coverage'].get(target, {}).get('status') != 'deferred'):
                 raise Conflict('Only a skipped topic can be reviewed again.')
-            # Check before mutating: a failed reopen must not invalidate a
-            # completed profile or reset the already-issued question budget.
+            # Check before mutating.
             if not any(option['open_fields'] for option in question_options(items[target], memory)):
                 raise Conflict('elo has no questions left for this topic. Your CV is used as written for it.')
             from app.conversation.service import key
@@ -449,8 +436,7 @@ class InterviewHarness:
             used_budget = topic_question_count(memory, item['id']) >= MAX_TOPIC_QUESTIONS
             settled = not any(option['open_fields'] for option in question_options(item, memory))
             if settled or used_budget or enough_context(item):
-                # A topic that needed all of its questions closes with gaps, as before. An early
-                # close is reviewed only with proven ownership; skill levels stay uncertain where unproven.
+                # A topic that used all its questions closes with gaps; an early close is reviewed only with proven ownership.
                 status = 'reviewed' if not used_budget and ownership_established(item) else 'reviewed_with_gaps'
                 memory['coverage'][item['id']] = {'item_id': item['id'], 'status': status, 'evidence_refs': []}
                 closed.append(item['title'])
@@ -478,8 +464,7 @@ class InterviewHarness:
             memory['focus_item_id'] = None
             return await self.publish(account, conversation['_id'], route['id'], token, memory,
                 'Your baseline skill review is complete. Each project skill has an evidence-based estimate; details that could not be established remain unknown.', None, [])
-        # Offer the next viable topic up front when the current one has no
-        # remaining material question. The previous ledger remains citable.
+        # Offer the next viable topic when the current one has no remaining material question.
         current_focus = next((item for item in eligible if item['id'] == memory.get('focus_item_id')), None)
         if not current_focus or not any(option['open_fields'] for option in question_options(current_focus, memory)):
             focus_id = next((item['id'] for item in eligible
@@ -544,8 +529,7 @@ class InterviewHarness:
                 invalid_calls += 1
                 if invalid_calls >= MAX_PLAN_CALLS: break
                 continue
-            # The agent can choose another experience; hydrate it before validating
-            # a question rather than asking it to reason from an abbreviated title.
+            # Hydrate another chosen experience before validating a question.
             if (raw.get('action') == 'ask' and isinstance(source_id, str) and source_id in available_topics
                     and (context.get('focused_source') or {}).get('id') != source_id):
                 await record('hydrate_source', 'ask')
@@ -565,8 +549,7 @@ class InterviewHarness:
         if decision is None:
             skipped_topic = memory.get('focus_item_id')
             if route.get('_command') == 'skip' and skipped_topic:
-                # A skip must not strand the user on a failed plan: close this topic with
-                # gaps and plan once more without it. Focus is now empty, so this cannot loop.
+                # Close the skipped topic with gaps and plan once more without it.
                 memory['coverage'][skipped_topic] = {'item_id': skipped_topic, 'status': 'reviewed_with_gaps', 'evidence_refs': []}
                 memory['focus_item_id'] = None
                 return await self.plan(app, account, conversation, document, route, token, memory)
@@ -606,8 +589,6 @@ class InterviewHarness:
             active = {'id': key(route['id'] + ':interview-question'), 'item_id': decision.item_id,
                       'title': context['focused_source']['title'], 'question': decision.reply,
                       'number': asked, 'limit': MAX_TOPIC_QUESTIONS,
-                      # These fragments are not additional model-authored evidence
-                      # requests. Their presence is optional, but their text is fixed.
                       'hints': ['Your own actions', 'Relevant decisions or constraints'] if decision.answer_hints else [],
                       'reason': 'This helps clarify your experience.' if decision.reason else None}
             targets = [t.model_dump(mode='json') for t in decision.targets]
@@ -648,8 +629,6 @@ class InterviewHarness:
     async def save_question(self, account, conversation, document, route, token, memory, reply_text, active, targets, source):
         """Stage before writing so a retry publishes the same question and count exactly once."""
         from app.conversation.service import action_in, key
-        # Interview targets carry field scope. Legacy attribution-wide questions
-        # would require reinterpreting every skill on an unrelated follow-up.
         uncertainty = 'claim'
         question = {'id': active['id'], 'item_id': active['item_id'],
             'kind': 'project' if source['kind'] == 'project' else 'work' if source['kind'] == 'experience' else 'other',
@@ -682,8 +661,7 @@ class InterviewHarness:
     async def rate_skill_levels(self, account, conversation):
         """Rate the skills of every closed or skipped topic, and of every source once the review ends.
 
-        Runs after the reply is saved and is best effort: a failure never loses the turn, and the
-        topic is rated on a later turn. Levels are stored beside the CV and applied on read.
+        Runs after the reply is saved and is best effort. Levels are stored beside the CV and applied on read.
         """
         from uuid import uuid5, NAMESPACE_URL
         from app.domain.skill_levels import BATCH, pending_sources, rating_failure, rating_ready, validate_level_review
@@ -726,12 +704,11 @@ class InterviewHarness:
                     Mutation(expected_version=current['version'],
                              mutation_id=uuid5(NAMESPACE_URL, 'elo:skill-levels:' + digest(reviews))),
                     'skill-levels', store, record_history=False)
-        except Exception as exc:  # Best effort by design; the saved review is never at risk.
+        except Exception as exc:
             logger.warning('CV skill level evaluation skipped reason=%s', type(exc).__name__)
 
     async def no_progress(self, app, account, conversation, document, route, token, memory, active):
-        # Keep the original question visible in the transcript without issuing it
-        # again. A repeated failed interpretation defers it rather than looping.
+        # Keep the original question visible without issuing it again.
         if active:
             failures = memory.setdefault('no_progress', {})
             failures[active['id']] = failures.get(active['id'], 0) + 1
@@ -772,8 +749,6 @@ class InterviewHarness:
             if document['effective_version'] != memory['evidence_version']:
                 raise Conflict('Your evidence changed before the interview reply was saved. Continue with the latest evidence.')
             # Publish the same canonical memory shape that status polling reads.
-            # A read racing this write must not normalize private fields later
-            # and silently invalidate the revision returned with this reply.
             normalized = reconcile_memory({**current, 'interview_memory': memory}, document)
             current.update(interview_memory=normalized, interview_progress=progress(normalized, document),
                            active_question=active, interview_targets=targets)

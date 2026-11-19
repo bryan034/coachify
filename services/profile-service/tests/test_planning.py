@@ -12,7 +12,7 @@ from app.domain import planning
 
 
 class PlanningMemoryRepository:
-    """API fixture; real MongoDB tests separately exercise production persistence."""
+    """API fixture."""
     update = ProfileRepository.update
     change_period = ProfileRepository.change_period
     fingerprint = staticmethod(ProfileRepository.fingerprint)
@@ -88,7 +88,6 @@ def test_device_zone_midnight_and_exact_date(client):
     assert first['application_date']=='2030-01-02'
     assert inputs(client).json()['issues'][0]['field']=='application_date'
     assert inputs(client,time_zone='America/Los_Angeles').json()['application_date']=='2030-01-02'
-    # Changing an unrelated field keeps an elapsed deadline.
     assert client.patch('/api/v1/profile',json={'expected_version':first['version'],'occupational_status':'unemployed'}).status_code==200
     assert client.get('/api/v1/profile').json()['application_date']=='2030-01-02'
     assert write(client,application_date='2032-02-29',time_zone='America/New_York').status_code==200
@@ -145,7 +144,6 @@ def test_period_crud_overlap_boundaries_and_proration(client):
     assert add(client,start='2030-01-04',end='2030-01-05').status_code==422
     adjacent=add(client,start='2030-01-05',end='2030-01-05',hours=0).json()
     assert len(adjacent['availability_periods'])==2
-    # Exclude the period's own ID when checking an unchanged edit.
     same=client.patch('/api/v1/profile/availability-periods/'+row['id'],headers={'Idempotency-Key':uuid4().hex},json={'expected_version':adjacent['version'],'weekly_hours':7})
     assert same.json()['version']==adjacent['version']
     window=inputs(client,start_date='2030-01-02',end_date='2030-01-08').json()
@@ -171,7 +169,7 @@ def test_reference_capacity_example_and_missing_values(client):
     result=inputs(client,start_date='2030-01-02',end_date='2030-01-08').json()
     assert result['capacity_window']['available_hours']==12
     assert result['hours_unit']=='hours_per_week'
-    assert not result['ready'] # missing deadline is never guessed
+    assert not result['ready']
     assert inputs(client,start_date='2030-01-02').status_code==422
     assert inputs(client,start_date='2030-01-08',end_date='2030-01-02').status_code==422
 

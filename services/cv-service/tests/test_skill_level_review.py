@@ -9,7 +9,7 @@ METADATA = {'provider': 'synthetic', 'model': 'fixture', 'prompt_version': 'cv-s
 
 
 def stored_when(app, cv, ready):
-    """Rating and the reviewed mark run after the chat reply is saved, so wait for them instead of racing."""
+    """Wait for rating and the reviewed mark, which run after the chat reply is saved."""
     deadline = time.monotonic() + 5
     while True:
         stored = app.state.conversations.cv.get('owner-a', cv['id'])
@@ -39,7 +39,6 @@ def test_source_gives_the_model_cv_and_review_answers_but_not_team_only_skills()
     source = review_source(document(), item(), 'deferred')
     assert [s['name'] for s in source['model']['skills']] == ['Python']
     assert source['model']['review_answers'][0]['id'] == 'answer:q1' and source['model']['review_status'] == 'deferred'
-    # The review status is context, not evidence: it must not make a saved review stale.
     assert source['fingerprint'] == review_source(document(), item())['fingerprint']
 
 
@@ -61,7 +60,6 @@ def test_supported_rating_is_kept_from_an_answer_or_the_cv():
 def test_missing_or_unsupported_rating_assumes_the_worst(bad):
     source = review_source(document(), item())
     stored = validate_level_review({'levels': [bad]}, [source])['item-1']
-    # Still rated, at the pessimistic level for unconfirmed project use; the team-only skill is never rated.
     assert [(l['skill_id'], l['level'], l.get('assumed')) for l in stored['levels']] == [('skill:python', 2, True)]
     assert stored['levels'][0]['evidence'][0]['id'] == 'b1'
     assert pending_sources(document(skill_level_reviews={'item-1': stored}), [item()]) == []
@@ -77,7 +75,6 @@ def test_conflicting_evidence_is_labelled_uncertain_not_rated():
 
 
 def test_model_level_cannot_exceed_the_evidence_ceiling():
-    # Use without any explanation from the person shows only basic understanding.
     unexplained = item(skill_claims=[{'skill_id': 'skill:python', 'name': 'Python', 'attribution': 'personal', 'assistance': 'independent'}])
     source = review_source(document(clarifications=[]), unexplained)
     from_cv = rating(level=9, evidence=[{'source_id': 'b1', 'quote': 'ran a Python pipeline alone'}])
@@ -125,24 +122,20 @@ def test_skipped_topics_are_rated_from_the_cv(harness):
     first = chat['active_question']['item_id']
     chat = send(client, chat, 'Skip this topic.', command='skip_topic', item_id=first)
     stored = stored_when(app, cv, lambda d: len(d.get('skill_level_reviews') or {}) == 1)
-    # Only the closed (skipped) topic is rated so far, with its skipped status as context.
     assert list(stored['skill_level_reviews']) == [first]
     assert rater.calls[0]['sources'][0]['review_status'] == 'deferred'
     view = detail(stored)
     claims = next(i for i in view['items'] if i['id'] == first)['skill_claims']
-    # The skipped topic never established independent work, so the model's 6 is capped at guided use.
     assert {c['skill_level']['level'] for c in claims} == {3}
     assert all(c['skill_level']['source'] == 'review' for c in claims)
     assert next(s for s in view['skills'] if s['name'] == 'Python')['skill_level']['level'] == 3
-    # Levels are an overlay: the evidence version and fingerprints are untouched.
     assert stored['effective_version'] == cv['effective_version']
     chat = send(client, chat, 'Skip all remaining topics.', command='skip_remaining', item_id=None)
     stored = stored_when(app, cv, lambda d: len(d.get('skill_level_reviews') or {}) == 2
                          and d.get('profile_reviewed_effective_version') == d['effective_version'])
     assert len(stored['skill_level_reviews']) == 2 and chat['interview']['status'] == 'reviewed_with_gaps'
     assert stored['profile_reviewed_effective_version'] == stored['effective_version']
-    assert len(rater.calls) == 2  # The first topic is not rated twice.
-    # Every skill has a level once the review is finished, even though both topics were skipped.
+    assert len(rater.calls) == 2
     assert coverage(detail(stored)['items'])['share'] >= 0.9
 
 
@@ -155,13 +148,13 @@ def test_rating_failure_never_loses_the_turn(harness):
     chat = send(client, chat, 'Skip all remaining topics.', command='skip_remaining', item_id=None)
     assert chat['interview']['status'] == 'reviewed_with_gaps'
     stored = stored_when(app, cv, lambda d: d.get('profile_reviewed_effective_version') == d['effective_version'] and d.get('skill_level_failures'))
-    assert 'skill_level_reviews' not in stored  # Missing persisted reviews remain eligible for a model retry.
+    assert 'skill_level_reviews' not in stored
     assert stored.get('skill_level_failures')
     assert coverage(detail(stored)['items'])['share'] >= 0.9
     assert pending_sources(stored, detail(stored)['items'])
     conversation = app.state.conversations.get('owner-a', chat['id'])
     asyncio.run(InterviewHarness(app.state.conversations).rate_skill_levels({'id': 'owner-a'}, conversation))
-    assert len(rater.calls) == 1  # Unrelated turns during backoff do not call the provider again.
+    assert len(rater.calls) == 1
 
 
 def test_rating_failure_backoff_is_scoped_to_exact_source_fingerprint():
@@ -192,7 +185,7 @@ def test_completed_review_projects_fallback_without_overwriting_a_supported_leve
     level = projected[0]['skill_claims'][0]['skill_level']
     assert level['level'] == 2 and 'assumed' in level['rationale']
     assert 'skill_level_reviews' not in stored
-    assert pending_sources(stored, projected)  # Read-time assumptions are never considered a model result.
+    assert pending_sources(stored, projected)
     supported = item()
     supported['skill_claims'][0]['skill_level'] = {'level': 5, 'rationale': 'Independent work.', 'source': 'cv', 'evidence': []}
     assert apply_skill_level_reviews(stored, [supported])[0]['skill_claims'][0]['skill_level']['level'] == 5

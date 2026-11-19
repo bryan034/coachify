@@ -40,8 +40,7 @@ def register_session_routes(app,context,mutate):
         def apply(row,source):
             plan=active(row);capacity=calendar(plan,app.state.clock())
             if len({item.session_id for item in body.moves})!=len(body.moves):raise Problem('Move each task only once.',422,'validation')
-            # Release all moving slots before validating the final schedule, so swaps
-            # are valid and every destination is checked against the final batch.
+            # Release all moving slots before validating the final schedule.
             prepared=[]
             for item in body.moves:
                 task,index=locate(plan,item.session_id)

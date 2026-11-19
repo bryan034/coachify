@@ -1,4 +1,4 @@
-"""J12/J13 public synthesis input and private request contracts."""
+"""Public synthesis input and private request contracts."""
 from typing import Literal
 from pydantic import Field
 from app.schemas.analysis import Contract, Text, Evidence, Version, ResearchSource, BraveAnswer, InterviewProcess

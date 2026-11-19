@@ -97,7 +97,6 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   await expect(page.locator('.cv-chat-action-pending')).toHaveCount(0, {timeout: 35_000});
   const beforeReload = await readChat(account, cvId);
   await page.reload();
-  // The full-page review URL restores the mounted chat directly.
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   const resumed = await readChat(account, cvId);
   expect(resumed.id).toBe(beforeReload.id); expect(resumed.messages).toEqual(beforeReload.messages);

@@ -11,7 +11,6 @@ test('planning preferences persist, detect conflicts, prorate capacity and never
  await page.goto('/profile/edit');
  const prefs=page.getByRole('region',{name:'Planning preferences'});
  await expect(prefs.getByRole('button',{name:'Save weekly availability',exact:true})).toBeEnabled();
- // A planning save must not reset unrelated, unsaved education input.
  await page.getByRole('textbox',{name:'What course did you study?'}).fill('Unsaved education draft');
  await prefs.getByRole('spinbutton',{name:'Normal hours per week',exact:true}).fill('14');
  await prefs.getByRole('button',{name:'Save weekly availability',exact:true}).click();
@@ -48,11 +47,9 @@ test('planning preferences persist, detect conflicts, prorate capacity and never
  expect(snapshot.capacity_window.available_hours).toBe(12);
  expect(snapshot.profile_version).toBe(saved.version);
  const version=saved.version;
- // A no-op budget save does not create another version.
  await prefs.getByRole('button',{name:'Save weekly availability',exact:true}).click();
  await expect(prefs.getByText('Weekly availability saved.',{exact:true})).toBeVisible();
  expect((await (await api.get('/api/v1/profile')).json()).version).toBe(version);
- // Stale-version conflicts keep the user's draft while another session updates.
  await prefs.getByLabel('Application date',{exact:true}).fill(future(100));
  const other=await api.patch('/api/v1/profile',{headers:{'Idempotency-Key':crypto.randomUUID()},data:{expected_version:version,weekly_hours:15.5}});
  expect(other.ok()).toBe(true);
@@ -64,7 +61,6 @@ test('planning preferences persist, detect conflicts, prorate capacity and never
  await expect(prefs.getByLabel('Application date',{exact:true})).toHaveValue(future(100));
  await prefs.getByRole('button',{name:'Save application date',exact:true}).click();
  await expect(prefs.getByText('Application date saved.',{exact:true})).toBeVisible();
- // Inclusive overlapping endpoints fail and retain the editor for correction.
  await prefs.getByRole('button',{name:'Add reduced period',exact:true}).click();
  await prefs.getByLabel('Start date (Singapore)',{exact:true}).fill(future(4));
  await prefs.getByLabel('End date (Singapore)',{exact:true}).fill(future(5));
@@ -93,13 +89,9 @@ test('planning preferences persist, detect conflicts, prorate capacity and never
  expect(workspace.context.planning_defaults.weekly_hours).toBe(6);
  expect(workspace.context.planning_defaults.application_date).toBe(future(100));
  expect(workspace.context.planning_defaults.availability_periods).toHaveLength(2);
- // Without a CV and goal Roadmap shows its prerequisites instead of the settings road;
- // the saved defaults above are what its planner reads once those exist.
  await expect(page.getByRole('heading',{name:'Finish these first',exact:true})).toBeVisible();
  await page.getByRole('link',{name:/My profile/}).click();
  await expect(page.getByText('Saved course',{exact:true})).toBeVisible();
- // Baseline planning defaults remain on the standalone editor; the profile
- // summary now links to the Roadmap planner and its separate settings.
  await page.goto('/profile/edit');
  await expect(prefs).toBeVisible();
  for(const d of [future(3),future(5)]){

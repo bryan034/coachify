@@ -99,7 +99,6 @@ test('C-series drafts survive tab changes and connection recovery with no idle t
   session.hold();
   await visibility(page, 'visible');
   await expect(page.getByRole('heading', { name: 'Checking your session' })).toBeVisible();
-  // The private subtree remains mounted, but neither forms nor navigation are available.
   await expect(page.locator('.cv-workspace')).toHaveCount(1);
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Career Goal', exact: true })).toHaveCount(0);
@@ -113,7 +112,6 @@ test('C-series drafts survive tab changes and connection recovery with no idle t
   await page.getByRole('button', { name: 'Retry session', exact: true }).click();
   await expectDrafts(page);
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toBeFocused();
-  // A foreground tab may revalidate, but six minutes alone must never discard work or demand refresh.
   await page.clock.fastForward(6 * 60_000);
   await expectDrafts(page);
   await expect(page.getByRole('heading', { name: 'Connection interrupted' })).toHaveCount(0);

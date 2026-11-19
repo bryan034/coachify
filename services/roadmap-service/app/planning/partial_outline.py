@@ -5,7 +5,6 @@ from app.schemas.outlines import OutlineDraft
 def recover_outline(draft,assessment,existing=None):
     """Drop invalid reference rows and their dependants, retaining an audit for review.
 
-    This never edits the Assessment, guesses an ID or waives scheduling checks.
     The recovered draft must still pass normal validation before it can be shown.
     """
     data=draft.model_dump(mode='json')
@@ -20,7 +19,6 @@ def recover_outline(draft,assessment,existing=None):
     invalid_exclusions=[e for e in data['exclusions'] if e['requirement_ref'] not in allowed]
     for exclusion in invalid_exclusions:record('exclusion',exclusion['requirement_ref'],exclusion['requirement_ref'],'The generated exclusion references an unknown requirement.',exclusion['requirement_ref'])
     if not bad and not invalid_exclusions:return None,None
-    # Duplicate identities cannot be safely disambiguated during recovery.
     if len({g['id'] for g in data['gaps']})!=len(data['gaps']):return None,None
     if len({m['key'] for m in data['milestones']})!=len(data['milestones']):return None,None
     data['gaps']=[g for g in data['gaps'] if g['id'] not in bad]
@@ -30,7 +28,7 @@ def recover_outline(draft,assessment,existing=None):
         dependent={m['key'] for m in data['milestones'] if removed.intersection(m['prerequisite_keys'])}
         if dependent<=removed:break
         removed.update(dependent)
-    # Recovery must not remove milestones attached to saved work or progress.
+    # Never remove milestones attached to saved work or progress.
     if any(t.get('milestone_key') in removed for t in ((existing or {}).get('editable_tasks') or [])):return None,None
     if any(a.get('milestone_key') in removed for a in (existing or {}).get('assignments',[])):return None,None
     if any(m['key'] in removed and ((m.get('outcome') or {}).get('demonstrated') or any(c.get('reached_at') for c in m.get('checkpoints',[]))) for m in (existing or {}).get('milestones',[])):return None,None
@@ -71,7 +69,6 @@ def recover_outline(draft,assessment,existing=None):
     covered_refs={g['requirement_ref'] for g in data['gaps'] if g['id'] in covered_ids}
     excluded={e['requirement_ref'] for e in data['exclusions']}
     uncovered=[ref for ref in assessment.get('priorities',[]) if ref not in covered_refs|excluded]
-    # Removed beyond-deadline rows no longer establish that remaining work exceeds the deadline.
     data['summary']='This is a partial roadmap. Review the retained milestones and weekly objectives; omitted items are listed separately.'
     data['deadline_outcome']['summary']='Only the retained milestones are planned. This partial roadmap does not establish complete coverage of your career goal.'
     data['deadline_outcome']['achievable_by_target']=[m['demonstrable_outcome'] for m in retained]

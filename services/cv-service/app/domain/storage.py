@@ -1,8 +1,7 @@
 """Bounded upload admission and recovery for standalone MongoDB/local files.
 
-One ledger CAS reserves both a record and its bytes. Files and MongoDB are not a
-transaction: an uncertain publication stays charged until recovery holds the
-same file lock and establishes whether the CV record committed.
+One ledger CAS reserves both a record and its bytes. An uncertain publication stays
+charged until recovery establishes whether the CV record committed.
 """
 from copy import deepcopy
 from heapq import nsmallest
@@ -59,9 +58,7 @@ class UploadCapacity:
                 entries[identifier] = {'owner': owner, 'record': True,
                     'bytes': self.files.size(identifier), 'generation': str(uuid4()),
                     'state': 'published', 'key': '', 'fingerprint': '', 'at': time()}
-            # Orphans need durable identities too: a crash after unlink but before
-            # credit must leave enough information to finish recovery. Overflow
-            # stays conservatively charged and blocks admission for admin review.
+            # Orphans get durable identities too; overflow stays charged and blocks admission.
             untracked = 0
             for path in self.files.storage_files():
                 identifier = self.files.stored_identifier(path)

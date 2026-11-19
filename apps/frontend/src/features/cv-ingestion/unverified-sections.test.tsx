@@ -30,7 +30,6 @@ describe('sections that could not be verified', () => {
   const ordinary = within(topics).getByText('Payments API').closest('li')!;
   expect(ordinary).not.toHaveClass('is-warning');
   expect(within(ordinary).queryByText(/Warning/)).not.toBeInTheDocument();
-  // The summary sits outside the topic list, which is hidden on small screens.
   expect(screen.getByText(/1 section could not be verified against your CV/)).toBeVisible();
   expect(screen.getByText(/Heads up: I couldn’t automatically verify “Team dashboard”/)).toBeVisible();
  });
@@ -51,7 +50,6 @@ describe('sections that could not be verified', () => {
   expect(within(card).getByText('Warning · unverified')).toBeVisible();
   expect(within(card).getByRole('note')).toHaveTextContent(issue.message);
   expect(within(card).getByRole('note')).toHaveTextContent('not confirmed');
-  // The extracted description and its cited excerpt both stay visible.
   expect(within(card).getAllByText('Built a Python dashboard with a team.').length).toBeGreaterThanOrEqual(2);
   expect(within(card).queryByText('Stated in CV')).not.toBeInTheDocument();
  });

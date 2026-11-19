@@ -11,7 +11,7 @@ const weekdayOf = (value: string) => (new Date(`${value}T12:00:00Z`).getUTCDay()
 export const newBlockedTime = (start_date: string): BlackoutRule => ({ frequency: 'weekly', start_date, end_date: null, interval: 1, weekdays: [0], start_time: '18:00', end_time: '20:00' });
 export const dailyBlackout = (start_date: string, end_date: string): BlackoutRule => ({ frequency: 'daily', start_date, end_date, interval: 1, weekdays: [], start_time: null, end_time: null });
 
-/** The rule in words, so a person can check what they configured. Capacity itself is calculated by the backend. */
+/** The rule in words. */
 export function describeBlackout(rule: BlackoutRule) {
  const every = rule.interval > 1 ? `Every ${rule.interval} ${units[rule.frequency]}s` : `Every ${units[rule.frequency]}`;
  const day = Number(rule.start_date.slice(8));

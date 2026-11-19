@@ -37,8 +37,7 @@ def get_target(repository, owner, identifier):
 
 
 def create(repository, owner, request):
-    # Source is used only for validation by TargetCreate. Neither records nor
-    # mutation fingerprints contain the full source (including on retries).
+    # Records and mutation fingerprints never contain the full source.
     structured = request.model_dump(exclude={'mutation_id', 'reviewed_source_text'})
     origin = 'user_reviewed_jd' if request.target_type == 'specific_job' else 'user_guidance'
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -107,8 +106,7 @@ def selected_context(repository, owner, identifier=None, version=None):
     if (target['version'] != version or target['status'] != 'confirmed' or not has_requirements(target) or
         selection['career_target_id'] != identifier or selection['career_target_version'] != version):
         raise conflict('The confirmed target selection changed. Refresh before continuing.')
-    # Confirmed documents never mutate. Reading the selection fence again rejects
-    # a switch during this read, including switch-away-and-back at a new version.
+    # Re-read the selection fence to reject a switch during this read.
     if repository.selection(owner)['version'] != selection['version']:
         raise conflict('The selected target changed while it was being read. Please retry.')
     return {'id': target['id'], 'version': target['version'], 'type': target['target_type'], 'confirmed': True,

@@ -3,7 +3,7 @@ import type { Assessment, EvaluatedSkill } from '@/features/roadmap/types';
 import type {ReactNode} from 'react';
 import type {CvDetail, Declarations, SkillEstimate, SkillLevelInfo, SkillsProfile} from './types';
 
-// Steps follow the backend's evidence rubric. They are not a score or a test result.
+// Steps follow the backend's evidence rubric.
 const levels: Partial<Record<SkillEstimate['level'], {label: string; step: number}>> = {
  guided_application: {label: 'Guided', step: 1},
  independent_application: {label: 'Independent', step: 2},
@@ -86,7 +86,7 @@ export function evaluatedSkill(skill:Pick<Skill,'canonicalId'|'name'>,comparison
  const skills=comparison?.skill_profile?.skills??[],name=skill.name.trim().toLowerCase();
  return skills.find(item=>skill.canonicalId&&item.canonical_skill_id===skill.canonicalId)??skills.find(item=>item.name.trim().toLowerCase()===name);
 }
-/** Exactly one competence state per skill, read from the saved goal comparison. Nothing is scored here. */
+/** Exactly one competence state per skill, read from the saved goal comparison. */
 export function skillStatus(skill:Skill,comparison?:Assessment|null):Status{
  if(!comparison)return {relevance:null,state:'not_compared'};
  // Prefer the comparison's own judgement of this skill; older results fall back to requirement outcomes.

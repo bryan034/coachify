@@ -9,11 +9,9 @@ class OutputProblem(Problem):
         super().__init__(detail,502,'assessment_output')
         self.feedback=feedback
 
-# Evaluation requests may be larger than the shared 120000-byte default: an extra 34000 bytes
-# hold a full 8,500-character job description even at 4 UTF-8 bytes per character. Only
-# Assessment's own model client uses this; other services keep the shared default.
+# Evaluation requests may hold a full 8,500-character job description on top of the shared default.
 ASSESSMENT_CONTEXT_BYTES=120000+8500*4
-# Compacted evidence leaves room for one repair round (validation feedback and previous output).
+# Leaves room for one repair round.
 MODEL_CONTEXT_BUDGET=ASSESSMENT_CONTEXT_BYTES-30000
 _ONLY_LOCAL=('provenance','evidence')
 
@@ -28,10 +26,8 @@ def _clip_text(value,limit):
 def model_evidence(evidence,requirements,budget=MODEL_CONTEXT_BUDGET):
     """The evidence a comparison batch sends to the model, compacted to fit the request budget.
 
-    Every evidence ref stays, so nothing can be cited that was hidden. Fields only local
-    validation uses are dropped first, then long texts are shortened step by step. Quotes
-    copied from a shortened text are still exact substrings of the full text, and
-    validation always checks against the full, unshortened records.
+    Every evidence ref stays. Fields only local validation uses are dropped first, then long
+    texts are shortened step by step. Validation always checks against the full records.
     """
     base={ref:{k:v for k,v in record.items() if k not in _ONLY_LOCAL and v not in (None,'',[],{})}
           for ref,record in evidence.items()}
@@ -59,7 +55,6 @@ def group_outcome(items,operator):
     for item in items:
         status=item['match_status']
         # A partially supported AND route can still contain a proven unmet condition.
-        # It cannot satisfy an OR alternative merely because another component is supported.
         if operator=='any' and any(c['status']=='confirmed_shortfall' for c in item['components']):
             status='confirmed_shortfall'
         statuses.append(status)
@@ -107,13 +102,12 @@ def validate_batch(output,requirements,evidence):
         if requirement.get('required_proficiency') is not None:required.add('proficiency')
         if requirement.get('required_experience_months') is not None or requirement.get('minimum_months') is not None or requirement.get('maximum_months') is not None:required.add('duration')
         if requirement.get('category')=='qualification' and requirement.get('kind')=='constraint':required.add('qualification')
-        # A dimension the model left out is recorded as not judged ("uncertain"): it can neither
-        # support the requirement nor prove a shortfall, so no score is inflated by the default.
+        # A dimension the model left out is recorded as not judged ("uncertain").
         for dimension in sorted(required-dimensions):
             outcome.components.append(Component(dimension=dimension,status='uncertain',evidence_refs=[],
                 explanation=f'elo could not judge the {dimension} part of this requirement from your evidence.'))
         for index,component in enumerate(outcome.components):
-            # A repeated reference adds nothing; keep the first occurrence.
+            # Drop repeated references.
             component.evidence_refs=list(dict.fromkeys(component.evidence_refs))
             unknown=[ref for ref in component.evidence_refs if ref not in evidence]
             if unknown:

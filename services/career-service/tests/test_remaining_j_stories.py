@@ -261,14 +261,12 @@ def test_real_review_edit_during_retrieval_rejects_late_attachment(flow):
             assert started.wait(5)
             changed=edit_current_goal(client,goal,role='Product Analyst')
             assert changed['version']==2
-            # The original flaw needs no selection change: the real review API
-            # modifies the same canonical goal document in place.
             assert db.career_state.find_one({'_id':OWNER})['version']==1
         finally:release.set()
         result=pending.result(timeout=10)
     assert result.status_code==409,result.text
     assert not db.career_state.find_one({'_id':OWNER}).get('research_links')
-    assert db.interview_research.count_documents({})==1  # Immutable public history survives.
+    assert db.interview_research.count_documents({})==1
     latest=goal_view(client.get(BASE+goal.id+'/interview-research',headers=headers()))
     assert latest['research'] is None and latest['context']['role']=='Product Analyst'
     assert research(flow,expected_version=2).status_code==200

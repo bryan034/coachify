@@ -16,8 +16,7 @@ class CvDeletion:
             if previous is None: raise Missing()
             if not previous.get('deletion'):
                 if previous['version'] != mutation.expected_version: raise Conflict()
-                # CAS scrubs personal content and fences every in-flight worker/
-                # editor before any multi-resource cleanup. No model can undo it.
+                # CAS scrubs personal content and fences every in-flight worker/editor before cleanup.
                 previous = self.repository.replace(previous, {
                     '_id': identifier, 'user_id': owner, 'upload_key': previous['upload_key'],
                     'revision': previous['revision'] + 1, 'version': previous['version'] + 1,
@@ -59,12 +58,10 @@ class CvDeletion:
                     if record and record.get('deletion'): self._finish(record)
             except Exception:
                 # Keep the scrubbed tombstone and charged capacity for retry.
-                # One unavailable record must not block other owners' cleanup.
                 continue
 
     def recover_checkpoints(self):
-        # Older versions could leave parsed text behind a completed deletion.
-        # Scan only identifiers and flags, without loading active users' CV text.
+        # Scan only identifiers and flags for leftover parsed text.
         states = self.repository.extraction_states
         page = states.page(self.checkpoint_cursor, 10)
         self.checkpoint_cursor = page[-1]['_id'] if len(page) == 10 else None

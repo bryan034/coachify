@@ -129,7 +129,6 @@ test('upload opens the review and save for later restores the same question afte
  expect(opens).toBe(0);expect(reviewStarts).toBe(0);
  await page.getByRole('button',{name:'Save and review later'}).click();
  await expect(page.getByRole('heading',{name:'Skills Profile',exact:true})).toBeVisible();
- // While the only CV is still being read, the reading screen carries the review shortcut.
  const reviewShortcut=page.getByRole('region',{name:'synthetic-profile.pdf'}).getByRole('button',{name:'Open review'});
  await reviewShortcut.click();
  await expect(page.getByRole('progressbar',{name:'Reading your CV'})).toBeVisible();
@@ -137,7 +136,6 @@ test('upload opens the review and save for later restores the same question afte
  await expect(page.getByRole('progressbar',{name:'Reading your CV'})).toBeVisible();
  expect(opens).toBe(0);expect(reviewStarts).toBe(0);
  source={...source!,status:'ready'};
- // Processing polls the saved source and opens review automatically when ready.
  await page.setViewportSize({width:390,height:844});
  await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  await expect(page.getByRole('list',{name:'Saved conversation messages'}).getByText(firstQuestion,{exact:true})).toBeVisible();
@@ -182,7 +180,6 @@ test('Your CVs spans the full Skills Profile width once the review is finished',
  });
  await page.goto('/cv');
  await openCvLibrary(page);
- // The upload panel sits beside the CV card here, so Your CVs is not squeezed into one column of the upload grid.
  const saved=page.getByRole('region',{name:'Saved CVs',exact:true});await expect(saved).toBeVisible();
  const box=await saved.boundingBox(),grid=await page.locator('#your-cvs').boundingBox();
  expect(Math.abs(box!.width-grid!.width)).toBeLessThan(2);
@@ -204,7 +201,6 @@ test('CV library scrolls internally, persists renamed titles and opens full-page
  });
  await page.goto('/cv');
  const library=page.getByRole('region',{name:'Your uploaded CVs',exact:true}),first=page.getByRole('article',{name:'CV library-0',exact:true});
- // The CV card switches versions; the full library sits under Manage saved CVs.
  await openCvLibrary(page);await expect(first).toBeVisible();await page.getByRole('heading',{name:'Your CVs',exact:true}).scrollIntoViewIfNeeded();await expect(page.locator('summary').filter({hasText:'CV files'})).toHaveCount(0);
  const before=await library.boundingBox();expect(await library.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
  await library.evaluate(el=>{el.scrollTop=el.scrollHeight;});

@@ -1,4 +1,3 @@
-// Display-only filtering also covers replies saved by older backend versions.
 export function reviewText(text: string, sourceIds: string[] = []): string {
  const uuid = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
  const id = `(?:${uuid}|[a-f0-9]{32,64})`;

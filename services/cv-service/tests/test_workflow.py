@@ -150,7 +150,6 @@ def test_expired_lease_recovery_fencing_and_cleanup(harness):
     assert cleaned['source_available'] is False
     assert not app.state.files.exists(response['id'])
     assert cleaned['items']
-    # Expired source may be resupplied with exact bytes, retaining stable CV ID.
     queued = upload(client, cv_id=response['id'], expected_version=cleaned['version'])
     assert queued.status_code == 202
     worker.run_once()
@@ -278,7 +277,6 @@ def test_cleanup_recovers_after_file_deleted_before_tracking(harness, monkeypatc
             raise RuntimeError('Synthetic process interruption before deletion tracking')
         return replace(previous, document)
     monkeypatch.setattr(repo, 'replace', fail_tracking)
-    # One interrupted cleanup must stay recoverable without aborting its batch.
     app.state.worker.cleanup()
     assert not app.state.files.exists(cv['id'])
     assert repo.get('owner-a', cv['id'])['original_available'] is True
@@ -346,8 +344,6 @@ def test_full_edit_form_only_applies_changed_numeric_fields(harness):
     cv = ready(harness)
     item = cv['items'][0]
     path = f"/api/v1/cv/{cv['id']}/items/{item['id']}"
-    # Match the current edit form: unchanged title/description are sent alongside
-    # actual numeric/proficiency changes, and must not trigger text side effects.
     edited = client.patch(path, json=mutation(cv['version'], action='update', title=item['title'],
         description=item['description'], proficiency='basic', experience_months=6)).json()
     saved_item = edited['items'][0]

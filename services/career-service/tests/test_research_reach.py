@@ -93,7 +93,6 @@ def test_research_expands_past_irrelevant_and_duplicate_results_until_three_usef
     assert {s['source_id'] for s in saved_research(flow,current)['sources']}=={'a','b','c'}
     assert current['coverage'][-1]['useful_sources']==3 and not current['coverage'][-1]['limit_reached']
     assert len([v for v in context_model.calls if v.stage=='research_assess'])==2
-    # Adequate public research is reused without new searches for the same context.
     ingest(flow,'Another source JD. SQL is required.');wait(flow)
     assert len(search.calls)==2
 

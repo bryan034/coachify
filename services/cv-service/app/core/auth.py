@@ -16,8 +16,7 @@ async def current_account(request: Request, credentials):
         if session.status_code != 200: raise ValueError
         account = session.json()
         if not isinstance(account.get('id'), str) or not account['id'] or account.get('email_verified') is not True: raise ValueError
-        # Accept older Profile deployments during a rolling upgrade. CV owns
-        # the current question policy, never a browser-supplied scope.
+        # Default the question scope for older Profile deployments.
         scope = account.get('cv_review_scope', 'section')
         version = account.get('cv_review_policy_version', 1)
         if not validate_policy({'scope': scope, 'version': version}): raise ValueError

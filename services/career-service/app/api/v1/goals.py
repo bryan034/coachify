@@ -1,4 +1,4 @@
-"""J08/J09 authenticated orchestration; raw CV buffers never enter repositories."""
+"""Authenticated goal orchestration; raw CV buffers never enter repositories."""
 import hashlib
 import json
 import asyncio
@@ -72,8 +72,7 @@ async def assessment_status(request: Request, account=Depends(owner)):
     try:
         if cv_client is None:raise GoalError('CV service unavailable.',503)
         token=request.headers.get('authorization','')
-        # Saved-CV summaries are already scoped by the forwarded session and omit
-        # owner metadata. Detail reads below still verify the exact owner.
+        # Saved-CV summaries are scoped by the forwarded session; detail reads below verify the exact owner.
         rows=[cv for cv in (await cv_client.list(token))[:50] if cv.user_id in (None,account)]
         uploaded=bool(rows)
         if not rows:return AssessmentStatus(status='no_cv',cv_uploaded=False,skills_evaluated=False)
@@ -175,9 +174,7 @@ async def answer(draft_id: str, body: SendAnswer, request: Request, account=Depe
             if latest.version!=draft.cv.version or latest.extraction_version!=draft.cv.extraction_version or latest.profile_version!=draft.cv.profile_version:
                 raise GoalError('Your CV changed while generating. Please start a fresh exploration.')
         output=result.data
-        # The model can interpret multiple topics from one message, but cannot
-        # mark a question complete merely because it was asked. Each update must
-        # cite the current human message; no CV text or model answer counts as a declaration.
+        # Each context update must cite the current human message.
         for update in output.context_updates:
             if body.skip or update.quote not in (body.answer or ''):
                 raise AIError('invalid_output',True)

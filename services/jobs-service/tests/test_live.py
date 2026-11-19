@@ -133,7 +133,6 @@ def test_overlapping_searches_and_filters_share_live_work_and_recover(monkeypatc
             assert filters.result(timeout=5)['companies'] == [{'value': 'Synthetic Bank', 'count': 1}]
             assert latest.result(timeout=5)['total'] == 0
     assert len(calls) == 1
-    # Neither successful results nor failed operations survive as a cache.
     unavailable = False
     jobs.append(greenhouse_job(2, 'New role'))
     assert live.search(search_filter())['total'] == 2

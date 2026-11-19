@@ -6,10 +6,9 @@ import re
 from elo_shared.competence_scale import SCALE_TEXT
 
 SearchQuery=Annotated[str,StringConstraints(strip_whitespace=True,min_length=3,max_length=180)]
-# Provider wording shown directly to users; prompts aim for under 100 characters.
-# Stored findings keep the wider shared Text type, which quotes also need.
+# Provider wording shown directly to users.
 FindingText=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=240)]
-# Interview findings hold one question or action each and cover every round, so they need more room.
+# Interview findings hold one question or action each and cover every round.
 MAX_FINDINGS=20
 MAX_FINDINGS_BY_CATEGORY={'interview_intelligence':MAX_FINDINGS}
 DEFAULT_MAX_FINDINGS=12

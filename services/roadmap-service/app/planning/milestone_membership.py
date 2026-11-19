@@ -40,8 +40,7 @@ def mark_plan_membership_changes(previous, plan, *, reset_unchanged=False):
         old=(prior or {}).get('outcome') or {}
         if key in keys or not outcome.get('membership_review_required') or not prior or old.get('membership_review_required'):
             continue
-        # Discarding every newly proposed member can restore the exact active
-        # membership. Do not erase any pre-existing or definition-change review.
+        # Keep any pre-existing or definition-change review.
         outcome.pop('membership_review_required',None)
         if not old.get('definition_review_required') and prior.get('demonstrable_outcome')==milestone.get('demonstrable_outcome'):
             outcome.pop('definition_review_required',None)

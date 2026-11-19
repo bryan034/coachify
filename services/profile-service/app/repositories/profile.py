@@ -19,8 +19,7 @@ class MutationConflict(Exception):
 class ProfileRepository:
     """Append-only version documents; unique owner/version enforces concurrent writes.
 
-    Every insert is an atomic full snapshot. No cross-collection transaction or
-    mutable history is required, so standalone local MongoDB is supported.
+    Every insert is an atomic full snapshot.
     """
     def __init__(self, database):
         self.collection = database.profile_versions
@@ -64,7 +63,6 @@ class ProfileRepository:
             raise MutationConflict
         if committed or (receipt and receipt.get("completed_noop")):
             # Changed-write receipts commit atomically inside profile snapshots.
-            # An incomplete claim is retryable after a process/network failure.
             return self.current(owner)
         return None
 
@@ -74,8 +72,7 @@ class ProfileRepository:
             return replayed
         previous = self.current(owner)
         if (previous or {}).get("version", 0) != expected_version:
-            # A simultaneous duplicate may have committed between replay lookup
-            # and the current-version read. Check its receipt before rejecting it.
+            # Check a simultaneous duplicate's receipt before rejecting it.
             replayed = self.replay(owner, mutation_id, fingerprint)
             if replayed is not None:
                 return replayed

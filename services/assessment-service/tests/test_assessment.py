@@ -415,7 +415,6 @@ def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
         assert state['operation']['status']=='succeeded',state
         assert not state['stale']
         assert state['result']['inputs']['cv_id'] is None
-        # The declaration supplies basic personal use, not evidence of independent successful delivery.
         python=state['result']['job_skill_gaps'][0]
         assert python['scoring_rubric_version']=='evidence-role-v5' and python['competence_score']==6
         assert python['profile_skills'][0]['name']=='Python'
@@ -474,7 +473,6 @@ def test_retry_discards_pre_v2_scores_only_when_source_revisions_still_match():
         checkpoint.pop('scoring_rubric')
         checkpoint['input_hash']=digest(checkpoint['snapshot']['inputs'])
         checkpoint['outcomes'][0]['competence_score']=10
-        # Preserve the failed-at version, just as loading an existing saved row would.
         with store.lock: store.data[OWNER]=copy.deepcopy(row)
         model.fail=False
         client.post('/api/v1/assessments',headers=H,json=body)
@@ -496,7 +494,6 @@ def test_retry_after_inputs_changed_restarts_from_the_latest_inputs():
         client.post('/api/v1/assessments',headers=H,json=body)
         assert finish(client)['operation']['status']=='failed'
         old=store.load(OWNER)['last_operation']['checkpoint']['input_hash']
-        # The user changes the CV before pressing "Try again" on the failed run.
         sources.source['cv_version']+=1
         model.fail=False
         client.post('/api/v1/assessments',headers=H,json=body)
@@ -522,7 +519,6 @@ def test_large_cv_evidence_is_compacted_to_fit_the_model_request_budget():
     assert len(json.dumps({'requirements':requirements,'evidence':compact},ensure_ascii=False).encode())<=MODEL_CONTEXT_BUDGET
     assert set(compact)==set(snapshot['evidence'])
     assert all(snapshot['evidence'][ref]['text'].startswith(record['text'].rstrip('…')) for ref,record in compact.items())
-    # The full comparison now runs instead of failing with model_context.
     model=Interpreter()
     with TestClient(create_app(MemoryStore(),sources,model)) as client:
         client.post('/api/v1/assessments',json={'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True},headers=H)
@@ -543,7 +539,6 @@ def test_only_the_assessment_model_client_accepts_the_larger_request_limit(monke
         assert client.app.state.model.max_context_bytes==ASSESSMENT_CONTEXT_BYTES==154000
     other=Model(None,'ROADMAP');monkeypatch.setenv('ROADMAP_LLM_API_KEY','synthetic')
     assert other.max_context_bytes==MAX_CONTEXT_BYTES==120000
-    # A context between the two limits is refused by the default client before any network call.
     with pytest.raises(Problem) as error:asyncio.run(other.generate(Batch,'Assess.',{'text':'x'*130000}))
     assert error.value.code=='model_context'
 
@@ -555,14 +550,12 @@ def test_people_can_rate_a_skill_elo_could_not_rate():
         assert empty=={'version':0,'ratings':[]}
         saved=client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':0,'name':'FastAPI','canonical_skill_id':None,'score':7}).json()
         assert saved['version']==1 and saved['ratings'][0]|{'updated_at':None}=={'key':'fastapi','name':'FastAPI','canonical_skill_id':None,'score':7,'updated_at':None}
-        # Stale versions and out-of-range scores are rejected.
         assert client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':0,'name':'FastAPI','score':8}).status_code==409
         assert client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':1,'name':'FastAPI','score':11}).status_code==422
         changed=client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':1,'name':'FastAPI','score':8}).json()
         assert [r['score'] for r in changed['ratings']]==[8]
         cleared=client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':2,'name':'FastAPI','score':None}).json()
         assert cleared['ratings']==[]
-        # A rating never interrupts a running evaluation.
         begin(store,OWNER,Generate(expected_version=3,mutation_id=uuid4(),allow_partial=True),'assessment')
         blocked=client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':4,'name':'FastAPI','score':5})
         assert blocked.status_code==409 and blocked.json().get('code','operation_pending')

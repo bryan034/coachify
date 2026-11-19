@@ -1,8 +1,4 @@
-"""Seed labelled canonical goals in an explicitly disposable browser-test stack.
-
-This script has no HTTP route and is mounted only by compose.test.yaml. Confirmation
-still goes through the real owner-authenticated Career API after fixture setup.
-"""
+"""Seed labelled canonical goals in an explicitly disposable browser-test stack."""
 import json
 import os
 import re

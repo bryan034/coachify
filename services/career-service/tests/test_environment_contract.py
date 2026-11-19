@@ -21,7 +21,6 @@ def test_canonical_career_keys_take_precedence_including_explicit_blank(monkeypa
         if legacy is not None:monkeypatch.setenv(alias,legacy)
     settings=AISettings.from_env()
     sources=SourceAPIs.from_environment(None)
-    # Only the search key keeps a legacy alias; the model key is canonical-only.
     model_expected=(new or '').strip()
     assert settings.api_key.get_secret_value()==model_expected
     assert settings.enabled==bool(model_expected)
@@ -46,8 +45,6 @@ def test_public_example_covers_every_active_compose_input_without_real_secrets()
     inputs=set(re.findall(r'\$\{([A-Z][A-Z0-9_]*)',compose))
     aliases={'GEMINI_API_KEY','BRAVE_API_KEY'}
     values=dict(pairs)
-    # Template inputs can feed other template values (e.g. OPENROUTER_MODEL
-    # expands into each service model). Trace those references from Compose.
     used=inputs-aliases
     while True:
         expanded=used | {reference for name in used for reference in
@@ -65,7 +62,6 @@ def test_public_example_covers_every_active_compose_input_without_real_secrets()
     career=compose.split('  career-service:\n',1)[1].split('  cv-service:\n',1)[0]
     assert '      CAREER_LLM_API_KEY:' in career and '      CAREER_RESEARCH_API_KEY:' in career
     assert '      GEMINI_API_KEY:' not in career and '      BRAVE_API_KEY:' not in career
-    # A provider switch must not relabel a legacy key as the new provider's key.
     assert 'CAREER_LLM_API_KEY: ${CAREER_LLM_API_KEY:-}' in career
     assert 'CAREER_RESEARCH_API_KEY: ${CAREER_RESEARCH_API_KEY:-}' in career
     other_services=compose.replace(career,'')

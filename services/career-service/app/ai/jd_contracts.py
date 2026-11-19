@@ -63,8 +63,7 @@ class ExtractedJD(Contract):
     def to_domain(self):
         data = self.model_dump()
         data['job_dates'] = [item.model_dump() for item in self.job_dates]
-        # Transient condition keys are allocated here; review preparation assigns
-        # persistent identities. Group labels continue to span both item types.
+        # Transient condition keys are allocated here; review preparation assigns persistent identities.
         for index, condition in enumerate(data['non_skill_requirements']):
             condition['requirement_id'] = f'condition-{index + 1}'
         return JDExtraction.model_validate(data)

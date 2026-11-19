@@ -49,13 +49,12 @@ def schedule_digest(config):
     """Settings that decide when sessions can be placed. A change here applies from the next week planned."""
     return digest(config.model_dump(mode='json',exclude={*SHAPE_FIELDS,*DISPLAY_FIELDS}))
 def settings_differ(plan,state):
-    """Compares current forms, so a saved plan's older settings format never reads as a change."""
+    """Compares current settings forms."""
     return shape_digest(PlannerConfig.model_validate(plan['config']))!=shape_digest(saved_config(state))
 def completed_sessions(plan):
     if not plan:return []
     if isinstance(plan.get('editable_tasks'),list):
-        # Historical snapshots may contain the old, collision-prone projection.
-        # Rebuild from canonical tasks in memory without mutating the snapshot.
+        # Rebuild assignments from canonical tasks in memory without mutating the snapshot.
         from app.planning.tasks import project_assignments
         projection={'editable_tasks':plan['editable_tasks'],'milestones':plan.get('milestones',[])}
         assignments=project_assignments(projection)
@@ -99,8 +98,7 @@ def plan_review(plan,now):
 def learning_view(plan,now):
     """Each skill the active roadmap works on, most important first, with its own progress and next session."""
     if not plan:return {'has_roadmap':False,'roadmap_id':None,'skills_total':0,'skills_started':0,'skills_done':0,'steps':[]}
-    # The read-only session view is a compatibility projection of editable
-    # tasks. Rebuild it on a copy so stale projections cannot affect progress.
+    # Rebuild the session view on a copy.
     canonical=isinstance(plan.get('editable_tasks'),list)
     if canonical:
         from app.planning.tasks import legacy_inference_source_is_safe, project_assignments, task_link_source_is_current
@@ -115,16 +113,10 @@ def learning_view(plan,now):
                 source=task.get('source_assignment') or {}
                 refs=task.get('requirement_refs') or []
                 explicitly_linked=bool(refs and task_link_source_is_current(plan,task) and gap.get('requirement_ref') and gap['requirement_ref'] in refs)
-                # An explicit relink or unlink replaces the source assignment's
-                # old gap association, including any inferred milestone link.
+                # An explicit relink or unlink replaces the source assignment's old gap association.
                 if 'requirement_refs' in (task.get('overrides') or []):return explicitly_linked
-                # A manually created task's chosen requirements are explicit
-                # even before any edit has populated its overrides list.
-                # A personal task without a requirement link does not inherit
-                # a skill merely because it was placed under a milestone.
+                # A manually created task's chosen requirements are explicit; a personal task does not inherit a skill from its milestone.
                 if task.get('origin')=='user':return explicitly_linked
-                # An explicit requirement cannot be inferred into the current
-                # assessment when its saved provenance is missing or stale.
                 if refs:return explicitly_linked
                 if not legacy_inference_source_is_safe(plan,task):return False
                 if source.get('gap_id'):
@@ -134,8 +126,7 @@ def learning_view(plan,now):
                 return len(matched)==1 and matched[0]==gap['id']
             related=[task for task in plan['editable_tasks'] if task_belongs(task)]
             active=[task for task in related if not task.get('removed')]
-            # A task can span several legacy sessions. Match every projected
-            # session to its authoritative task rather than its stale gap_id.
+            # Match every projected session to its authoritative task.
             session_ids={task['id'] if i==0 else str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(i)))
                          for task in active for i,_ in enumerate(task.get('schedule') or [])}
             sessions=sorted((a for a in plan['assignments'] if a['id'] in session_ids),key=lambda a:(str(a['date']),a['start_time']))
@@ -157,8 +148,7 @@ def learning_view(plan,now):
                 return removal_needs_review(task,(milestone or {}).get('outcome'),has_active_members)
             removed=any(still_needs_review(task) for task in related)
             finished=bool(active) and all(task['status']=='completed' and not task.get('definition_review_required') for task in active)
-            # A self-report of "not demonstrated" acknowledges the removed
-            # work, but cannot itself make its learning outcome complete.
+            # A "not demonstrated" self-report acknowledges removed work without completing its outcome.
             reviewed_as_not_demonstrated=any(
                 task.get('removed') and task.get('milestone_key') and not still_needs_review(task)
                 and not ((milestones.get(task.get('milestone_key')) or {}).get('outcome') or {}).get('demonstrated')
@@ -238,12 +228,10 @@ def planner_view(row,source,now,default_zone=None):
     state=planner_state(row)
     operation=row.get('pending') or row.get('last_operation') or {}
     if operation.get('kind')=='outline_generate' and operation.get('body',{}).get('auto_accept'):
-        # Checkpointed drafts are private working data during automatic creation,
-        # including after a timeout. Only published tasks belong in this response.
+        # Only published tasks belong in this response.
         state=copy.deepcopy(state)
         state['outline_candidate']=None;state['week_candidate']=None
-    # Legacy snapshots are converted only in the response. A read never saves an
-    # upgrade; the next explicit task mutation persists the canonical task data.
+    # Legacy snapshots are converted only in the response; a read never saves an upgrade.
     from app.planning.tasks import ensure_tasks, project_assignments, schedule_warnings
     from app.planning.sessions import session_views
     from app.planning.weeks import planning

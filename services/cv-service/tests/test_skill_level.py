@@ -32,7 +32,6 @@ def test_supported_cv_level_reaches_claim_and_skill():
     assert items[0]['skill_levels'][0]['evidence'] == [{'id': 'b1', 'location': 'Page 1', 'excerpt': QUOTE['quote']}]
     document = {'original_items': items, 'overlays': {}, 'clarifications': []}
     claim = effective_items(document)[0]['skill_claims'][0]
-    # The CV never says the work was done independently, so the level is capped at guided use.
     assert claim['skill_level']['level'] == 3 and claim['skill_level']['source'] == 'cv'
     skill = CvSkill.model_validate(skills_for(effective_items(document))[0])
     assert skill.skill_level.level == 3 and skill.skill_level.status == 'rated' and skill.sources[0].skill_level.rationale
@@ -116,7 +115,6 @@ def test_review_level_overrides_cv_level_and_aggregates_highest():
     document = {'original_items': [deepcopy(item)], 'overlays': {}, 'clarifications': [
         {'id': 'q1', 'item_id': item['id'], 'interpretation': interpretation, 'reconciliation_required': False}]}
     claim = effective_items(document)[0]['skill_claims'][0]
-    # Independence is irrelevant; the review explanation sets the level.
     assert claim['skill_level']['level'] == 8 and claim['skill_level']['source'] == 'review'
     assert claim['skill_level']['evidence'][0]['excerpt'] == 'I maintain Python for the whole org.'
     interpretation['claims'][0].update(assistance='independent', changed_fields=['attribution', 'assistance', 'skill_level'])
@@ -128,7 +126,6 @@ def test_review_level_overrides_cv_level_and_aggregates_highest():
 def test_ceiling_rates_understanding_not_independence():
     from app.domain.capabilities import level_ceiling
     project = {'kind': 'project', 'review_evidence': []}
-    # Use alone, even independent, shows no understanding; AI may have done the work.
     assert level_ceiling(project, {'skill_id': 'skill:python', 'attribution': 'personal', 'assistance': 'independent'}) == 3
     assert level_ceiling(project, {'skill_id': 'skill:python', 'attribution': 'unknown', 'assistance': 'independent'}) == 3
     explained = {'kind': 'project', 'review_evidence': [{'status': 'supported', 'field': 'complexity', 'skill_name': 'Python'}]}

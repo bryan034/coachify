@@ -114,8 +114,6 @@ def test_completed_section_review_reopens_unasked_project_after_reload(harness, 
         conversation['active_question'] = None
     service.update('owner-a', chat['id'], completed)
     if prepare_first:
-        # A target-specific request can persist the new policy before the
-        # conversation is reloaded; reopening must still see the old scope.
         current = service.cv.get('owner-a', cv['id'])
         request = PrepareMutation.model_validate(mutation(current['version'], career_target_id='target', career_target_version=1))
         clarification.prepare(service.cv, 'owner-a', cv['id'], request,
@@ -399,8 +397,7 @@ def test_retained_question_recovers_after_target_prepare_changes_policy_or_ledge
     before_retry = service.cv.get('owner-a', cv['id'])
     assert before_retry['review_policy_snapshot'] == CURRENT
     if publication.endswith('_changed'):
-        # A different source changes after the question was staged. This must
-        # not make retry lose an already-issued question or loop on stale data.
+        # A different source changes after the question was staged.
         unrelated = next(item for item in before_retry['original_items'] if item['kind'] == 'skill')
         response = client.patch(f"/api/v1/cv/{cv['id']}/items/{unrelated['id']}",
                                 json=mutation(before_retry['version'], action='update', title='Synthetic SQL reporting'))

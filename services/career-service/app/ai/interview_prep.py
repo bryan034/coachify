@@ -16,7 +16,7 @@ class PrepSuggestions(Model):
 
 
 def prep_schema(context):
-    """Bind each fill to a gap this request lists, so the model cannot address other rounds."""
+    """Bind each fill to a gap this request lists."""
     gaps=context.get('gaps',[])
     rounds=sorted({g['round_number'] for g in gaps if g.get('round_number') is not None})
     schema=PrepSuggestions.model_json_schema()

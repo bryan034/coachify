@@ -19,8 +19,6 @@ def validate_skills(skills, message='', existing=(), *, extraction=False):
     for skill in skills:
         if skill.origin == 'employer' and skill.priority == 'suggested':
             raise AIError('invalid_output', True, reason='unexpected_origin', fields=('origin', 'priority'))
-        # Supporting explanations may summarize the JD. Exact substring matching
-        # is not a test of semantic accuracy and rejected legitimate interpretations.
         if skill.origin == 'user_declaration' and (extraction or (
                 skill not in existing and (not skill.evidence or skill.evidence not in message))):
             raise AIError('invalid_output', True, reason='source_quote', fields=('evidence',))
@@ -69,7 +67,6 @@ async def message(body: JDMessage, request: Request, account=Depends(owner)):
     def validate_reply(output):
         if output.proposed_skills is None:
             return
-        # The model does not own IDs, provenance or unchanged employer evidence.
         # Preserve the authoritative item when it merely paraphrases its explanation.
         facts=('name','category','priority','required_proficiency','required_experience_months')
         normalized=[]

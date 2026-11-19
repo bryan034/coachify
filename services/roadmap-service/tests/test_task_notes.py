@@ -27,7 +27,7 @@ def test_notes_save_restore_and_leave_status_and_schedule_alone():
         assert by_title(read(client), task['title'])['notes'] == saved['notes']
         stamp = saved['notes_updated_at']
         again = save(client, 'notes', state, task_id=task['id'], notes=DOC)
-        assert by_title(again, task['title'])['notes_updated_at'] == stamp  # unchanged notes keep their time
+        assert by_title(again, task['title'])['notes_updated_at'] == stamp
 
 
 def test_notes_need_the_current_version_and_an_owned_task():

@@ -30,7 +30,7 @@ const stops = [
 ];
 const stateWords: Record<StopState, string> = { done: 'Done', next: 'Up next', later: 'Later', checking: 'Checking', unavailable: 'Not available' };
 
-/** The first unfinished stop is only named once every stop is known, so the path never points at the wrong one. */
+/** The first unfinished stop is only named once every stop is known. */
 export function journeyStates(flags: Flag[]): StopState[] {
  const settled = flags.every(value => value !== 'loading');
  const next = settled ? flags.indexOf(false) : -1;
@@ -140,7 +140,7 @@ const importanceLabel = (priority?: string) => isEssential(priority) ? 'Essentia
 const priorityRank = (priority?: string) => isEssential(priority) ? 0 : 1;
 const Pencil = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>;
 
-/** Goal match reads the same saved comparison as Career Goal; nothing is recomputed here. */
+/** Goal match from the same saved comparison as Career Goal. */
 function GoalMatch({ section, skills, retry, comparison }: { section: Section<CurrentGoal>; skills: Section<SkillsSummary>; retry: () => void; comparison: ReturnType<typeof useComparison> }) {
  const goal = section.status === 'ready' ? section.data.goal : null;
  const matches = comparison.matches;

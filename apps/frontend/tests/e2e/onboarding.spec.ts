@@ -22,7 +22,6 @@ test('P13 uses canonical completion, guards deep links and distinguishes profile
  await page.reload();
  await expect(page).toHaveURL(/\/onboarding$/);
  complete=true;
- // Completing setup offers the optional goal and CV steps before the workspace.
  await page.reload();
  await expect(page).toHaveURL(/\/getting-started$/);
  await page.goto('/onboarding');

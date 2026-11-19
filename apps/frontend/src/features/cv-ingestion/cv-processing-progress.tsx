@@ -2,8 +2,6 @@
 import {useEffect, useState} from 'react';
 import type { CvSummary } from './types';
 
-// These are display ceilings between observed backend milestones, not provider
-// completion measurements. Only a ready response may display 100%.
 const ceilings: Record<string, number> = {
  queued: 9, source_read: 24, document_parse: 44, model_request: 74,
  extraction_validation: 84, model_repair: 94, publication: 99, ready: 100,

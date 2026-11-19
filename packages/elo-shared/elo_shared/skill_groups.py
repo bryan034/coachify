@@ -1,9 +1,6 @@
 """Display categories for skills, shared by every service that returns skills.
 
-A group only decides where a skill is shown. It is derived on read and never stored,
-hashed or used to compare skills: use the canonical registry ID for identity.
-Extraction rarely supplies a category, so the name decides first and the supplied
-category is only a fallback.
+Derived on read and never stored. The name decides first; the supplied category is a fallback.
 """
 import re
 from elo_shared.skills import normalize
@@ -17,7 +14,6 @@ def _words(*terms):
 
 # Order matters: the first match wins, so specific groups come before broad ones.
 _GROUPS = (
-    # AI comes first so "vector databases" or "machine learning" are not read as general data skills.
     ('AI & ML', _words('ai', 'artificial intelligence', 'generative ai', 'gen ?ai', 'llms?', 'large language models?',
                        'rag', 'retrieval[- ]augmented generation', 'vector (search|databases?|stores?|embeddings?)',
                        'embeddings?', 'mcp', 'model context protocol', 'langchain', 'langgraph', 'llama ?index',

@@ -18,7 +18,6 @@ export async function careerOperation<T>(path:string,token:string,options:Reques
  headers.set('Prefer','respond-async');
  if(!headers.has('Idempotency-Key'))headers.set('Idempotency-Key',crypto.randomUUID());
  let value=await careerApi<T|CareerOperation>(path,token,{...options,headers:Object.fromEntries(headers)});
- // Older consumers/servers can still use the synchronous response shape.
  if(!value||typeof value!=='object'||!('operation_id' in value))return value as T;
  let job=value as CareerOperation;
  while(job.status!=='succeeded'){

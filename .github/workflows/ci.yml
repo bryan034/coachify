@@ -116,7 +116,6 @@ jobs:
 
   profile-integration:
     name: Profile MongoDB integration
-    # Keep the runner on a kernel supported by the MongoDB image. See docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     services:
@@ -140,7 +139,6 @@ jobs:
 
   analysis-integration:
     name: Analysis MongoDB contracts (${{ matrix.service }})
-    # Keep the runner on a kernel supported by the MongoDB image. See docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
@@ -176,7 +174,6 @@ jobs:
 
   local-ui-integration:
     name: Local UI and MongoDB integration
-    # Keep the runner on a kernel supported by the MongoDB image. See docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:

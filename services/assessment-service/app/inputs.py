@@ -70,7 +70,6 @@ async def capture(upstream,account):
             'text':'\n'.join([declaration['description'],*[c['description'] for c in declaration.get('contributions',[])]]),
             'attribution':'personal','assistance':'unknown','support_uncertain':False,
             'attachment':declaration.get('attached_to'),**identity(declaration['name'])}
-    # Background supports qualification context; it cannot establish capability by status.
     education=account['profile'].get('education')
     if education:
         import json
@@ -91,7 +90,6 @@ async def capture(upstream,account):
             name=f.get('value') or f.get('name')
             requirements.append({**f,'ref':'interview:'+str(f.get('finding_id') or index),'kind':'interview_preparation',
                 'name':name,'priority':'suggested','origin':'interview_research',**identity(name)})
-    # Reported to the client, which offers evaluation once the CV review is finished and research has settled.
     reviewed=not cv_id or bool(cv.get('profile_reviewed_effective_version') is not None and cv.get('profile_reviewed_effective_version')==cv.get('effective_version'))
     interview_status=((research or {}).get('intelligence') or {}).get('categories',{}).get('interview_intelligence',{}).get('status')
     research_pending=bool(research and (research.get('research_status') in ('pending','processing') or interview_status in ('pending','running')))

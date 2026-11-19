@@ -33,8 +33,6 @@ def test_full_8000_character_jd_fits_with_instructions_schema_output_and_margin(
     margin=max(1024,16384//10)
     assert input_tokens(payload)+cap+margin<=16384
     if stage=='jd_extraction':
-        # This complete request was rejected when byte counts were compared to
-        # the available token budget, despite fitting in the model window.
         byte_count=sum(len(message['content'].encode()) for message in payload['messages'])+len(json.dumps(payload['response_format']).encode())
         assert byte_count>16384-cap-margin
     if repair:assert 'Latest validation issues:' in payload['messages'][0]['content']

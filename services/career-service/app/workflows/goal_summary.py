@@ -205,7 +205,7 @@ async def summarize(request, account, body):
         if error.code not in ('invalid_output','incomplete_output','context_limit'):raise
         await snapshot()
         return saved_evidence_summary(goal,record)
-    await snapshot()  # A replaced goal/research must never publish a stale overview.
+    await snapshot()
     points=[]
     last_point={}
     research_heading=False

@@ -132,7 +132,7 @@ def test_edit_second_call_preserves_existing_identity_and_validates_new_items(de
                 result=await pending
                 assert result.data.proposed_skills[0]==JDExtraction.model_validate(GOAL).skills[0]
                 assert result.data.proposed_skills[1].origin=='user_declaration'
-            assert len(calls)==2  # One operation, two provider calls.
+            assert len(calls)==2
     asyncio.run(invoke())
     assert len(calls)==2
     assert calls[1]['response_format']['json_schema']['name']=='jd_edit'

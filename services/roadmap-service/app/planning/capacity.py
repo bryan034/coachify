@@ -1,4 +1,4 @@
-"""Runway and study-capacity arithmetic. This is the only source of these numbers.
+"""Runway and study-capacity arithmetic.
 
 Times are wall-clock minutes on real local dates. A date is available only inside its
 configured blocks, so overlapping blocks merge and repeated daylight-saving hours count once.
@@ -87,7 +87,7 @@ def blackout_occurs(rule,day):
     months=(day.year-first.year)*12+day.month-first.month
     return months%rule.interval==0 and day.day==min(first.day,monthrange(day.year,day.month)[1])
 def blackout_span(rule):
-    """Local minutes a rule removes on a day it occurs. 23:59 is the latest a time field can say, so it means midnight."""
+    """Local minutes a rule removes on a day it occurs; 23:59 means midnight."""
     if rule.start_time is None:return (0,1440)
     return (to_minute(rule.start_time),1440 if rule.end_time=='23:59' else to_minute(rule.end_time))
 def resolve_dates(config,today):
@@ -189,7 +189,6 @@ class Capacity:
             if first<=day<=last:weeks.setdefault(self.week(day),[]).append(day)
         result={}
         for week,days in weeks.items():
-            # Capacity construction never calls _week_minutes, so this does not recurse.
             start=max(first,min(days));end=min(last,max(days))+timedelta(days=1)
             result[week]=Placer(self.config,self.now,self.reserved,start,end).room_details()
         self._capacity_cache[key]=result

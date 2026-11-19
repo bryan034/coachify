@@ -34,7 +34,7 @@ test('confirmed Career targets drive saved project, work and skill clarification
   return value.cvs[0]?.status;
  }, { timeout: 30_000 }).toBe('ready');
  await openCvReviewTools(page);
- await page.evaluate(() => window.dispatchEvent(new Event('focus'))); // Skills Profile rechecks saved CVs when the window regains focus.
+ await page.evaluate(() => window.dispatchEvent(new Event('focus')));
  await expect(page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByText('Active CV',{exact:true})).toBeVisible();
  await expect(page.getByLabel('Confirmed clarification target', { exact: true })).toContainText('Synthetic data analyst');
  await page.getByRole('button', { name: 'Prepare relevant questions', exact: true }).click();
@@ -57,14 +57,12 @@ test('confirmed Career targets drive saved project, work and skill clarification
  expect(targetQuestions).toHaveLength(4);
  expect(targetQuestions.filter((q: { status: string }) => q.status === 'answered')).toHaveLength(2);
  expect(targetQuestions.filter((q: { status: string }) => q.status === 'skipped')).toHaveLength(1);
- // Python attributed only to a teammate is no longer an active proficiency question.
  expect(clarified.skills.find((skill: { skill_id: string }) => skill.skill_id === 'skill:sql').sources).toEqual(expect.arrayContaining([expect.objectContaining({ attribution: 'personal' })]));
  expect(clarified.effective_version).toBe(afterAnswers.effective_version);
  await page.reload();await openCvReviewTools(page);
  await expect(page.getByRole('button', { name: 'Edit explanation', exact: true })).toHaveCount(2);
  await expect(page.getByRole('button', { name: 'Answer voluntarily', exact: true })).toHaveCount(1);
 
- // An unrelated canonical exploration changes relevance, never the saved contribution.
  const exploration=await seedCanonicalGoal(account,{role:'Synthetic visual designer',field:'Design',target_type:'career_exploration',skills:[{name:'Illustration'}]});
  const explorationGoal=await (await account.get('/api/v1/career/goals/current')).json();
  expect(explorationGoal.goal.target_type).toBe('career_exploration');
@@ -122,7 +120,6 @@ test('confirmed Career targets drive saved project, work and skill clarification
   const other = await createLocalAccount(otherPage, 'Synthetic separate target owner');
   const otherProfile = await (await other.get('/api/v1/profile')).json();
   expect((await other.finish({ expected_version: otherProfile.version, occupational_status: 'employed', no_previous_education: true })).ok()).toBeTruthy();
-  // A context outside this account's current selection is a generic conflict; it reveals no goal data.
   expect((await other.get(`/api/v1/career/goals/${targetId}/confirmed-context?expected_version=${currentTarget.version}`)).status()).toBe(409);
   expect(await (await other.get('/api/v1/career/goals/current/cv-confirmation')).json()).toMatchObject({goal_id:null,confirmed:false,context:null});
   expect((await other.get(`/api/v1/cv/${cvId}/clarifications`)).status()).toBe(404);

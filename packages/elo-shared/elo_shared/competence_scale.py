@@ -1,9 +1,7 @@
 """One 1-10 scale for how well a skill is understood: the level a role expects and the level a person has shown.
 
-AI tools can produce work for anyone, so the scale measures understanding of the subject, not whether the
-person can carry out the tasks alone. Career rates each required skill on it, CV rates each of the person's
-skills on it, and Assessment compares the two. Evidence of a person's level is read pessimistically: what is
-not stated or explained is assumed not to be understood.
+Career rates each required skill on it, CV rates each of the person's skills on it, and Assessment
+compares the two. What is not stated or explained is assumed not to be understood.
 """
 SCALE_VERSION = 'understanding-1-10-v2'
 MIN_LEVEL, MAX_LEVEL = 1, 10

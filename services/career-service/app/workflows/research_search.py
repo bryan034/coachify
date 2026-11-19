@@ -37,7 +37,7 @@ def query_key(query):return ' '.join(query.casefold().split())
 
 
 def next_query(state,context):
-    # Deterministic fallbacks keep employer/location rather than becoming global advice.
+    # Deterministic fallbacks keep employer/location.
     base=' '.join(v[:limit] for v,limit in ((context.company,50),(context.role,40),(context.location,35),(context.field,20)) if v)
     fallbacks=[base+' '+focus for focus in ('interview process rounds','online assessment coding test',
         'technical interview questions','candidate interview experience','recruitment selection stages','assessment centre interview')]
@@ -70,7 +70,7 @@ async def plan(workflow,state):
 async def assess(workflow,state):
     goal=await workflow.goal(state)
     if state.get('source_error'):
-        # Later acquisition failures must not discard already assessed evidence.
+        # Keep already assessed evidence after later acquisition failures.
         if state.get('useful_source_ids'):
             return {'search_exhausted':True}
         raise GoalError(state['source_error'],503)

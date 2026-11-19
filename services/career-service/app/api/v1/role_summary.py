@@ -45,7 +45,6 @@ async def generate(goal_id:str,body:SummaryCommand,request:Request,account=Depen
     goal=await owned_goal(request,account,goal_id)
     if goal.version!=body.expected_version:raise GoalError('The current career goal changed. Reload before generating.')
     finished,record=await research_state(request,account,goal)
-    # Cards change while research adds findings; summarise once it settles.
     if not finished:raise GoalError('Role research is still running. The summary is generated when it finishes.')
     if not body.refresh:
         saved=await digest.read_saved(request,account,goal,record)

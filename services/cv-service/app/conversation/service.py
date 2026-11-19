@@ -32,8 +32,7 @@ def key(value): return str(uuid5(NAMESPACE_URL, 'elo-cv-chat:' + value))
 
 
 def at_capacity(document):
-    # Reserve both user and assistant messages plus room for this turn's bounded
-    # action receipts. A capacity limit never deletes older factual provenance.
+    # Reserve both user and assistant messages plus room for this turn's bounded action receipts.
     return len(document['messages']) + 2 > MAX_MESSAGES or len(BSON.encode(document)) >= 6 * 1024 * 1024
 
 
@@ -117,8 +116,6 @@ class ConversationService:
         self.tasks.add(task)
         def finished(completed):
             self.tasks.discard(completed)
-            # Storage can disappear before the coordinator can publish a failure.
-            # The durable lease remains recoverable; never log private task data.
             if not completed.cancelled(): completed.exception()
         task.add_done_callback(finished)
 
@@ -172,7 +169,7 @@ class ConversationService:
             def upgrade(current):
                 if any(a['status'] in {'pending', 'awaiting_confirmation', 'needs_source', 'failed'}
                        for m in current['messages'] for a in m.get('actions', [])):
-                    return  # Retain the execution semantics of unfinished older actions.
+                    return
                 current['purpose'] = mutation.purpose
             document = self.update(owner, document['_id'], upgrade)
         return document
@@ -231,8 +228,7 @@ class ConversationService:
                 error = 'Career context is unavailable. Your conversation is saved; retry to prepare relevant questions.'
         document = self.cv.get(account['id'], previous['cv_id']) if previous['cv_id'] else None
         def transform(current):
-            # Source reads precede this CAS. A completed action may have published
-            # a question since those reads; only reconcile the captured revision.
+            # Only reconcile the captured revision.
             if current['revision'] != previous['revision']: return
             active = current.get('active_question')
             if current.get('purpose') == 'skills_profile':
@@ -352,8 +348,7 @@ class ConversationService:
     def routing_payload(self, owner, conversation, route):
         document = self.cv.get(owner, conversation['cv_id']) if conversation['cv_id'] else None
         items = effective_items(document) if document else []
-        # Identity summaries establish references. Only a deliberately focused
-        # source gets its fuller context; the interpreter later sees that source.
+        # Only a deliberately focused source gets its fuller context.
         summaries = [{'id': i['id'], 'kind': i['kind'], 'title': i['title'],
             'description': i['description'][:120], 'skill_names': [n[:60] for n in i['skill_names'][:4]]}
             for i in items if not i['removed']]
@@ -522,7 +517,6 @@ class ConversationService:
         document = self.cv.get(owner, conversation['cv_id']) if conversation['cv_id'] else None
         if document and any(key(route['id'] + suffix) in document['receipts'] for suffix in (':skip', ':prepare')):
             # Only receipts for this guided turn may advance its CV snapshot.
-            # Selection, extraction and confirmed target must still match.
             expected['cv_version'] = document['version']
         await self.check_snapshot(app, account, conversation, expected)
         active = conversation.get('active_question')
@@ -609,7 +603,6 @@ class ConversationService:
             created = bool(cv_document and key(action_id + ':question-create') in cv_document['receipts'])
             if applied or created:
                 # Recover only an exact durable operation belonging to this action.
-                # Extraction/selection/target identities are still checked below.
                 expected['cv_version'] = cv_document['version']
                 question_id = original.get('_saved_question_id') or key(action_id + ':question')
                 if any(q['id'] == question_id for q in cv_document['clarifications']):
@@ -657,9 +650,7 @@ class ConversationService:
                 if current.get('active_question') and current['active_question']['item_id'] == item['id']:
                     q = next((q for q in saved['clarifications'] if q['id'] == current['active_question']['id']), None)
                     if q and q['status'] in {'answered', 'skipped'}: current['active_question'] = None
-                # Publish the pending continuation with the saved answer. Otherwise a
-                # poll can observe no pending work between this write and planner
-                # admission, stop polling, and strand the chat without a question.
+                # Publish the pending continuation with the saved answer.
                 if current.get('purpose') == 'skills_profile':
                     turn = action_message(current, action_id)
                     parent = next((a for a in turn.get('actions', []) if a['kind'] == 'route'), None)
@@ -670,8 +661,7 @@ class ConversationService:
                                       _token=None, _lease_until=now() + LEASE_SECONDS)
             await run_in_threadpool(self.update, owner, identifier, completed)
         except Conflict as exc:
-            # The saved CV receipt may already exist after a process/response failure;
-            # recovery uses the stored exact mutation payload rather than a new write.
+            # Recovery reuses the stored exact mutation payload.
             latest_token = action_in(self.get(owner, identifier), action_id).get('_token')
             await self.fail(owner, identifier, action_id, token if latest_token == token else original.get('_token'), exc.detail, 'stale')
         except Exception as exc:
@@ -736,8 +726,7 @@ class ConversationService:
 
             def interpret(self, *args):
                 result = app.state.interpreter.interpret(*args)
-                # A provider request may outlive sign-out. Verify again immediately
-                # before returning facts to the existing fenced publication path.
+                # Verify the session again before returning facts.
                 asyncio.run_coroutine_threadsafe(coordinator.authenticate(app, account), loop).result(timeout=8)
                 return result
             def __getattr__(self, name):
@@ -772,9 +761,7 @@ class ConversationService:
         if any(q['item_id'] == item['id'] and q.get('interpretation_status') in {'pending', 'failed'}
                 and not q.get('reconciliation_required') for q in document['clarifications']):
             raise Conflict('An earlier explanation for this source still needs interpretation. Finish or retry it first; this new message remains saved.')
-        # An appended statement is a separate source-bound event, never replacement
-        # of the previous answer. Its interpretation changes only explicitly named
-        # fields; old evidence survives even after cumulative text exceeds 4000 chars.
+        # An appended statement is a separate source-bound event; its interpretation changes only named fields.
         if not recovered_unanswered and (not question or question['status'] != 'unanswered' or action['kind'] == 'correct'):
             parent = question or next((q for q in reversed(document['clarifications']) if q['item_id'] == item['id'] and not q.get('reconciliation_required')), None)
             question_id = key(action['id'] + ':question')
@@ -924,7 +911,6 @@ class ConversationService:
         if action['kind'] == 'route':
             await self.dispatch(self.process(app, account, identifier, action_id, token), owner, identifier, action_id, token)
         elif candidate['status'] == 'needs_source' and action['kind'] in {'correct', 'remove'}:
-            # Choosing the identity is not the same as approving a correction.
             return saved
         else:
             await self.dispatch(self.execute(app, account, identifier, action_id, mutation), owner, identifier, action_id)

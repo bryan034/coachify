@@ -33,8 +33,6 @@ def payload():
 
 def validate(value):
     blocks = [{'id': 'b1', 'location': 'Paragraph 1', 'text': TEXT}]
-    # Explicit synthetic semantic verdicts; exact quote anchors still undergo
-    # the production checks even when the interpreted descriptions are approved.
     approved = frozenset((r['block_id'], r['excerpt']) for r in evidence_requiring_semantic_check(value, blocks))
     return validate_extraction(value, blocks, 'synthetic-cv', approved)[0]
 

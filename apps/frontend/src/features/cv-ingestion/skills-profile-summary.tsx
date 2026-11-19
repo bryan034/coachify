@@ -56,7 +56,7 @@ export function SkillsProfileSummary({token, title, profile, cv, recentReview, d
  ].filter(Boolean).join(' ') : null;
  const notFinished = Boolean(cv && cv.status === 'ready' && !reviewed && !firstUpload);
  const reviewTopics = useReviewTopics(token, notFinished ? cv!.id : null, `${cv?.effective_version}:${cv?.updated_at}:${pending}`);
- // Every topic is covered but the CV was never marked reviewed (e.g. finished before this was automatic): mark it once.
+ // Every topic is covered but the CV was never marked reviewed: mark it once.
  const topicList = reviewTopics?.topics ?? [];
  const allCovered = topicList.length > 0 && topicList.every(topic => ['reviewed', 'reviewed_with_gaps', 'deferred'].includes(topic.status));
  // A finished review rates the new skills: let the automatic skill-gap update see it.

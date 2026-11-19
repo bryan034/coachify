@@ -38,7 +38,7 @@ def test_embedded_errors_beat_even_complete_content(choice_error, code, reason):
     failure = caught.value
     assert (failure.reason, failure.parameter, failure.status_code) == (reason, None, code)
     assert failure.quota_exhausted is (code == 402)
-    assert not isinstance(failure, ValueError)  # Not a schema-repair candidate.
+    assert not isinstance(failure, ValueError)
     assert PRIVATE not in str(failure) + repr(failure.__dict__)
     assert failure.__cause__ is None and failure.__context__ is None
     assert envelope == original

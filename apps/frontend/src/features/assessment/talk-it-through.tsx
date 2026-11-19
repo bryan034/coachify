@@ -85,7 +85,7 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
  const push = (kind: Message['kind'], body: ReactNode) => setMessages(all => [...all.filter(item => item.kind !== 'wait'), { id: next.current++, kind, body }]);
  useEffect(() => { const node = list.current; if (node) node.scrollTop = node.scrollHeight; }, [messages, replies]);
  useEffect(() => { if (mode !== 'build') input.current?.focus(); }, [mode]);
- useEffect(() => { if (mode === 'build') build('Help me build it'); /* the opening, once */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
+ useEffect(() => { if (mode === 'build') build('Help me build it');  }, []); // eslint-disable-line react-hooks/exhaustive-deps
  const done = (): Reply[] => [{ label: 'Close', solid: true, run: onClose }];
 
  /* ---- What the person tells elo: saved as evidence, then only this skill is judged again ---- */

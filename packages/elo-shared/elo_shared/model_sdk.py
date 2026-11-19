@@ -1,7 +1,6 @@
 """OpenAI SDK transport with bounded bodies and caller-owned retry policy.
 
-The application owns the supplied HTTP client. Closing the SDK wrapper must not
-close it: search and authentication may still be using that same client.
+Closing the SDK wrapper does not close the application-owned HTTP client.
 """
 from contextlib import asynccontextmanager, contextmanager
 from elo_shared.model_telemetry import Measurement
@@ -13,11 +12,7 @@ from openai import OpenAI, AsyncOpenAI, APIConnectionError, APIStatusError, APIT
 
 
 def resolve_model_api_key(base_url, service_key):
-    """Use the shared OpenRouter key only for its exact HTTPS origin.
-
-    An explicitly configured service key takes precedence. Future model
-    integrations can use the same resolver after validating their base URL.
-    """
+    """Use the shared OpenRouter key only for its exact HTTPS origin; an explicit service key takes precedence."""
     key = (service_key or '').strip()
     if key:
         return key
@@ -37,8 +32,7 @@ class ProviderHTTPClient(httpx.AsyncClient):
         self.upstream = upstream
 
     async def send(self, request, **kwargs):
-        # The SDK otherwise eagerly reads rejection bodies before raising an
-        # APIStatusError. Bound that read before any SDK parsing or diagnostics.
+        # Bound the rejection body read before any SDK parsing.
         kwargs.update(stream=True, follow_redirects=False)
         response = await self.upstream.send(request, **kwargs)
         if response.status_code == 200:
@@ -52,8 +46,6 @@ class ProviderHTTPClient(httpx.AsyncClient):
                     break
         finally:
             await response.aclose()
-        # aiter_bytes has already decoded compression/chunking. Do not ask the
-        # SDK to decode the replacement body a second time.
         headers={key:value for key,value in response.headers.items()
                  if key.lower() not in ('content-encoding','content-length','transfer-encoding')}
         return httpx.Response(response.status_code, headers=headers,
@@ -63,7 +55,6 @@ class ProviderHTTPClient(httpx.AsyncClient):
 def model_client(settings, http_client):
     return AsyncOpenAI(
         base_url=settings.base_url,
-        # Disabled AI still builds a client; it never sends this placeholder.
         api_key=settings.api_key.get_secret_value() or 'not-configured',
         http_client=ProviderHTTPClient(http_client),
         max_retries=0,
@@ -84,8 +75,6 @@ async def _completion_response(client, payload):
         raise httpx.ReadTimeout('Model request timed out.') from None
     except APIConnectionError:
         raise httpx.ConnectError('Model connection failed.') from None
-    # Leave the SDK exception handler before the caller raises its safe error;
-    # otherwise provider prose can remain attached as implicit exception context.
     if rejection is not None:
         yield rejection
 

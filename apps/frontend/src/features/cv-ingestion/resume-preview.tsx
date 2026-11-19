@@ -24,10 +24,7 @@ export function ResumePreview() {
  const {token,account}=useProfile();
  return token&&account?<ResumeWorkspace key={`${account.id}:${token}`} token={token}/>:null;
 }
-/**
- * The upload form lives in one DOM node that is only moved between slots. Rebuilding it whenever the page layout
- * changes (empty profile, saved capability, first load) detached the file input mid-selection and dropped the chosen file.
- */
+/** The upload form lives in one DOM node that is only moved between slots. */
 function UploadSlot({host}:{host:HTMLElement|null}){
  const attach=useCallback((element:HTMLDivElement|null)=>{if(element&&host&&host.parentNode!==element)element.appendChild(host);},[host]);
  return <div ref={attach} style={{display:'contents'}}/>;
@@ -102,10 +99,10 @@ function ResumeWorkspace({token}:{token:string}) {
   window.addEventListener('beforeunload',unload);document.addEventListener('click',leave,true);return()=>{window.removeEventListener('beforeunload',unload);document.removeEventListener('click',leave,true);};
  },[]);
  useEffect(()=>{if(!viewId&&list?.selection.cv_id)setViewId(list.selection.cv_id);},[list,viewId]);
- // The most recent upload becomes the active CV once it is ready (tried once per upload, so a later manual choice of an older CV is kept).
+ // The most recent upload becomes the active CV once it is ready (tried once per upload).
  const autoActivated=useRef<string|null>(null);
  useEffect(()=>{if(!list||busy)return;const newest=[...list.cvs].filter(cv=>cv.status!=='failed').sort((x,y)=>y.created_at.localeCompare(x.created_at)||Number(y.id===list.selection.cv_id)-Number(x.id===list.selection.cv_id))[0];if(!newest||newest.status!=='ready'||autoActivated.current===newest.id)return;autoActivated.current=newest.id;if(list.selection.cv_id!==newest.id)void select(newest.id,true);});
- // Saved CVs but none active: show the newest ready one so an unreviewed CV lands on its review screen, not an empty page.
+ // Saved CVs but none active: show the newest ready one.
  useEffect(()=>{if(viewId||!list||list.selection.cv_id)return;const newest=[...list.cvs].filter(cv=>cv.status==='ready').sort((x,y)=>y.created_at.localeCompare(x.created_at))[0];if(newest)setViewId(newest.id);},[list,viewId]);
  useEffect(()=>{if(viewId)void getDetail(viewId);},[viewId,getDetail]);
  useEffect(()=>{if(!list?.cvs.some(cv=>processing(cv.status))&&!(detail&&processing(detail.status)))return;const timer=setInterval(()=>{void getList();if(viewId&&(list?.cvs.some(cv=>cv.id===viewId&&processing(cv.status))||(detail?.id===viewId&&processing(detail.status))))void getDetail(viewId);},3000);return()=>clearInterval(timer);},[list,viewId,detail?.status,getList,getDetail]);

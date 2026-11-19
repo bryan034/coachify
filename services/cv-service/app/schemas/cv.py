@@ -134,7 +134,7 @@ class ExtractedItem(StrictModel):
 
     @model_validator(mode='after')
     def valid_dates(self):
-        # Dates are optional extraction hints, never a reason to lose CV facts.
+        # Dates are optional extraction hints.
         for field in ('start_date', 'end_date'):
             try:
                 date_bounds(getattr(self, field))

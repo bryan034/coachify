@@ -66,7 +66,7 @@ test('one question at a time; saves do not unlock the app; completion does', asy
 test('student unlisted school, optional course, extended year and review use existing endpoints', async () => {
   await open(); fireEvent.click(screen.getByRole('button', { name: 'Student' }));
   await screen.findByRole('heading', { name: 'Where are you studying?' });
-  expect(saved.version).toBe(0); // Student + category are one valid initial save.
+  expect(saved.version).toBe(0);
   fireEvent.click(screen.getByRole('button', { name: 'University' }));
   await screen.findByRole('heading', { name: 'Where are you studying?' });
   fireEvent.click(screen.getByRole('button', { name: 'My school isn’t listed' }));

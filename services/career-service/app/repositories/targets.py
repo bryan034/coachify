@@ -55,7 +55,7 @@ class TargetRepository:
 
 
 class MemoryTargetRepository:
-    """Explicit test adapter; never a production fallback."""
+    """Explicit test adapter."""
     def __init__(self): self.documents, self.selections, self.lock = {}, {}, RLock()
 
     def get(self, owner, identifier):

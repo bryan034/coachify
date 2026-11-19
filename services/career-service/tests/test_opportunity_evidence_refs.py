@@ -134,7 +134,6 @@ def test_adapter_and_bounded_repair_use_the_same_catalogue_and_preserve_safe_fee
         calls=[]
         def handler(request):
             calls.append(json.loads(request.content))
-            # A provider ignoring schema enums must still pass backend validation.
             output={'findings':[claim(evidence_ref=99 if len(calls)==1 else 0)],'relevant_refs':[0],'follow_up_query':None}
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -184,7 +183,6 @@ def test_referenced_provider_findings_persist_and_remain_readable_through_existi
         assert result['status']=='completed' and len(calls)==5
         assert all(category['findings'] for category in result['categories'].values())
         finding=result['categories']['internship_insights']['findings'][0]
-        # Public reads stay compact; exact quotes remain in the existing evidence read.
         assert 'quotes' not in finding
         evidence=client.get(path+'/findings/'+finding['finding_id']+'/evidence?research_id='+workspace['research_id'],headers=headers())
         assert evidence.status_code==200

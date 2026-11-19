@@ -45,7 +45,6 @@ async function visitEmployer(title:string){
  return card;
 }
 const returnToElo=()=>fireEvent.focus(window);
-// Nothing is searched until the user presses Search.
 const runSearch=async()=>fireEvent.click(await screen.findByRole('button',{name:'Find jobs'}));
 
 describe('Search Jobs',()=>{
@@ -126,15 +125,12 @@ describe('Search Jobs',()=>{
   expect(sent.getAll('company')).toEqual(['Synthetic Pay']);
   expect(sent.get('posted_within_days')).toBe('7');
   expect(sent.get('sort')).toBe('newest');
-  // Editing a filter after a search does not search again until Search is pressed.
   fireEvent.click(screen.getByRole('checkbox',{name:'Fintech (3)'}));
   expect(searches()).toHaveLength(2);
-  // Clearing filters returns to the waiting state instead of searching.
   fireEvent.click(screen.getByRole('button',{name:'Clear filters'}));
   expect(searches()).toHaveLength(2);
   await waitFor(()=>expect(screen.queryByRole('group',{name:'Filters'})).toBeNull());
   await runSearch();
-  // Sort is a display order, not a filter: clearing filters keeps the chosen order.
   await waitFor(()=>expect([...lastSearch().entries()]).toEqual([['sort','newest']]));
  });
  it('supports a custom posted date range',async()=>{

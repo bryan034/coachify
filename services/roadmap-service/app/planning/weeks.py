@@ -83,7 +83,7 @@ def unfinished(plan,capacity):
     return result
 
 def planning(state,now,config=None,ignore_candidate=False):
-    """Which week can be planned now, and why. The page shows this; the generate route enforces it."""
+    """Which week can be planned now, and why."""
     outline=state.get('outline_active');active=state.get('active')
     if not outline or not active:return None
     config=config or saved_config(state);capacity=Capacity(config,now)
@@ -249,7 +249,6 @@ def check_week(draft,outline,config,existing,routines,pending,target,scope,*,fee
         seen.add(entry.task_id)
         if entry.action=='split' and not (entry.minutes and shortest_session(config)<=entry.minutes<task['estimated_minutes']):
             errors.append(f"Carryover '{entry.task_id}' is split, so minutes must be less than its {task['estimated_minutes']} minutes and at least {shortest_session(config)}.")
-    # Invalid splits have already produced an actionable model validation error.
     carryover=build_carryover(draft,pending,config)
     carried=0
     for entry in carryover:
@@ -299,7 +298,7 @@ def snapshot(task):
     return {key:copy.deepcopy(task.get(key)) for key in ('id','status','removed','schedule','anytime_date','estimated_minutes','title','instructions','description','completion_outcome','milestone_key','prerequisites','requirement_refs','overrides','history','notes','self_rating','definition_review_required')}
 
 def week_basis(outline,existing,week,pending):
-    """What a preview depends on: the outline, the target week's saved tasks and the unfinished work it moves. Progress elsewhere leaves it valid."""
+    """What a preview depends on: the outline, the target week's saved tasks and the unfinished work it moves."""
     tasks=ensure_tasks(copy.deepcopy(existing)) if existing else []
     inside=[snapshot(t) for t in tasks if any(week<=day_of(s['date'])<week+timedelta(days=7) for s in t.get('schedule',[])) or t.get('anytime_date') and week<=day_of(t['anytime_date'])<week+timedelta(days=7)]
     return digest({'outline':[outline['id'],outline['revision']],'week':sorted(inside,key=lambda t:t['id']),'pending':sorted([snapshot(t) for t in pending],key=lambda t:t['id'])})
@@ -400,7 +399,6 @@ async def prepare_week(app,row,account,read_context,*,initial=False):
         'tasks':routines+placed,'unplaced':[],'carryover':carryover,'objective_changes':changes,
         'created_at':stamp(),'generation':{'attempts':attempt,'prompt_version':'roadmap-week-v1'}}
     bounded_size(candidate,MAX_WEEK_BYTES,'This week is too large to review safely. Reduce the number or length of tasks and retry.')
-    # Checkpointing replaces the row's nested data with a persisted copy.
     state=planner_state(row);state['config']=config.model_dump(mode='json');state['week_candidate']=candidate;state['week_notice']=None
     return True
 
@@ -510,8 +508,7 @@ def accept_week(state,source,identifier,now):
         else:
             task['removed']=True;task['removal']={'at':at,'reason':entry['reason']}
         if entry['action']=='split':
-            # A reviewed split creates two explicit pieces. Completing this week's piece
-            # must never complete or lose the deferred remainder.
+            # A reviewed split creates two explicit pieces.
             remaining=task['estimated_minutes']-entry['minutes']
             remainder=copy.deepcopy(task)
             remainder.update(id=str(uuid5(NAMESPACE_URL,task['id']+':remainder:'+candidate['id'])),

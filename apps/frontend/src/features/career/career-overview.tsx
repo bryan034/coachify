@@ -30,7 +30,6 @@ export type GoalView='skills'|'interview'|'role';
 export function CareerGoalHome({view='skills'}:{view?:GoalView}={}){
  const {token,account}=useProfile(),params=useSearchParams();
  const [workspace,setWorkspace]=useState<CareerWorkspace>(),[error,setError]=useState(''),[attempt,setAttempt]=useState(0);
- // An extraction this tab started keeps running after the user leaves; reopen its progress.
  const [extracting]=useState(()=>typeof window!=='undefined'&&Boolean(pendingExtraction(account?.id||'')));
  const creating=params.get('new')==='1'||extracting;
  const replacingGoal=params.get('new')==='1';
@@ -62,7 +61,6 @@ export function CareerGoalHome({view='skills'}:{view?:GoalView}={}){
 function originLabel(item:{correction?:string;origin?:string}){
  return item.correction==='user'||item.origin==='user_declaration'?'Your refinement':item.origin==='generated_guidance'?'AI planning suggestion':item.origin==='market_research'?'From sampled job listings':'From the job description';
 }
-// Required and preferred skills are both Essential, so they rank together.
 const priorityRank:Record<ReviewSkill['priority'],number>={required:0,preferred:0,unspecified:1,conflicting:2,suggested:3};
 function RequirementSources({urls=[]}:{urls?:string[]}){
  const links=urls.map(sourceLink).filter(link=>link!==null);
@@ -77,10 +75,9 @@ const skillImportance=(skill:ReviewSkill):Importance=>skill.priority==='required
 const inferredImportance=(skill:ReviewSkill)=>(skill.priority_origin??skill.origin)==='generated_guidance';
 const tidy=(value:number)=>Math.round(value*10)/10;
 
-/** A goal skill's level and the level the role needs, read from the saved evaluation. Nothing is scored here. */
+/** A goal skill's level and the level the role needs, read from the saved evaluation. */
 export function goalSkillLevel(skill:ReviewSkill,outcome?:Requirement,profileLevels:ProfileLevel[]=[]):{level:number|null;target:number|null}{
  const target=outcome?.required_score??skill.competence_target?.level??null;
- // Older evaluations hold progress towards the target rather than the level itself.
  const evaluated=outcome?.demonstrated_score??(outcome?.competence_score!=null&&target!=null?tidy(outcome.competence_score*target/10):outcome?.competence_score??null);
  // A skill the evaluation has not rated still shows the level its Skills Profile entry already has.
  const profile=profileLevels.find(item=>namesSkill([item],{name:skill.name,canonicalId:skill.canonical_skill_id}))?.level;
@@ -97,7 +94,6 @@ function Evidence({row,evidence}:{row:Row;evidence?:Record<string,{name?:string;
  return <div className="ws-evidence">
   <div>
    <h4>Your evidence</h4>
-   {/* The level's explanation sits above, in the opened row. */}
    {!outcome?.score_explanation?.trim()&&<p>{outcome?'elo found no evidence for this skill in your CV and review.':'Evaluate your skills to see the evidence elo used.'}</p>}
    {refs.map((item,index)=><blockquote key={index}>{item.name?<><b>{item.name}.</b> </>:null}{item.text}</blockquote>)}
    {outcome&&<><h4>From your Skills Profile</h4>{linked.length?<ul>{linked.map(item=><li key={item.canonical_skill_id||item.name}><Link href="/cv">{item.name}</Link>{item.competence_score!=null?` · ${item.competence_score} / 10`:''}</li>)}</ul>:<p>No skill in your Skills Profile covers this yet.</p>}</>}
@@ -129,7 +125,6 @@ function TargetReasons({target}:{target:NonNullable<ReviewSkill['competence_targ
 /** Why the row shows its numbers: what the role's target rests on and why the person's level is what it is. */
 function RatingReasons({row}:{row:Row}){
  const {skill,outcome,level,target,status}=row,goal=skill.competence_target;
- // An evaluation can carry its own target; the goal's explanation only describes the goal's level.
  const targetReason=goal&&target===goal.level&&goal.explanation.trim()?goal:null;
  const levelReason=status!=='unrated'?outcome?.score_explanation?.trim():null;
  if(!targetReason&&!levelReason)return null;
@@ -229,7 +224,6 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
  const saved=workspace.current.goal!;
  const comparison=useComparison(token, `${saved._id}:${saved.version}`);
  const roadmap=useSection(loadRoadmap,token),profile=useSection(loadSkills,token);
- // A new or edited goal (such as a changed job description) makes earlier evaluations and roadmaps out of date.
  const savedRevision=useRef(`${saved._id}:${saved.version}`);
  useEffect(()=>{const revision=`${saved._id}:${saved.version}`;if(savedRevision.current!==revision){savedRevision.current=revision;announceInputsChanged();}},[saved._id,saved.version]);
  const current=!(comparison.result?.inputs && (comparison.result.inputs.goal_id!==saved._id || comparison.result.inputs.goal_version!==saved.version));
@@ -252,7 +246,6 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
   goal.target_type==='career_exploration'?'Career exploration':null,
   ...(goal.job_dates??[]).filter(item=>item.date||item.text).map(item=>`${dateKinds[item.kind]??sentence(item.kind.replaceAll('_',' '))} ${item.date?formatDayMonthYear(item.date):item.text}`),
  ].filter((fact):fact is string=>Boolean(fact));
- // A roadmap that runs past the job's start date can't prepare the person in time.
  const planner=roadmap.state.status==='ready'?roadmap.state.data.planner:null;
  const jobStart=goal.job_dates?.find(item=>item.kind==='job_start'&&item.date)?.date,roadmapEnd=planner?.config.target_date;
  const lateRoadmap=jobStart&&roadmapEnd&&roadmapEnd>jobStart?roadmapEnd:null;

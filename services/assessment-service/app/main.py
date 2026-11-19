@@ -20,12 +20,10 @@ def create_app(store=None,upstream=None,model=None):
         if previous['freshness'] == 'current' and previous['completeness'] == 'complete':
             return row
         checkpoint=row['pending'].get('checkpoint')
-        # A pre-v2 checkpoint can restart with the new rubric only when the exact
-        # source revisions still match. Never reuse its already inflated scores.
+        # A pre-v2 checkpoint restarts with the new rubric only when the exact source revisions still match.
         if checkpoint and checkpoint.get('scoring_rubric')!=RUBRIC_VERSION and checkpoint['input_hash']==digest(snapshot['inputs']):
             checkpoint=None
-        # A retry of a failed run carries its checkpoint. When the CV, goal, research or profile changed since,
-        # its partial outcomes describe old inputs: discard them and compare the latest inputs from the start.
+        # A retry whose inputs changed since its checkpoint discards the partial outcomes and starts again.
         if checkpoint and checkpoint['input_hash']!=snapshot['input_hash']:
             checkpoint=None
         if checkpoint:
@@ -50,8 +48,7 @@ def create_app(store=None,upstream=None,model=None):
                 except Problem as error:
                     if error.code!='assessment_output' or attempt:
                         raise
-                    # Only fixed local validation guidance is sent back. Provider
-                    # failures do not enter repair, and no rejected batch is saved.
+                    # Only fixed local validation guidance is sent back.
                     model_context={**model_context,'validation_feedback':getattr(error,'feedback',None) or error.detail,
                                    'previous_output':output.model_dump(mode='json')}
             outcomes.extend(validated)
@@ -176,7 +173,6 @@ def create_app(store=None,upstream=None,model=None):
     @app.post('/api/v1/assessments/skill-ratings',response_model=SkillRatings)
     async def rate_skill(body:SkillRatingInput,request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id'])
-        # A running evaluation publishes only onto the version it started from; never move it.
         if row.get('pending'):raise Problem('Wait for the current evaluation to finish before rating a skill.',409,'operation_pending')
         if row['version']!=body.expected_version:raise Problem('Your workspace changed. Reload before saving.',409,'version_conflict')
         key=body.canonical_skill_id or body.name.casefold()
@@ -216,7 +212,7 @@ def create_app(store=None,upstream=None,model=None):
         key=judged['canonical_skill_id'] or judged['name'].casefold()
         skills=[judged if (item.get('canonical_skill_id') or item['name'].casefold())==key else item for item in profile['skills']]
         if judged not in skills:skills.append(judged)
-        # The immutable history entry is untouched; only the current copy moves to the inputs this skill was judged from.
+        # Only the current copy moves to the inputs this skill was judged from.
         row['result']={**result,'skill_profile':{**profile,'skills':skills},'evidence':now,'inputs':snapshot['inputs'],'input_hash':snapshot['input_hash'],'source_snapshot':snapshot['source_snapshot']}
         saved=await thread(app.state.store.cas,account['id'],row['version'],row)
         return {'version':saved['version'],'skill':judged}

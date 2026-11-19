@@ -120,7 +120,7 @@ def test_before_cv_fields_versions_and_account_preservation(repo):
 
 
 def test_cv_attachment_waits_leave_auth_and_reads_available(client):
-    """CV calls Profile back for authentication; attachment waits need own capacity."""
+    """Attachment waits leave auth and reads available."""
     from anyio import to_thread
     async def shrink_shared_pool():
         limiter = to_thread.current_default_thread_limiter()
@@ -259,7 +259,6 @@ def test_explicit_cv_attachment_records_version_without_copying_or_claiming_cv_t
     row = saved["declarations"][0]
     assert row["attached_to"] == reference and row["provenance"] == "user_declared"
     assert "evidence" not in row and row["proficiency"] is None
-    # Retry remains safe if that CV has since changed or become unavailable.
     def unavailable():
         raise AssertionError("Committed retries must not revalidate changed foreign state")
     assert repo.create("alice", request, unavailable) == saved
@@ -474,7 +473,6 @@ def test_withdrawal_is_idempotent_scoped_to_the_owner_and_checks_the_version(rep
     row = saved["declarations"][0]
     body = withdrawal(declaration_id=row["id"], contribution_id=row["contributions"][0]["id"])
     assert repo.withdraw("alice", body) == repo.withdraw("alice", body)
-    # Bob cannot remove Alice's description, and an unknown one changes nothing.
     other = repo.withdraw("bob", withdrawal(mutation_id="bob-undo", expected_version=0, declaration_id=row["id"], contribution_id="x"))
     assert other["version"] == 0
     with pytest.raises(CapabilityConflict):

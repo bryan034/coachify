@@ -236,8 +236,7 @@ def extract_page(data):
 def import_url(url, fetch=request_page):
     deadline = time.monotonic() + URL_IMPORT_TIMEOUT
     raw_fetch=fetch
-    # Wrap the actual request once, including redirect robots checks. Nested
-    # redirect helpers must not multiply the single retry for a timed-out request.
+    # Wrap the actual request once, including redirect robots checks.
     fetch=lambda target,limit:fetch_with_timeout_retry(target,limit,raw_fetch)
     # Validate before requesting robots as well as on every redirect connection.
     parsed, _, _, _ = destination(url)
@@ -293,7 +292,6 @@ def check_access_page(data):
 
 def needs_rendering(data):
     soup=BeautifulSoup(data,'html.parser')
-    # Structured job data is already usable without executing the site's scripts.
     for script in soup.find_all('script',type='application/ld+json'):
         if 'JobPosting' in (script.string or ''):return False
     text=html_text(str(soup))

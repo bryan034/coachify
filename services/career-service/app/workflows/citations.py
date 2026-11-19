@@ -13,7 +13,6 @@ def normalize_citations(reply, sources, *, strict_markers=True):
     """Accept exact trusted URLs and grouped IDs, never model-chosen destinations.
 
     Return canonical [source_id] markers before Python restores final links.
-    No model response text, unknown reference or URL enters diagnostics.
     """
     urls = {}
     for identifier, url in sources.items():
@@ -24,7 +23,7 @@ def normalize_citations(reply, sources, *, strict_markers=True):
         if identifier is None:raise citation_error('unapproved_source_url')
         return '['+identifier+']'
 
-    # Parse balanced Markdown destinations; a regex alone stops at URL parentheses.
+    # Parse balanced Markdown destinations.
     pattern=re.compile(r'\[[^\]\n]*\]\(')
     position=0
     while match:=pattern.search(reply,position):
@@ -63,7 +62,7 @@ def normalize_citations(reply, sources, *, strict_markers=True):
         refs = [match[1]] if match[1] in sources else re.split(r'\s*[,;]\s*', match[1].strip())
         if any(ref not in sources for ref in refs):
             if not strict_markers:
-                return match[0]  # Follow-up prose can contain arrays or bracketed terms.
+                return match[0]
             raise citation_error('unknown_source_reference')
         cited.update(refs)
         return ' '.join('[' + ref + ']' for ref in refs)
@@ -111,7 +110,7 @@ def fact_citations(reply,references,links,*,max_length=4000):
     normalized,cited=normalize_citations(reply,sources,strict_markers=False)
     reply=render_citations(normalized,sources)
     cited_urls={sources[identifier] for identifier in cited}
-    # Compatibility for answers lacking inline markers: retain only uncited sources.
+    # Answers lacking inline markers: retain only uncited sources.
     remaining=[]
     for identifier,url in sources.items():
         if url not in cited_urls:

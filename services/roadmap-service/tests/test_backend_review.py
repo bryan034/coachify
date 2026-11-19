@@ -1,6 +1,6 @@
-"""Loop 2 regressions for the defects recorded in work/roadmap-backend-review.md.
+"""Regressions for defects found in a roadmap backend review.
 
-All data and providers are synthetic. No personal DB or live model is used.
+All data and providers are synthetic.
 """
 import asyncio
 from datetime import date
@@ -237,7 +237,7 @@ def test_anytime_commitments_use_budget_without_fabricating_time_slots():
 
 def test_split_sessions_obey_the_configured_minimum_as_well_as_maximum():
     config=CONFIG.model_copy(update={'preferred_session_minutes':30,'min_session_minutes':25,'allow_overflow':True})
-    assert Placer(config,NOW,[],START,END).place(40) is None  # two sessions cannot both be at least 25
+    assert Placer(config,NOW,[],START,END).place(40) is None
     slots=Placer(config,NOW,[],START,END).place(55)
     assert sum(s['duration_minutes'] for s in slots)==55 and all(25<=s['duration_minutes']<=30 for s in slots)
 

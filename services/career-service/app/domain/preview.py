@@ -47,8 +47,7 @@ def run_browser_preview(url,deadline):
         except (subprocess.SubprocessError,ValueError):
             raise HTTPException(422,'The JavaScript preview could not be prepared within the import limits. Paste the description or upload a document.') from None
         finally:
-            # Chromium creates its own process group. Include descendants before
-            # terminating the supervisor group so detached browsers cannot survive.
+            # Include Chromium's descendants before terminating the supervisor group.
             descendants=child_processes(process.pid)
             for child in reversed(descendants):
                 try:os.kill(child,signal.SIGKILL)

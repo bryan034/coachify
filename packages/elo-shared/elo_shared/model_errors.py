@@ -1,8 +1,7 @@
-"""Recognize error envelopes after callers finish their bounded response reads.
+"""Recognize error envelopes in provider responses.
 
-An HTTP 200 can still contain a provider rejection. Keep its embedded code
-distinct from the HTTP status and retain only fixed, safe diagnostic labels.
-This helper performs no I/O, retries, content recovery or schema validation.
+An HTTP 200 can still contain a provider rejection; its embedded code is kept
+distinct from the HTTP status.
 """
 import json
 
@@ -84,8 +83,6 @@ def _details(error):
     parameter = parameter if isinstance(parameter, str) and parameter in PARAMETERS else None
     message = error.get('message')
     text = message.casefold() if isinstance(message, str) else ''
-    # Only request-error prose can refine a rejection. Provider outage/auth
-    # messages must not become schema guidance just because they mention JSON.
     if reason in ('invalid_request', 'unsupported_parameter', 'http_error'):
         unsupported = any(word in text for word in ('not supported', 'unsupported', 'unknown name', 'not allowed'))
         if any(word in text for word in ('too many states', 'too much branching', 'schema is too complex', 'schema complexity')):
@@ -104,13 +101,11 @@ def _details(error):
 def _failure(value):
     error = _bounded_error(value)
     if not error and isinstance(value, dict):
-        # Large/invalid detail must not hide a safe numeric rejection code.
         error = {'code': _status(value.get('code'))}
     reason, parameter, status, quota_exhausted = _details(error)
     metadata = error.get('metadata')
     raw = metadata.get('raw') if isinstance(metadata, dict) else None
-    # OpenRouter may wrap one upstream error as JSON text or an object. Parse
-    # only this documented layer; never recurse through arbitrary provider data.
+    # OpenRouter may wrap one upstream error as JSON text or an object; parse only this layer.
     if isinstance(raw, str):
         try:
             raw = json.loads(raw) if len(raw.encode('utf-8')) <= MAX_ERROR_BYTES else None

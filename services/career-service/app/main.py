@@ -72,7 +72,7 @@ class BodyLimit:
 def create_app(profile_client=None, processor=run_preview, database=None, ai=None, cv_client=None, review_store=None, research_client=None, context_ai=None, target_repository=None):
     @asynccontextmanager
     async def lifespan(app):
-        # Explicit legacy test adapter only. Production uses the canonical goal.
+        # Explicit legacy test adapter only.
         if target_repository is not None:
             from anyio import CapacityLimiter
             app.state.target_repository=target_repository
@@ -241,7 +241,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     async def health(): return {'status':'ok'}
 
     if dev_reset_enabled():
-        # Development only and absent from the published contract: delete the caller's goal, chats and research.
+        # Development only: delete the caller's goal, chats and research.
         @app.post('/api/v1/career/dev/reset', include_in_schema=False)
         async def dev_reset(request: Request, owner: str = Depends(authenticated)):
             store = request.app.state.goal_store

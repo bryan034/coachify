@@ -32,7 +32,7 @@ def evidence_proposals(row):
             if not gap:continue
             proposal={'id':session['id']+'_'+gap_id,'session_id':session['id'],'name':gap['name'],
                 'description':'Self-reported roadmap practice: '+session['evidence_note']}
-            if len(proposal['name'])>120 or len(proposal['description'])>2000:continue  # Original note stays saved; never truncate evidence.
+            if len(proposal['name'])>120 or len(proposal['description'])>2000:continue
             proposal['proposal_hash']=digest(proposal)
             if proposal['proposal_hash'] not in state.get('confirmed_evidence',[]):proposals.append(proposal)
     return proposals

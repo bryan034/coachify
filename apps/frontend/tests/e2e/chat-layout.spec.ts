@@ -43,7 +43,6 @@ for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:3
   await expect(page.locator('.cv-chat-current-topic')).toHaveCount(0);
   await expect(page.locator('.cv-chat-messages').getByRole('button',{name:'Skip this question'})).toBeInViewport();
   await expect(page.locator('.cv-chat-message-user .cv-chat-bubble')).toHaveCSS('background-color','rgb(236, 253, 245)');
-  // Quick replies belong to the composer, so the composer starts right below the transcript.
   const input=await page.locator('.cv-chat-composer-wrap').boundingBox();
   const history=await page.locator('.cv-chat-messages').boundingBox();
   expect(input!.y-(history!.y+history!.height)).toBeLessThan(24);

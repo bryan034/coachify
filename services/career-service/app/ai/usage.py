@@ -1,4 +1,4 @@
-"""Approximate request-size diagnostics; not a rate limiter or billing ledger."""
+"""Approximate request-size diagnostics."""
 import json
 import tiktoken
 

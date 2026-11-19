@@ -54,7 +54,6 @@ class Search:
     def __init__(self):self.calls=[];self.fail=None;self.empty=False;self.active=0;self.maximum=0
     async def collect_opportunity_query(self,context,query):
         self.calls.append(query);self.active+=1;self.maximum=max(self.maximum,self.active)
-        # The plain employer/role query names its topic in words; tag it with its category like the planned ones.
         from app.workflows.opportunity.queries import BROAD_TOPICS
         query=next((f'{query} {category}' for category,topic in BROAD_TOPICS.items() if query.endswith(topic)),query)
         try:
@@ -149,7 +148,6 @@ def test_invalid_claim_repairs_are_bounded_and_no_unvalidated_facts_persist(oppo
     _,result,_=research(flow)
     assert result['status']=='failed'
     assert all(not c['findings'] for c in result['categories'].values())
-    # Bounded: 5 categories x 3 searches x (one attempt + one correction).
     assert len([v for v in flow[2].calls if v.stage=='opportunity_structure'])==30
 
 
@@ -334,8 +332,6 @@ def test_quota_pause_does_not_reset_the_invalid_response_repair_budget(opportuni
     primary.generate=generate;ingest(flow)
     _,result,_=research(flow)
     assert result['finished'] and result['status']=='failed'
-    # The correction budget is per category and survives the pause: invalid, quota pause, final correction,
-    # then the next search's attempts. Fewer than the 6 calls an unpaused category makes, so a pause adds nothing.
     assert set(attempts.values())=={5}
     assert all(v['error_code']=='invalid_output' for v in result['categories'].values())
 

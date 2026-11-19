@@ -83,16 +83,13 @@ export function ProfileForm({ initialSetup = false, onSaved, onCancel }: {
       if (!finish) onSaved?.();
 
     } catch(e) {
-      // A lost committed response is reconciled from the server, never inferred locally.
       if(finish&&(!(e instanceof ApiError)||e.status>=500)) {
-        try {const latest=await profileApi<Profile>('',{},token);if(latest.onboarding_complete&&setProfile(latest)){return;}}catch{ /* Keep the current account's draft and retry key. */ }
+        try {const latest=await profileApi<Profile>('',{},token);if(latest.onboarding_complete&&setProfile(latest)){return;}}catch{}
       }
       setConflict(e instanceof ApiError&&e.status===409);
       setError(errorText(e, 'Saving failed. Your selections are retained; please retry.'));
     } finally {setSaving(false);}
   }
-  // Loading the profile and populating the editor commit separately. Keep edits
-  // locked until that population finishes, so it cannot overwrite a new selection.
   const disabled = saving || loading || initializedSource !== educationSource || !authMode || needsSignIn || !profile || !!configError;
   function changeCategory(value: string) {
     setNoPrevious(value === 'none'); setCategory(value === 'none' ? '' : value as SchoolCategory);

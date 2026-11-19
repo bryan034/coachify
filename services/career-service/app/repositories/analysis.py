@@ -1,8 +1,6 @@
 """Opt-in Career persistence boundary; not mounted by the preview API.
 
-Only validated structured records cross this boundary. Stable revision IDs plus the unique
-_id index make retries idempotent; revisions are immutable. Foreign
-snapshots are supplied by the authenticated orchestration layer, never Mongo.
+Only validated structured records cross this boundary; revisions are immutable.
 """
 from bson.codec_options import CodecOptions
 from pymongo import ASCENDING, DESCENDING
@@ -19,8 +17,6 @@ class AnalysisRepository:
         self.database = database.with_options(codec_options=CodecOptions(tz_aware=True))
 
     def ensure_indexes(self):
-        # _id identifies an immutable revision; logical ID/version pairing is
-        # handled by callers selecting a new revision and pinning its exact ID.
         for name in ('career_goals', 'skill_gap_analyses'):
             self.database[name].create_index([('user_id', ASCENDING), ('created_at', DESCENDING)])
         self.database.interview_research.create_index([('context_key', ASCENDING), ('updated_at', DESCENDING)])
@@ -33,8 +29,6 @@ class AnalysisRepository:
         if record.user_id != owner:
             raise ContractConflict('Record ownership mismatch.')
         if collection == 'skill_gap_analyses':
-            # Existence of Career-owned references is checked here, not inferred
-            # from a caller-supplied DTO. Foreign CV/Profile snapshots come via APIs.
             stored_goal = self.get_private('career_goals', record.career_goal_id, owner)
             if stored_goal is None or goal != stored_goal:
                 raise ContractConflict('Referenced career goal is missing or changed.')
@@ -61,7 +55,6 @@ class AnalysisRepository:
             self.database[name].insert_one(payload)
         except DuplicateKeyError:
             existing = self.database[name].find_one({'_id': payload['_id']})
-            # BSON timestamps have millisecond precision.
             from bson import BSON
             if existing is None or BSON.encode(existing) != BSON.encode(payload):
                 raise ContractConflict('Revision ID already used with different content.') from None
@@ -85,8 +78,7 @@ class AnalysisRepository:
         return None
 
     def reusable_research(self, context, researched_after, mapping_version):
-        # Only verified successful/no-findings records qualify. Caller decides
-        # the freshness threshold; this lookup never triggers public retrieval.
+        # Only verified successful/no-findings records qualify.
         if researched_after.tzinfo is None:
             raise ValueError('Freshness threshold must be timezone-aware.')
         data = self.database.interview_research.find_one({'context_key': context.reuse_key(),
