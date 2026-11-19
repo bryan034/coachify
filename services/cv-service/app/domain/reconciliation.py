@@ -2,7 +2,7 @@
 from copy import deepcopy
 from uuid import uuid4
 from app.domain.capabilities import digest, effective_items, effective_fingerprint
-from app.domain.errors import Conflict, Missing
+from app.domain.errors import Conflict
 from app.domain.service import bump, now
 from app.schemas.cv import validate_item_dates
 from app.domain.answer_capacity import release as release_answer_capacity

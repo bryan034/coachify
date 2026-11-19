@@ -17,6 +17,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
     if (url.pathname.endsWith('/auth/session')) return route.fulfill({json:{id:'synthetic',name:'Synthetic',provider:'local_test',onboarding_complete:false}});
     if (url.pathname.endsWith('/auth/logout')) return route.fulfill({json:{ok:true}}); apiCalls.push(url.pathname);
   if(url.pathname.endsWith('/cv/policy'))return route.fulfill({json:policy});
+  if (url.pathname === '/api/v1/cv/skills') return route.fallback();
   if(url.pathname === '/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
   if(url.pathname === '/api/v1/jobs/filters')return route.fulfill({json:{job_types:[{value:'internship',count:1}],industries:[{value:'fintech',count:1}],workplaces:[{value:'hybrid',count:1}],companies:[{value:'Synthetic Pay',count:1}],last_synced_at:'2026-11-05T04:00:00Z'}});
   if(url.pathname === '/api/v1/jobs/applications')return route.fulfill({json:{items:[]}});

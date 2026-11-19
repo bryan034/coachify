@@ -7,7 +7,9 @@ import type {ConversationAction, ConversationMessage, CvConversation} from './ty
 
 vi.mock('@/lib/api/cv', async importOriginal => {const actual = await importOriginal<typeof import('@/lib/api/cv')>(); return {...actual, cvApi: Object.fromEntries(Object.keys(actual.cvApi).map(key => [key, vi.fn()]))};});
 const message = (id: string, text: string, actions: ConversationAction[] = [], role: 'user' | 'assistant' = 'assistant'): ConversationMessage => ({id, text, actions, role, sequence: Number(id.replace(/\D/g, '')) || 1, created_at: '2026-10-28T09:00:00Z'});
-const conversation = (overrides: Partial<CvConversation> = {}): CvConversation => ({id:'chat-one', cv_id:'cv-one', revision:1, read_only:false, previous_conversation_id:null, active_question:null, context:confirmedTarget, messages:[], next_before:null, limits:{max_message_chars:4000,max_messages:500}, ...overrides});
+const conversation = (overrides: Partial<CvConversation> = {}): CvConversation => ({id:'chat-one', cv_id:'cv-one', revision:1, read_only:false, previous_conversation_id:null, active_question:null, context:confirmedTarget, next_before:null, limits:{max_message_chars:4000,max_messages:500}, ...overrides,
+ messages: (overrides.messages ?? []).map(message => message.role === 'assistant' && overrides.active_question && message.text.includes(overrides.active_question.question)
+  ? {...message, question_id: overrides.active_question.id} : message)});
 const action = (overrides: Partial<ConversationAction> = {}): ConversationAction => ({id:'action-one', kind:'correct', status:'awaiting_confirmation', title:'Update React experience', summary:'Change the reported duration for ShopTrack.', changes:[{field:'experience_months',before:'5',after:'3'}], choices:[], ...overrides});
 const props = () => ({cvId:'cv-one', detail:savedCv('cv-one'), token:'synthetic-session', onChanged:vi.fn().mockResolvedValue(undefined), onOpenSummary:vi.fn()});
 beforeEach(() => {vi.clearAllMocks(); vi.mocked(cvApi.openConversation).mockResolvedValue(conversation()); vi.mocked(cvApi.conversation).mockResolvedValue(conversation());});
@@ -38,10 +40,10 @@ describe('saved CV conversation', () => {
   expect(screen.getByText('Your message will send as soon as elo finishes.')).toBeVisible();
  });
  it('offers skip and continue after a failed next-step decision without an active question', async () => {
-  const failed=action({id:'route-failed',kind:'route',status:'failed',title:'Continue review',summary:'Could not continue.',changes:[],error:'The interview could not choose a valid next step. Its proposed next steps did not pass the review checks.'});
+  const failed=action({id:'route-failed',kind:'route',status:'failed',title:'Continue review',summary:'Could not continue.',changes:[],error:'Try a different topic.',error_code:'no_valid_next_step'});
   const current=conversation({purpose:'skills_profile',active_question:null,interview:{status:'reviewing',reviewed_items:0,total_items:2,estimates:[],topics:[{id:'one',title:'First project',status:'current'},{id:'two',title:'Next project',status:'pending'}]},messages:[message('m1','My original contribution is saved.',[],'user'),message('m2','Could not continue.',[failed])]});
   vi.mocked(cvApi.openConversation).mockResolvedValue(current);
-  vi.mocked(cvApi.sendMessage).mockResolvedValue({...current,revision:2,active_question:{id:'q2',item_id:'two',title:'Next project',question:'What did you handle in the next project?'},interview:{...current.interview!,reviewed_items:1,topics:[{id:'one',title:'First project',status:'deferred'},{id:'two',title:'Next project',status:'current'}]},messages:[current.messages[0],message('m2','Skipped remaining questions.',[{...failed,status:'cancelled',error:null}]),message('m3','What did you handle in the next project?')]});
+  vi.mocked(cvApi.sendMessage).mockResolvedValue({...current,revision:2,active_question:{id:'q2',item_id:'two',title:'Next project',question:'What did you handle in the next project?'},interview:{...current.interview!,reviewed_items:1,topics:[{id:'one',title:'First project',status:'deferred'},{id:'two',title:'Next project',status:'current'}]},messages:[current.messages[0],message('m2','Skipped remaining questions.',[{...failed,status:'cancelled',error:null}]),{...message('m3','What did you handle in the next project?'),question_id:'q2'}]});
   render(<CvConversationPanel {...props()} purpose="skills_profile"/>);
   fireEvent.click(await screen.findByRole('button',{name:'Skip and continue'}));
   await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat-one',expect.objectContaining({command:'skip',text:'Skip remaining questions for this experience.'}),'synthetic-session',expect.any(AbortSignal)));
@@ -59,14 +61,13 @@ describe('saved CV conversation', () => {
   expect(screen.getByText(/Python · .* · guided application/)).toBeVisible();
   expect(screen.queryByText(/insufficient evidence|Internal missing-field diagnostic|SQL ·/)).not.toBeInTheDocument();
  });
- it('hides internal references in restored assistant messages while preserving the user transcript', async () => {
+ it('renders the cleaned assistant reply and preserves the user transcript', async () => {
   const source='12b476847583f093b7e8aaf5dac8d5d5';
-  const restored=conversation({purpose:'skills_profile',messages:[message('m1',`Regarding your Product Manager role [${source}], what tools did you use?`),message('m2',`My original reference was [${source}].`,[],'user')]});
+  const restored=conversation({purpose:'skills_profile',messages:[message('m1','Regarding your Product Manager role, what tools did you use?'),message('m2',`My original reference was [${source}].`,[],'user')]});
   vi.mocked(cvApi.openConversation).mockResolvedValue(restored);
   render(<CvConversationPanel {...props()} purpose="skills_profile"/>);
   expect(await screen.findByText('Regarding your Product Manager role, what tools did you use?')).toBeVisible();
   expect(screen.getByText(`My original reference was [${source}].`)).toBeVisible();
-  expect(restored.messages[0].text).toContain(source);
  });
  it('keeps successful routing machinery out of the visible conversation but retains retry for a routing failure',async()=>{
   vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({messages:[message('m1','Let’s focus on your own contribution.',[action({kind:'route',status:'saved',title:'Understand your message',summary:'Message understood.',changes:[]}),action({id:'route-failed',kind:'route',status:'failed',title:'Try understanding again',summary:'Your message is saved.',changes:[],error:'Provider unavailable.'})])]}));
@@ -112,7 +113,7 @@ describe('saved CV conversation', () => {
  it('keeps topic progress visible and unchanged through followups until a topic transition', async () => {
   const reviewing=conversation({purpose:'skills_profile',interview:{status:'reviewing',reviewed_items:0,total_items:2,estimates:[],topics:[{id:'one',title:'First experience',status:'current'},{id:'two',title:'Second experience',status:'pending'}]},active_question:{id:'q1',item_id:'one',title:'First experience',question:'What did you do?'},messages:[message('m1','What did you do?')]});
   vi.mocked(cvApi.openConversation).mockResolvedValue(reviewing);
-  vi.mocked(cvApi.sendMessage).mockResolvedValueOnce({...reviewing,revision:2,active_question:{...reviewing.active_question!,id:'q2',question:'What was the task scope?'},messages:[message('m2','What was the task scope?')]}).mockResolvedValueOnce({...reviewing,revision:3,interview:{...reviewing.interview!,reviewed_items:1,topics:[{id:'one',title:'First experience',status:'reviewed_with_gaps'},{id:'two',title:'Second experience',status:'current'}]},active_question:{id:'q3',item_id:'two',title:'Second experience',question:'Moving to your second experience: what did you do?'},messages:[message('m3','Moving to your second experience: what did you do?')]});
+  vi.mocked(cvApi.sendMessage).mockResolvedValueOnce({...reviewing,revision:2,active_question:{...reviewing.active_question!,id:'q2',question:'What was the task scope?'},messages:[{...message('m2','What was the task scope?'),question_id:'q2'}]}).mockResolvedValueOnce({...reviewing,revision:3,interview:{...reviewing.interview!,reviewed_items:1,topics:[{id:'one',title:'First experience',status:'reviewed_with_gaps'},{id:'two',title:'Second experience',status:'current'}]},active_question:{id:'q3',item_id:'two',title:'Second experience',question:'Moving to your second experience: what did you do?'},messages:[{...message('m3','Moving to your second experience: what did you do?'),question_id:'q3'}]});
   render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
   const bar=await screen.findByRole('progressbar',{name:'Review progress'});
   expect(bar).toHaveAttribute('aria-valuenow','0');
@@ -142,10 +143,10 @@ describe('saved CV conversation', () => {
  });
  it('shows one line and one action when an answer could not be processed', async () => {
   const failed=action({kind:'clarify',status:'failed'});
-  vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',messages:[message('m1','Your answer is saved. We couldn’t finish processing it yet.',[failed])]}));
+  vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',messages:[{...message('m1','Saved status from the server.',[failed]),status_only:true}]}));
   render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
   expect(await screen.findByText('We couldn’t process your answer. It’s saved, so you can try again.')).toBeVisible();
-  expect(screen.queryByText(/couldn’t finish processing it/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Saved status from the server/)).not.toBeInTheDocument();
   expect(screen.getAllByRole('button',{name:'Try again'})).toHaveLength(1);
  });
  it('keeps a saved evidence-alignment failure available for explicit retry', async () => {
@@ -164,7 +165,7 @@ describe('saved CV conversation', () => {
  it('restores the same saved question in two tabs without starting a second turn', async () => {
   const empty = conversation({purpose:'skills_profile'});
   const question = {id:'question',item_id:'project-one',title:'ShopTrack',question:'What did you build yourself?'};
-  const active = {...empty,revision:2,active_question:question,messages:[message('m1','Review my CV.',[],'user'),message('m2',question.question)]};
+  const active = {...empty,revision:2,active_question:question,messages:[message('m1','Review my CV.',[],'user'),{...message('m2',question.question),question_id:question.id}]};
   let server = empty;
   let modelStarts = 0;
   vi.mocked(cvApi.openConversation).mockResolvedValue(empty);
@@ -227,7 +228,7 @@ describe('saved CV conversation', () => {
   await act(async () => finishRefresh());
   expect(input).toBeDisabled();
   const nextQuestion = {...question,id:'next-question',question:'How did you check the dashboard totals?'};
-  await act(async () => finishReturn({...pending,revision:3,active_question:nextQuestion,messages:[...pending.messages.slice(0,-1),message('m3',nextQuestion.question)]}));
+  await act(async () => finishReturn({...pending,revision:3,active_question:nextQuestion,messages:[...pending.messages.slice(0,-1),{...message('m3',nextQuestion.question),question_id:nextQuestion.id}]}));
   expect(screen.getByText(nextQuestion.question)).toBeVisible();
   expect(input).toBeEnabled();
   expect(cvApi.sendMessage).toHaveBeenCalledTimes(2);

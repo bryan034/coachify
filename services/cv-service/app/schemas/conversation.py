@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import Field, field_validator, model_validator
 from app.schemas.interview_evidence import SkillEstimate
 from app.schemas.cv import StrictModel, Text, ConfirmedContext, ItemMutation
+from app.domain.error_codes import ErrorCode
 
 
 class ConversationStart(StrictModel):
@@ -72,6 +73,7 @@ class ChatAction(StrictModel):
     changes: list[ChatChange] = Field(default_factory=list)
     choices: list[ChatChoice] = Field(default_factory=list, max_length=260)
     error: str | None = None
+    error_code: ErrorCode | None = Field(default=None, description='Stable identifier for a failure; branch on this, not on the error text.')
 
 
 class ChatMessage(StrictModel):
@@ -81,6 +83,8 @@ class ChatMessage(StrictModel):
     text: str
     created_at: str
     actions: list[ChatAction] = Field(default_factory=list)
+    question_id: str | None = Field(default=None, description='The review question this assistant message asks, when it asks one.')
+    status_only: bool = Field(default=False, description='The message only reports the failure already shown by its actions.')
 
 
 class ActiveQuestion(StrictModel):

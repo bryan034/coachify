@@ -221,6 +221,10 @@ source API is tested as unavailable. Frontend checks cover the shared skills rev
 read-only historical evidence, retry preservation and mobile layout. Run Career
 with a disposable `MONGODB_TEST_URI` to include these database-backed tests.
 
+Skills Profile CI also runs `npm run lint:skills-profile --workspace apps/frontend` from the
+repository root. From `services/cv-service`, install `.[lint]` and run `python -m ruff check app`
+to check for imports inside functions.
+
 
 LangGraph single-workspace checks use real disposable MongoDB with synthetic models
 and Brave HTTP responses. They cover automatic current-goal saves, session

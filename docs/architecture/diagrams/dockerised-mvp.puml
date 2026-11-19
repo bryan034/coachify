@@ -24,7 +24,7 @@ node "Docker Compose — focused design" {
 
   package "Private backend network" {
     node "CV analyser\nservices/cv-service" as CV <<Docker container>> {
-      artifact "Summary-first upload/review/deletion and explicit resumable chat\nSource-linked clarification, correction and selection\nTransient LangGraph extraction + one validated repair + review preparation\n/api/v1/cv" as CVAPI
+      artifact "Summary-first upload/review/deletion and explicit resumable chat\nSource-linked clarification, correction and selection\nMerged Skills Profile evidence\nTransient LangGraph extraction + one validated repair + review preparation\n/api/v1/cv" as CVAPI
     }
     node "Career goal and public research\nservices/career-service" as Career <<Docker container>> {
       artifact "Specific JD or conversational discovery\nOne canonical CareerGoal + explicit CV confirmation\nStructured skills and five-category Opportunity Intelligence\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
@@ -60,7 +60,7 @@ Gateway --> Roadmap : Adviser and tasks
 Gateway --> Jobs : Job search and tracking
 
 ' API dependencies point from caller to the service it calls.
-CV --> Profile : Validate session / read declarations / confirmed additions
+CV --> Profile : Validate session / read Skills Profile and declarations / confirmed additions
 Profile --> CV : Validate explicit source attachment
 CV --> Career : Current confirmed goal/version/selection projection
 Career --> Profile : Validate session / read selected context

@@ -3,16 +3,12 @@ import calendar
 import hashlib
 import json
 import re
-import unicodedata
-from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates, date_bounds
+from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates
 from app.domain.extraction_errors import EvidenceValidationError
+from app.domain.names import normalized_name
 from app.schemas.interview_evidence import ReviewFact, fact_key, fact_statement, unique_facts
 from pydantic import ValidationError
 from elo_shared.competence_scale import UNEXPLAINED_CEILING, MODERATE_LEVEL, MAX_LEVEL, MENTION_CEILING, clamp_level
-
-
-def normalized_name(name):
-    return ' '.join(unicodedata.normalize('NFKC', name).split()).casefold()
 
 
 def skill_id(name): return 'skill:' + normalized_name(name)
@@ -410,7 +406,7 @@ def skills_for(items):
         # Report the highest rated source level, preferring the review on a tie.
         judged = [s['skill_level'] for s in skill['sources'] if s.get('skill_level')]
         rated = [j for j in judged if j.get('level') is not None]
-        if rated: skill['skill_level'] = max(rated, key=lambda j: (j['level'], j['source'] == 'review'))
+        if rated: skill['skill_level'] = max(rated, key=lambda j: (j.get('status') != 'assumed', j['level'], j['source'] == 'review'))
         elif judged: skill['skill_level'] = judged[0]
     return list(groups.values())
 

@@ -6,7 +6,7 @@ import pytest
 from pymongo.errors import AutoReconnect
 from app.schemas.cv import Mutation, SelectionMutation
 from app.domain.errors import Conflict
-from tests.conftest import docx, ready, upload, mutation
+from tests.conftest import docx, ready, upload, mutation, select
 from tests.test_storage_capacity import reset_ledger
 
 
@@ -17,7 +17,7 @@ def remove(client, cv, **fields):
 def test_delete_selected_cv_erases_content_chats_file_and_capacity(harness):
     client, app, *_ = harness
     cv = ready(harness)
-    selected = client.put('/api/v1/cv/selection', json=mutation(0, cv_id=cv['id'])).json()
+    selected = select(client, cv['id']).json()
     chat = client.post('/api/v1/cv/conversations', json={'cv_id': cv['id'], 'mutation_id': str(uuid4())}).json()
     manual = client.post('/api/v1/cv/conversations', json={'cv_id': None, 'mutation_id': str(uuid4())}).json()
     manual_version = harness[4].declaration_version
@@ -43,7 +43,7 @@ def test_delete_selected_cv_erases_content_chats_file_and_capacity(harness):
 def test_delete_retry_is_idempotent_and_does_not_clear_new_selection(harness):
     client, app, *_ = harness
     first, second = ready(harness), ready(harness)
-    selected = client.put('/api/v1/cv/selection', json=mutation(0, cv_id=first['id'])).json()
+    selected = select(client, first['id']).json()
     request = mutation(first['version'])
     path = '/api/v1/cv/' + first['id']
     assert client.request('DELETE', path, json=request).status_code == 200
@@ -166,14 +166,14 @@ def test_lost_tombstone_acknowledgement_is_recovered(harness, monkeypatch):
 def test_deletion_preserves_concurrently_selected_other_cv(harness, monkeypatch):
     client, app, *_ = harness
     first, second = ready(harness), ready(harness)
-    client.put('/api/v1/cv/selection', json=mutation(0, cv_id=first['id']))
+    version = select(client, first['id']).json()['version']
     remove_file = app.state.files.remove
     def switch_then_remove(identifier):
-        app.state.service.select('owner-a', SelectionMutation(**mutation(1, cv_id=second['id'])))
+        app.state.service.select('owner-a', SelectionMutation(**mutation(version, cv_id=second['id'])))
         remove_file(identifier)
     monkeypatch.setattr(app.state.files, 'remove', switch_then_remove)
     result = remove(client, first)
-    assert result.status_code == 200 and result.json()['selection'] == {'cv_id': second['id'], 'version': 2}
+    assert result.status_code == 200 and result.json()['selection'] == {'cv_id': second['id'], 'version': version + 1}
 
 
 def test_deleted_upload_receipt_blocks_recreation_and_releases_capacity(harness):

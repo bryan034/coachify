@@ -191,7 +191,7 @@ def test_legacy_counts_still_share_non_project_section_budget(monkeypatch):
 @pytest.mark.parametrize('second_mapping', [False, True])
 def test_legacy_count_follows_same_cv_reconciliation_for_chat_and_target_paths(monkeypatch, second_mapping):
     from app.conversation import interview_memory as memory
-    from app.domain.review_policy import migrate_snapshot
+    from app.conversation.interview_memory import migrate_snapshot
     target = 'C' if second_mapping else 'B'
     history = [accepted('cv', [], 'A', 'B')]
     if second_mapping:
@@ -219,7 +219,7 @@ def test_legacy_count_follows_same_cv_reconciliation_for_chat_and_target_paths(m
 
 def test_legacy_count_is_not_transferred_from_a_different_cv(monkeypatch):
     from app.conversation import interview_memory as memory
-    from app.domain.review_policy import migrate_snapshot
+    from app.conversation.interview_memory import migrate_snapshot
     document = {'_id': 'new-cv', 'history': [accepted('old-cv', [], 'A', 'B')],
         'original_items': [{'id': 'B', 'kind': 'project', 'removed': False}],
         'clarifications': [], 'review_policy_snapshot': {'scope': 'section', 'version': 1},
@@ -240,7 +240,7 @@ def test_legacy_count_is_not_transferred_from_a_different_cv(monkeypatch):
 
 def test_merged_same_cv_sources_do_not_lose_legacy_question_counts(monkeypatch):
     from app.conversation import interview_memory as memory
-    from app.domain.review_policy import migrate_snapshot
+    from app.conversation.interview_memory import migrate_snapshot
     entry = accepted('cv', [], 'A', 'C')
     entry['choices'].append({'item_id': 'B', 'target_item_id': 'C'})
     document = {'_id': 'cv', 'history': [entry], 'original_items': [

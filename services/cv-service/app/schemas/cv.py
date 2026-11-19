@@ -199,16 +199,17 @@ class SkillLevelInfo(BaseModel):
     """The skill's own 1-10 level on the shared competence scale (not a goal comparison).
 
     `uncertain` means the CV and review were not conclusive; the level is then null.
+    `assumed` is a conservative level used when no supported rating is available yet.
     """
     level: SkillLevel | None
-    status: Literal['rated', 'uncertain'] = 'rated'
+    status: Literal['rated', 'assumed', 'uncertain'] = 'rated'
     rationale: str
     source: Literal['cv', 'review'] = Field(description="cv: judged at extraction from the saved CV; review: judged during the CV review from the CV and the user's answers.")
     evidence: list[Evidence]
 
     @model_validator(mode='after')
     def consistent_status(self):
-        self.status = 'uncertain' if self.level is None else 'rated'
+        self.status = 'uncertain' if self.level is None else 'assumed' if self.status == 'assumed' else 'rated'
         return self
 
 
@@ -283,7 +284,7 @@ class CvSkill(BaseModel):
     category: str
     proficiency: str | None
     experience_months: float | None
-    skill_level: SkillLevelInfo | None = Field(default=None, description="Highest rated level across this skill's sources; uncertain only when no source could be rated.")
+    skill_level: SkillLevelInfo | None = Field(default=None, description="Highest level across this skill's sources, preferring rated over assumed levels; uncertain only when no source could be rated.")
     context: str | None
     evidence: list[Evidence]
     evidence_type: str

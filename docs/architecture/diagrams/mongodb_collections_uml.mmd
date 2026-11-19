@@ -30,6 +30,9 @@ class cvs {
     +Integer version
     +Integer effective_version
     +Integer profile_reviewed_effective_version?
+    +Integer auto_selection_revision? [pending_one_time_selection]
+    +Boolean auto_selection_done? [first_ready_selection_processed]
+    +Map skill_level_failures [source_fingerprint_and_retry_backoff]
     +CvItem[] items
     +Map skill_level_reviews [item_id_to_fingerprinted_ratings]
     +Object corrections

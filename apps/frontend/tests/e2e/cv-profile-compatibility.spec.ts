@@ -39,7 +39,8 @@ async function workspace(page: Page) {
     if (path.includes('/conversations')) return route.fallback();
     if (route.request().method() !== 'GET') writes.push(path);
     if (path.endsWith('/policy')) return route.fulfill({ json: policy });
-    if (path === '/api/v1/cv') return route.fulfill({ json: { cvs: [cv], selection: { cv_id: cv.id, version: 1 } } });
+    if (path === '/api/v1/cv/skills') return route.fallback();
+  if (path === '/api/v1/cv') return route.fulfill({ json: { cvs: [cv], selection: { cv_id: cv.id, version: 1 } } });
     if (path.endsWith('/clarifications')) return route.fulfill({ json: clarificationState(cv, confirmedTarget, true) });
     return route.fulfill({ json: cv });
   });

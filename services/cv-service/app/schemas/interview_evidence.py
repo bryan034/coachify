@@ -1,4 +1,5 @@
 """One evidence vocabulary for CV extraction, clarification and interview memory."""
+from app.domain.names import normalized_name
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -35,7 +36,6 @@ class ReviewFact(BaseModel):
 
 
 def fact_key(fact):
-    from app.domain.capabilities import normalized_name
     return fact['field'], normalized_name(fact.get('skill_name') or '')
 
 

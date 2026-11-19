@@ -8,7 +8,8 @@ from app.domain.baseline import estimate_skill
 from app.domain.capabilities import validate_extraction, evidence_requiring_semantic_check, interpretation_semantic_checks
 from app.domain.extraction_errors import EvidenceValidationError
 from app.domain.extraction_feedback import feedback_for
-from app.domain.review_context import evidence_for, clarification_context
+from app.domain.review_context import clarification_context
+from app.domain.evidence_ledger import evidence_for
 from app.schemas.interview_evidence import fact_statement
 from tests.conftest import docx, upload
 

@@ -3386,6 +3386,129 @@
           }
         }
       }
+    },
+    "/api/v1/cv/skills": {
+      "get": {
+        "summary": "Skills",
+        "description": "Skills from the given CV (default: the active CV), the chat-built Skills Profile and manual capabilities.",
+        "operationId": "skills_api_v1_cv_skills_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cv_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cv Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3655,6 +3778,23 @@
               }
             ],
             "title": "Error"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "unsupported_interpretation",
+                  "no_valid_next_step",
+                  "interrupted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code",
+            "description": "Stable identifier for a failure; branch on this, not on the error text."
           }
         },
         "additionalProperties": false,
@@ -3786,6 +3926,24 @@
             },
             "type": "array",
             "title": "Actions"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id",
+            "description": "The review question this assistant message asks, when it asks one."
+          },
+          "status_only": {
+            "type": "boolean",
+            "title": "Status Only",
+            "description": "The message only reports the failure already shown by its actions.",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -5010,7 +5168,7 @@
                 "type": "null"
               }
             ],
-            "description": "Highest rated level across this skill's sources; uncertain only when no source could be rated."
+            "description": "Highest level across this skill's sources, preferring rated over assumed levels; uncertain only when no source could be rated."
           },
           "context": {
             "anyOf": [
@@ -7247,6 +7405,7 @@
             "type": "string",
             "enum": [
               "rated",
+              "assumed",
               "uncertain"
             ],
             "title": "Status",
@@ -7281,7 +7440,376 @@
           "evidence"
         ],
         "title": "SkillLevelInfo",
-        "description": "The skill's own 1-10 level on the shared understanding scale (1-3 basic, 4-6 moderate, 7-8 good, 9-10 expert; not a goal comparison).\n\n`uncertain` means the CV and review were not conclusive; the level is then null."
+        "description": "The skill's own 1-10 level on the shared competence scale (not a goal comparison).\n\n`uncertain` means the CV and review were not conclusive; the level is then null.\n`assumed` is a conservative level used when no supported rating is available yet."
+      },
+      "ListedSkill": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Skill identity: the canonical skill ID, or the normalised name when the registry has none."
+          },
+          "canonical_skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Skill Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillLevelInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strongest 1-10 level across sources, preferring rated over assumed levels."
+          },
+          "application": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "guided_application",
+                  "independent_application",
+                  "complex_application"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application",
+            "description": "Strongest supported application estimate from the CV review when no 1-10 level exists."
+          },
+          "proficiency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proficiency"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "level",
+              "application",
+              "proficiency",
+              "described",
+              "draft",
+              "declared",
+              "none"
+            ],
+            "title": "Basis",
+            "description": "What the displayed strength rests on, strongest first."
+          },
+          "added_in_review": {
+            "type": "boolean",
+            "title": "Added In Review",
+            "default": false
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SkillListSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "basis",
+          "sources"
+        ],
+        "title": "ListedSkill"
+      },
+      "SkillList": {
+        "properties": {
+          "cv_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cv Id"
+          },
+          "cv_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cv Version"
+          },
+          "profile_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Version"
+          },
+          "declarations_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declarations Version"
+          },
+          "unavailable": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "chat",
+                "declarations"
+              ]
+            },
+            "type": "array",
+            "title": "Unavailable",
+            "description": "Sources that could not be read; their skills are missing from this list."
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/ListedSkill"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "skill_groups": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Skill Groups"
+          },
+          "skill_subgroups": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Skill Subgroups"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cv_id",
+          "cv_version",
+          "profile_version",
+          "declarations_version",
+          "skills"
+        ],
+        "title": "SkillList"
+      },
+      "SkillListEvidence": {
+        "properties": {
+          "quote": {
+            "type": "string",
+            "title": "Quote"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "quote"
+        ],
+        "title": "SkillListEvidence"
+      },
+      "SkillListFact": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "value",
+          "status"
+        ],
+        "title": "SkillListFact"
+      },
+      "SkillListSource": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cv",
+              "chat",
+              "declaration"
+            ],
+            "title": "Kind",
+            "description": "cv: a saved CV item; chat: the Skills Profile built in chat; declaration: a manual capability."
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "The experience or profile entry title; absent for manual capabilities."
+          },
+          "item_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Kind"
+          },
+          "attribution": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "personal",
+                  "team",
+                  "observed",
+                  "denied",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution"
+          },
+          "assistance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "independent",
+                  "assisted",
+                  "supervised",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistance"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "draft": {
+            "type": "boolean",
+            "title": "Draft",
+            "default": false
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/SkillListFact"
+            },
+            "type": "array",
+            "title": "Facts"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/SkillListEvidence"
+            },
+            "type": "array",
+            "title": "Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "SkillListSource"
       }
     },
     "securitySchemes": {

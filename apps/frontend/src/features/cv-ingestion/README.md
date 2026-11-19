@@ -11,11 +11,13 @@ still processing and none is active it shows a reading screen (`skills-states.ts
 the experiences found so far and skeleton skills, plus **Open review** and **Cancel upload**. When a CV is read but its review is unfinished, the page shows **Finish your CV review** at full page width (no separate CV card; **Upload new CV** scrolls to the upload panel beside **Your CVs**, which shows `x/max` CVs from the policy, 3 by default) instead of skills: a Continue review action, the saved topic progress (read from the CV's current saved conversation, without starting one) and a **Waiting for your review** list of what unlocks. Once the
 active CV is reviewed, a **Your CV review is complete** banner reports the questions answered and the skills added, corrected and removed (from the CV's `review_summary`) and offers Generate roadmap and Search jobs. A skill's side panel adds **From your review** when the backend holds a note for it.
 
+The page reads the merged CV, chat and manual evidence from `GET /api/v1/cv/skills`. Scores based on assumed levels carry an estimate label.
+
 `resume-preview.tsx` coordinates the policy, saved CVs, explicit selection and
 recoverable upload/processing states. Upload opens guided review immediately and
 shows progress until the first question is ready. `cv-conversation.tsx` saves the
 conversation for later. **Your CVs** is the one place to switch, make active, rename, delete or review CVs: each row shows its state, review progress, and **Review CV** (**Refine CV** once reviewed). The Skills Profile card only summarises the CV analysed. **View extracted results** opens a read-only results page for that CV (`extracted-results.tsx`): skills by category or by where they came from (CV, added, removed or skipped in review), a detail panel for the selected skill, and the experiences found. **Upload a CV** sits beside a fixed-height **Your CVs** library with a sticky desktop position and an independently scrollable card list. Each card offers a persisted title, Rename with Save/Cancel, Review CV, View extracted results, Make active and Delete CV. Original filenames and source versions remain under File details;
-The Skills Profile no longer has a “CV details and corrections” section. Source reconciliation, when a re-upload needs a decision, appears on the results page. Uploading never changes selection. The
+The CV service automatically activates a new CV when its first extraction finishes and no newer CV is ready. The
 active CV is identified separately from the CV currently being
 reviewed, including when filenames repeat. Same-source re-upload sends the original
 CV ID/version and preserves backend corrections; changed bytes require a separate
@@ -299,6 +301,4 @@ controls. It opens the existing source-bound clarification/editor and manual
 capability controls without replacing the read-only Extracted results page.
 The page marks its initial API loads with `aria-busy`; navigation helpers wait for
 that state before choosing between first-upload and saved-CV layouts. Viewing the
-Skills Profile after completing review returns to its summary. Equal upload
-creation timestamps prefer the active CV, avoiding accidental selection changes
-on reload. The saved library scrolls internally on desktop and mobile.
+Skills Profile after completing review returns to its summary. Reload uses the selection saved by the CV service. The saved library scrolls internally on desktop and mobile.

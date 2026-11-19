@@ -1,4 +1,5 @@
 "use client";
+import {useCvDraft} from './draft-state';
 import { useRef, useState } from 'react';
 import { cvApi, CvApiError } from '@/lib/api/cv';
 import type { CvDetail, Declaration, DeclarationLink, Declarations } from './types';
@@ -13,6 +14,7 @@ export function DeclarationAttachment({declaration,link,linkError,data,selectedC
  const stale=editing&&(version!==data.version||(choice!==''&&choice!=='standalone'&&(sourceId!==selectedCv?.id||sourceVersion!==selectedCv?.version)));
  const status=!declaration.attached_to?'standalone':link?.status??'unavailable';
  const label={standalone:'Standalone declaration; no CV evidence link.',current:'Linked evidence is current.',changed:'Linked evidence changed. Review how this declaration relates to it.',removed:'The linked source no longer supports this skill. Your declaration is retained.',unavailable:'The linked evidence could not be checked. Your declaration is retained.',unverified:'This older link needs an explicit review before it can be treated as current.'}[status];
+ useCvDraft(editing && Boolean(choice), busy);
  async function save(){
   if(busy||stale||!choice)return;
   if(choice!=='standalone'&&(!selectedCv||!sources.some(source=>source.id===choice)))return;
@@ -24,7 +26,7 @@ export function DeclarationAttachment({declaration,link,linkError,data,selectedC
   finally{if(!signal.aborted)setBusy(false);}
  }
  return <div className="cv-attachment"><p className={status==='current'||status==='standalone'?'small':'cv-warning'}>{label}</p>{declaration.attached_to&&<p className="small">Saved source: {declaration.attached_to.cv_id} · {declaration.attached_to.item_id}{link&&!link.selected?' · This is a different CV from your selected analysis source.':''}</p>}{declaration.attached_to&&linkError&&<p className="small">{linkError}</p>}
-  {editing?<form className="cv-form" data-unsaved={Boolean(choice)} aria-busy={busy} onSubmit={event=>{event.preventDefault();void save();}} aria-label={`Review link for ${declaration.name}`}>
+  {editing?<form className="cv-form" aria-busy={busy} onSubmit={event=>{event.preventDefault();void save();}} aria-label={`Review link for ${declaration.name}`}>
    <label>How should this declaration be linked?<select value={choice} disabled={busy} onChange={event=>{setChoice(event.target.value);setSourceId(selectedCv?.id??null);setSourceVersion(selectedCv?.version??null);}}><option value="">Choose after reviewing the evidence</option><option value="standalone">Keep as a standalone declaration</option>{sources.map(source=><option key={source.id} value={source.id}>Link to {source.title} · {source.id}</option>)}</select></label>
    {choice&&choice!=='standalone'&&sources.filter(source=>source.id===choice).map(source=><div key={source.id}><p className="cv-copy">{source.description}</p>{source.evidence.map((e,index)=><blockquote key={`${e.id}:${index}`}><p>{e.excerpt}</p><cite>{e.location}</cite></blockquote>)}</div>)}
    {stale&&<div className="cv-warning"><p>The saved declaration or selected evidence changed. Your choice has not been applied.</p><button type="button" className="btn ghost sm" onClick={()=>{setVersion(data.version);setChoice('');setSourceId(null);setSourceVersion(null);setError('');}}>Review latest link choices</button></div>}

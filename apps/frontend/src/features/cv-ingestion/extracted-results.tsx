@@ -52,7 +52,7 @@ function useResults(cv: CvDetail) {
    return {
     id: skill.skill_id, name: skill.name, itemIds: sourceItems, note: review?.skill_notes[skill.skill_id],
     origin: added ? 'add' : everySourceSkipped ? 'skip' : 'cv',
-    category: groups[skill.skill_id] ?? skill.category ?? 'Other', subgroup: subgroups[skill.skill_id] ?? '',
+    category: groups[skill.name] ?? skill.category ?? 'Other', subgroup: subgroups[skill.name] ?? '',
    };
   });
   // Skills removed in review come back from the item list.

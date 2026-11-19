@@ -15,7 +15,7 @@ import { levelText } from './levels';
 /** One skill as the drawer talks about it. Level and target come from the saved evaluation. */
 export type TalkSkill = {
  key: string; name: string; canonicalId?: string | null;
- level: number | null; target: number | null;
+ level: number | null; target: number | null; estimated?: boolean;
  /** What reaching the target means for this role, when the goal says. */
  meaning?: string | null;
  /** Where the current level comes from. */
@@ -36,10 +36,10 @@ type Reply = { label: string; solid?: boolean; href?: string; run?: () => void }
 
 const words = (value: string) => value.trim().split(/\s+/).filter(Boolean);
 /** One line, under 20 words, on why the skill has its level. */
-export function ratingReason(skill: Pick<TalkSkill, 'name' | 'level' | 'sources' | 'note'>) {
+export function ratingReason(skill: Pick<TalkSkill, 'name' | 'level' | 'sources' | 'note' | 'estimated'>) {
  if (skill.note && words(skill.note).length < 20) return skill.note;
  if (skill.level == null) return 'I couldn’t find enough in your CV to rate this.';
- const base = `Rated ${skill.level} out of 10 based on`, sources = (skill.sources ?? []).filter(Boolean);
+ const base = `${skill.estimated ? 'Estimated at' : 'Rated'} ${skill.level} out of 10 based on`, sources = (skill.sources ?? []).filter(Boolean);
  if (!sources.length) return `${base} your CV and review answers.`;
  const room = 19 - words(base).length;
  const both = sources.length > 1 ? `${sources[0]} and ${sources[1]}` : '';
@@ -168,7 +168,7 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
  }
  return <>
   <div className="ws-msgs" ref={list} aria-live="polite">
-   <HelperOpening title={skill.level == null ? `Why isn’t ${skill.name} rated?` : `Why is ${skill.name} rated ${skill.level} out of 10?`}>
+   <HelperOpening title={skill.level == null ? `Why isn’t ${skill.name} rated?` : `Why is ${skill.name} ${skill.estimated ? 'estimated at' : 'rated'} ${skill.level} out of 10?`}>
     <p>{ratingReason(skill)}{skill.target != null ? ` Target: ${skill.target}.` : ''}</p>
     <p>Without clear evidence, elo assumes you had guidance.</p>
     <p><b>Want a re-rating?</b> Tell me about:</p>

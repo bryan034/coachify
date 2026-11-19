@@ -7,6 +7,7 @@ from uuid import NAMESPACE_URL, uuid5
 from starlette.concurrency import run_in_threadpool
 from elo_shared.skills_profile import SkillsProfile, SkillsProfileWrite, FIELDS, SKILL_FIELDS
 from app.domain.errors import Conflict, CvError
+from app.conversation.actions import action_in, action_message, key
 from app.schemas.intake import IntakeEvaluation
 
 LABELS = {'work': 'work or internship experience', 'project': 'project',
@@ -119,7 +120,6 @@ async def read_profile(app, account):
 
 
 async def process_intake(service, app, account, conversation, route, token):
-    from app.conversation.service import action_in, action_message, key
     owner, identifier = account['id'], conversation['_id']
     current = await read_profile(app, account)
     if not route.get('_profile_body') and route.get('_profile_version', current['version']) != current['version']:
