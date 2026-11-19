@@ -7,7 +7,7 @@ import httpx
 
 from app.normalise import SINGAPORE, plain_text
 
-MAX_RESPONSE_BYTES = 48 * 1024 * 1024
+MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 USER_AGENT = 'elo-jobs-live/0.1'
 EMPLOYMENT_METADATA = re.compile(r'employment|time type|commitment|job type', re.I)
 WORKPLACE_METADATA = re.compile(r'workplace|location type|remote', re.I)

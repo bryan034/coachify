@@ -30,29 +30,29 @@ def auth_config(request: Request):
 
 
 @router.get("/school-categories", response_model=list[CategoryView])
-def school_categories():
+async def school_categories():
     return schools.categories()
 
 
 @router.get("/school-countries", response_model=list[CountryView])
-def school_countries():
+async def school_countries():
     return schools.countries()
 
 
 @router.get("/institutions", response_model=InstitutionResults)
-def institutions(category: SchoolCategory, q: str = Query("", max_length=150),
-                 country: str | None = Query(None, pattern="^[A-Z]{2}$"),
-                 offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
+async def institutions(category: SchoolCategory, q: str = Query("", max_length=150),
+                       country: str | None = Query(None, pattern="^[A-Z]{2}$"),
+                       offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
     return schools.search(category, q.strip(), country, offset, limit)
 
 
 @router.get("/companies", response_model=list[EmploymentOption])
-def companies(q: str = Query("", max_length=150), limit: int = Query(20, ge=1, le=100)):
+async def companies(q: str = Query("", max_length=150), limit: int = Query(20, ge=1, le=100)):
     return employment.search("companies", q, limit)
 
 
 @router.get("/industries", response_model=list[EmploymentOption])
-def industries(q: str = Query("", max_length=150), limit: int = Query(20, ge=1, le=100)):
+async def industries(q: str = Query("", max_length=150), limit: int = Query(20, ge=1, le=100)):
     return employment.search("industries", q, limit)
 
 

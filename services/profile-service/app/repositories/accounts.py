@@ -63,13 +63,13 @@ class AccountRepository:
     def finish(self, data, settings, verify, source):
         flow = self.attempt(data, settings)
         fingerprint = keyed(settings.otp_secret, flow['intent'], data.name, data.email, data.password,
-                            data.credential, digest(data.session_token))
+                            data.credential)
         if flow.get('fingerprint'):
             if flow['fingerprint'] != fingerprint:
                 raise HTTPException(409, 'This attempt has already been used. Start again to change account details.')
         else:
             account, registration, replaces, step_up = self.authenticate(data, flow, settings, verify, source)
-            changes = {'fingerprint': fingerprint, 'account_id': account['id'], 'session_hash': digest(data.session_token)}
+            changes = {'fingerprint': fingerprint, 'account_id': account['id']}
             if step_up:
                 changes['password_step_up'] = True
             if account.get('password_hash'):
@@ -131,10 +131,8 @@ class AccountRepository:
                 return account, False, None, False
             buckets = self.verification.password_buckets(settings.otp_secret, identity, source)
             self.verification.check_password_source(buckets)
-            if not password_matches((account or {}).get('password_hash'), data.password):
+            if not password_matches((account or {}).get('password_hash'), data.password) or not account:
                 self.verification.failed_password(buckets)
-                if not account:
-                    raise HTTPException(404, 'No account was found for this email address. Create a new account to get started.')
                 raise HTTPException(401, 'Email or password is incorrect.')
             step_up = account.get('email_verified') and self.verification.password_needs_mailbox(buckets[0])
             return account, False, None, step_up
@@ -213,14 +211,48 @@ class AccountRepository:
             self.sessions.update_many({'account_id': flow['registration_replaces']}, {'$set': {'revoked': True}})
         return activated
 
+    @staticmethod
+    def _seal_token(secret, data, token):
+        raw = token.encode('ascii')
+        pad = bytes.fromhex(keyed(secret, 'session-pad-1', data.flow_id, data.attempt_id)
+                            + keyed(secret, 'session-pad-2', data.flow_id, data.attempt_id))[:len(raw)]
+        return bytes(a ^ b for a, b in zip(raw, pad)).hex()
+
+    @staticmethod
+    def _unseal_token(secret, data, seal):
+        encrypted = bytes.fromhex(seal)
+        pad = bytes.fromhex(keyed(secret, 'session-pad-1', data.flow_id, data.attempt_id)
+                            + keyed(secret, 'session-pad-2', data.flow_id, data.attempt_id))[:len(encrypted)]
+        return bytes(a ^ b for a, b in zip(encrypted, pad)).decode('ascii')
+
     def publish(self, data, flow, account, settings):
-        session_hash = digest(data.session_token)
-        if flow.get('session_hash') != session_hash:
-            raise HTTPException(409, 'The verification session changed. Start again.')
-        self.sessions.update_one({'_id': session_hash}, {'$setOnInsert': {
-            'account_id': account['id'], 'flow': flow['_id'], 'auth_mode': settings.mode,
-            'credential_hash': account.get('password_hash'),
-            'expires_at': now() + timedelta(hours=24), 'revoked': False}}, upsert=True)
+        token = token_urlsafe(32)
+        session_hash = digest(token)
+        seal = self._seal_token(settings.otp_secret, data, token)
+        claimed = self.flows.find_one_and_update(
+            {'_id': flow['_id'], 'attempt': flow['attempt'], 'fingerprint': flow['fingerprint'],
+             'status': {'$in': ['pending', 'completed']}, 'session_hash': {'$exists': False}},
+            {'$set': {'session_hash': session_hash, 'session_seal': seal}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if claimed is None:
+            claimed = self.flows.find_one({'_id': flow['_id'], 'attempt': flow['attempt']})
+            if (not claimed or claimed.get('fingerprint') != flow['fingerprint']
+                or claimed.get('status') not in ('pending', 'completed')
+                or not claimed.get('session_hash') or not claimed.get('session_seal')):
+                raise HTTPException(409, 'Access attempt cancelled or superseded. Start again.')
+        session_hash = claimed['session_hash']
+        token = self._unseal_token(settings.otp_secret, data, claimed['session_seal'])
+        try:
+            self.sessions.insert_one({
+                '_id': session_hash, 'account_id': account['id'], 'flow': flow['_id'], 'auth_mode': settings.mode,
+                'credential_hash': account.get('password_hash'),
+                'expires_at': now() + timedelta(hours=24), 'revoked': False,
+            })
+        except DuplicateKeyError as exc:
+            existing = self.sessions.find_one({'_id': session_hash})
+            if not existing or existing.get('flow') != flow['_id'] or existing.get('account_id') != account['id']:
+                raise HTTPException(409, 'Session could not be established. Start again.') from exc
         updated = self.flows.update_one({'_id': flow['_id'], 'attempt': flow['attempt'], 'status': 'pending',
                                         'fingerprint': flow['fingerprint']},
             {'$set': {'status': 'completed', 'active_session': session_hash, 'expires_at': now() + timedelta(days=2)},
@@ -229,11 +261,11 @@ class AccountRepository:
             latest = self.flows.find_one({'_id': flow['_id']})
             if not latest or latest.get('status') != 'completed' or latest.get('fingerprint') != flow['fingerprint']:
                 raise HTTPException(409, 'Access attempt cancelled or superseded. Start again.')
-        return self.session(data.session_token, settings)
+        return {**self.session(token, settings), 'session_token': token}
 
     def verify_email(self, data, settings):
         flow = self.attempt(data, settings)
-        if flow.get('session_hash') != digest(data.session_token) or not flow.get('account_id'):
+        if not flow.get('account_id'):
             raise HTTPException(409, 'This verification request does not match account access. Start again.')
         account = self.bound_account(flow)
         verified = self.verification.consume(data, flow, account, settings)
@@ -249,7 +281,7 @@ class AccountRepository:
 
     def resend(self, data, settings):
         flow = self.attempt(data, settings)
-        if flow['status'] != 'pending' or flow.get('session_hash') != digest(data.session_token) or not flow.get('account_id'):
+        if flow['status'] != 'pending' or not flow.get('account_id'):
             raise HTTPException(409, 'Start a new verification attempt.')
         return self.verification.send(flow, self.bound_account(flow), settings, self.mailer, resend=True)
 

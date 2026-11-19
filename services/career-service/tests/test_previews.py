@@ -196,7 +196,7 @@ def test_unsafe_url_syntax_rejected(url):
     with pytest.raises(ValueError),patch('socket.getaddrinfo',public_dns):job_url.destination(url)
 
 
-@pytest.mark.parametrize('address',['127.0.0.1','10.0.0.1','169.254.169.254','192.168.1.1','0.0.0.0','::1','fe80::1','::ffff:127.0.0.1','100.64.0.1'])
+@pytest.mark.parametrize('address',['127.0.0.1','10.0.0.1','169.254.169.254','192.168.1.1','0.0.0.0','::1','fe80::1','::ffff:127.0.0.1','100.64.0.1','224.0.0.1','ff02::1','64:ff9b::127.0.0.1'])
 def test_private_and_special_dns_addresses_rejected(address):
     with patch('socket.getaddrinfo',return_value=[(2,1,6,'',(address,80))]),pytest.raises(ValueError,match='Private'):
         job_url.destination('https://example.test/job')
@@ -230,6 +230,14 @@ def test_tls_request_uses_validated_address_and_original_hostname():
         assert connect.call_args.args[0]==('93.184.216.34',443)
         assert context.return_value.wrap_socket.call_args.kwargs['server_hostname']=='example.test'
         assert connection.return_value.request.call_args.kwargs['headers']['Accept-Encoding']=='identity'
+
+    class BadLengthResponse(Response):
+        def getheaders(self):return [('Content-Type','text/html'),('Content-Length','invalid-length')]
+    with patch('socket.getaddrinfo',public_dns),patch('socket.create_connection'),patch('ssl.create_default_context'),patch('http.client.HTTPConnection') as connection:
+        connection.return_value.getresponse.return_value=BadLengthResponse()
+        with pytest.raises(ValueError,match='invalid response size') as exc:
+            job_url.request_page('https://example.test/job',__import__('time').monotonic()+10)
+        assert 'invalid literal' not in str(exc.value)
 
 
 def test_jobposting_and_readable_html_extraction():

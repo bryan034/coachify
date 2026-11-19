@@ -1,6 +1,6 @@
 """Atomic OTP claims and rate limits; SMTP never receives database credentials."""
 from datetime import timedelta
-from secrets import randbelow, token_urlsafe
+from secrets import compare_digest, randbelow, token_urlsafe
 from fastapi import HTTPException
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
@@ -101,22 +101,26 @@ class VerificationRepository:
         return self.receipt(selected)
 
     def consume(self, data, flow, account, settings):
-        receipt = keyed(settings.otp_secret, data.challenge_id, data.code, digest(data.session_token))
+        receipt = keyed(settings.otp_secret, data.challenge_id, data.code)
         if flow.get('verification_receipt') == receipt and flow.get('otp_verified'):
             return flow
         if flow['status'] != 'pending' or flow.get('challenge_id') != data.challenge_id:
             raise HTTPException(409, 'This code is no longer current. Use the latest email.')
         code_hash = keyed(settings.otp_secret, account['id'], account['email'], data.challenge_id, data.code)
         conditions = {'_id': flow['_id'], 'attempt': flow['attempt'], 'status': 'pending', 'challenge_id': data.challenge_id,
-                      'delivery': 'sent', 'code_expires_at': {'$gt': now()},
+                      'delivery': 'sent', 'code_expires_at': {'$gt': now()}, 'otp_verified': {'$ne': True},
                       '$or': [{'otp_attempts': {'$exists': False}}, {'otp_attempts': {'$lt': 5}}]}
         self.limit(settings.otp_secret, 'verification', account['email'], 25)
-        consumed = self.flows.find_one_and_update({**conditions, 'code_hash': code_hash},
-            {'$set': {'otp_verified': True, 'verification_receipt': receipt}, '$unset': {'code_hash': ''}}, return_document=ReturnDocument.AFTER)
-        if consumed:
-            return consumed
-        latest = self.flows.find_one({'_id': flow['_id']})
+        claimed = self.flows.find_one_and_update(conditions, {'$inc': {'otp_attempts': 1}}, return_document=ReturnDocument.AFTER)
+        if claimed and compare_digest(claimed.get('code_hash', ''), code_hash):
+            consumed = self.flows.find_one_and_update(
+                {'_id': flow['_id'], 'attempt': flow['attempt'], 'status': 'pending', 'challenge_id': data.challenge_id},
+                {'$set': {'otp_verified': True, 'verification_receipt': receipt}, '$unset': {'code_hash': ''}},
+                return_document=ReturnDocument.AFTER,
+            )
+            if consumed:
+                return consumed
+        latest = self.flows.find_one({'_id': flow['_id'], 'attempt': flow['attempt']})
         if latest and latest.get('verification_receipt') == receipt and latest.get('otp_verified'):
             return latest
-        self.flows.update_one({**conditions, 'code_hash': {'$ne': code_hash}, 'otp_verified': {'$ne': True}}, {'$inc': {'otp_attempts': 1}})
         raise HTTPException(400, 'Code incorrect, expired or exhausted. Use the latest email or request another code.')

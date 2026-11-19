@@ -1,4 +1,5 @@
 """Live search uses synthetic HTTP responses; MongoDB contains only saved applications."""
+from datetime import timedelta
 from types import SimpleNamespace
 from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event, Lock
@@ -16,15 +17,16 @@ from jobs_fixtures import GREENHOUSE, LEVER, NOW, SyntheticUpstream, greenhouse_
 OWNER = {'Authorization': 'Bearer owner'}
 
 
-def test_each_search_reads_provider_again_and_never_uses_seeded_data(database):
+def test_each_search_reads_provider_again_after_ttl_and_never_uses_seeded_data(database):
     calls = []
     jobs = [greenhouse_job()]
+    current_time = [NOW]
     def fetch(url):
         calls.append(url)
         return {'jobs': jobs.copy()}
-    live = LiveJobs([GREENHOUSE], fetch, lambda: NOW)
+    live = LiveJobs([GREENHOUSE], fetch, lambda: current_time[0])
     database.job_postings.insert_one({'_id': 'stale', 'title': 'Stale job'})
-    app = create_app(store=SimpleNamespace(database=database), upstream=SyntheticUpstream(), catalogue=live, clock=lambda: NOW)
+    app = create_app(store=SimpleNamespace(database=database), upstream=SyntheticUpstream(), catalogue=live, clock=lambda: current_time[0])
     with TestClient(app) as client:
         assert client.get('/api/v1/jobs/search').status_code == 401
         assert calls == []
@@ -33,8 +35,10 @@ def test_each_search_reads_provider_again_and_never_uses_seeded_data(database):
         identifier = first['items'][0]['id']
         saved = client.post('/api/v1/jobs/applications', headers=OWNER, json={'posting_id': identifier}).json()
         assert saved['snapshot']['title'] == 'Software Engineer'
+        assert len(calls) == 1
         jobs.clear()
         assert client.post('/api/v1/jobs/applications', headers=OWNER, json={'posting_id': identifier}).json()['id'] == saved['id']
+        current_time[0] = NOW + timedelta(minutes=6)
         assert client.get('/api/v1/jobs/search', headers=OWNER).json()['total'] == 0
         assert client.get('/api/v1/jobs/postings/' + identifier, headers=OWNER).status_code == 404
         item = client.get('/api/v1/jobs/applications', headers=OWNER).json()['items'][0]
@@ -113,7 +117,8 @@ def test_overlapping_searches_and_filters_share_live_work_and_recover(monkeypatc
             raise ProviderUnavailable('status 503')
         return {'jobs': jobs.copy()}
 
-    live = LiveJobs([GREENHOUSE], fetch, lambda: NOW)
+    current_time = [NOW]
+    live = LiveJobs([GREENHOUSE], fetch, lambda: current_time[0])
     with ThreadPoolExecutor(max_workers=3) as pool:
         first = pool.submit(live.search, search_filter('engineer'))
         try:
@@ -133,9 +138,13 @@ def test_overlapping_searches_and_filters_share_live_work_and_recover(monkeypatc
             assert filters.result(timeout=5)['companies'] == [{'value': 'Synthetic Bank', 'count': 1}]
             assert latest.result(timeout=5)['total'] == 0
     assert len(calls) == 1
-    # Neither successful results nor failed operations survive as a cache.
+    # Failed operations never enter the cache; successful results refresh once TTL expires.
     unavailable = False
     jobs.append(greenhouse_job(2, 'New role'))
+    if not calls or live._cache is not None:
+        assert live.search(search_filter())['total'] == 1
+        assert len(calls) == 1
+        current_time[0] = NOW + timedelta(minutes=6)
     assert live.search(search_filter())['total'] == 2
     assert len(calls) == 2
 
@@ -174,3 +183,18 @@ def test_invalid_records_warn_without_discarding_valid_results():
     result = live.search(search_filter())
     assert result['total'] == 1
     assert result['unavailable_sources'] == ['greenhouse:synthetic-gh']
+
+
+def test_malformed_recommended_search_cursor_position_types_return_409():
+    import base64
+    import hashlib
+    import json
+    live = LiveJobs([GREENHOUSE], lambda url: {'jobs': [greenhouse_job()]})
+    query = search_filter()
+    ranking = {'role': 'Software Engineer', 'skills': ['Python']}
+    signature = hashlib.sha256(json.dumps({'ranking': ranking, 'query': query}, sort_keys=True, default=str).encode()).hexdigest()[:12]
+    for bad_position in ([None, 'a', 'b'], [True, 'a', 'b'], [1, 2, 3], [1, 'a'], 'not-a-list'):
+        cursor = base64.urlsafe_b64encode(json.dumps({'v': 1, 'context': signature, 'position': bad_position}).encode()).decode()
+        with pytest.raises(Problem) as error:
+            live.search(query, cursor=cursor, ranking=ranking)
+        assert error.value.status == 409 and error.value.code == 'search_changed'

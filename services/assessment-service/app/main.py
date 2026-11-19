@@ -1,7 +1,7 @@
 from uuid import uuid5, NAMESPACE_URL
 from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
-from elo_shared.runtime import application, authenticated, Problem, begin, launch, operation_view, stamp, digest
+from elo_shared.runtime import application, authenticated, Problem, begin, launch, operation_view, stamp, digest, operation_scope, budget_owner
 from app.schemas import Generate, Result, Context, Current, DashboardSource, SkillRatingInput, SkillRatings, SkillReevaluateInput, SkillReevaluated, batch_schema
 from app.inputs import capture
 from app.domain import OutputProblem, INSTRUCTIONS, validate_batch, group_outcome, model_evidence, ASSESSMENT_CONTEXT_BYTES
@@ -209,7 +209,9 @@ def create_app(store=None,upstream=None,model=None):
         mine={source['ref'] for source in skill['sources']}
         if set(status['reasons'])-{'evidence_changed'} or any(ref not in mine or not ref.startswith('declaration:') for ref in changed):
             raise Problem('Your inputs changed beyond this skill. Re-evaluate your skills to update your level.',409,'full_evaluation_required')
-        try:judged=await reevaluate_skill(app.state.model,snapshot,result['job_skill_gaps'],skill)
+        try:
+            with operation_scope('skill-reevaluate:' + account['id']), budget_owner(account['id']):
+                judged=await reevaluate_skill(app.state.model,snapshot,result['job_skill_gaps'],skill)
         except OutputProblem as error:raise Problem('This skill could not be re-evaluated just now. Your answer is saved.',502,'assessment_output') from error
         fresh=await thread(app.state.store.load,account['id'])
         if fresh['version']!=row['version']:raise Problem('Your workspace changed. Try again.',409,'version_conflict')

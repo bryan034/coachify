@@ -119,6 +119,7 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
         response = await call_next(request)
         response.headers['Cache-Control'] = 'no-store'
         response.headers['Pragma'] = 'no-cache'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
         return response
 
     @app.exception_handler(RequestValidationError)

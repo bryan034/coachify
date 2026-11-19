@@ -227,6 +227,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
         response = await call_next(request)
         response.headers['Cache-Control'] = 'no-store'
         response.headers['Pragma'] = 'no-cache'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
         return response
 
     @app.exception_handler(RequestValidationError)

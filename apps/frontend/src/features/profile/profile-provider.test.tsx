@@ -31,9 +31,10 @@ let sessionRead: (()=>Promise<Response>) | undefined;
 let requests: string[]=[];
 beforeEach(()=>{
  sessionStorage.clear(); localStorage.clear(); failedLogout=false; privateRead=undefined; sessionRead=undefined; requests=[];replace.mockReset();
+ let issuedCounter=0;
  vi.stubGlobal('fetch',vi.fn(async(url:string)=>{
   requests.push(url);
-  const value=url.endsWith('/auth-config')?{mode:'local_test'}:url.endsWith('/school-categories')?[]:url.endsWith('/auth/attempts')?{nonce:'nonce'}:url.endsWith('/auth/complete')||url.endsWith('/auth/session')?{id:'synthetic-id',name:'Synthetic',provider:'local_test',onboarding_complete:false}:url.endsWith('/auth/logout')?{ok:true}:{version:1,education:{course:'Private course'}};
+  const value=url.endsWith('/auth-config')?{mode:'local_test'}:url.endsWith('/school-categories')?[]:url.endsWith('/auth/attempts')?{nonce:'nonce'}:url.endsWith('/auth/complete')?{id:'synthetic-id',name:'Synthetic',provider:'local_test',onboarding_complete:false,session_token:`${'s'.repeat(40)}-${++issuedCounter}`}:url.endsWith('/auth/session')?{id:'synthetic-id',name:'Synthetic',provider:'local_test',onboarding_complete:false}:url.endsWith('/auth/logout')?{ok:true}:{version:1,education:{course:'Private course'}};
   if(url.endsWith('/auth/logout')&&failedLogout)return new Response(JSON.stringify({detail:'Unavailable'}),{status:503});
   if(url.endsWith('/profile')&&privateRead)return privateRead();
   if(url.endsWith('/auth/session')&&sessionRead)return sessionRead();

@@ -12,9 +12,9 @@ test('P09–P16 Google entry, OTP verification, initial setup, reload and logout
   if(path.endsWith('/auth/attempts')){attempts++;nonce='synthetic-nonce-'+attempts;return route.fulfill({json:{nonce}});}
   if(path.endsWith('/auth/attempts/cancel'))return route.fulfill({json:{ok:true}});
   if(path.endsWith('/auth/complete')){
-   const input=route.request().postDataJSON();expect(input.credential).toBe('verified-google-'+nonce);accessToken=input.session_token;expect(accessToken.length).toBeGreaterThanOrEqual(32);completed++;return route.fulfill({json:{verification_required:true,challenge_id:'synthetic-challenge',masked_email:'s***@example.test',expires_at:new Date(Date.now()+600000).toISOString(),resend_at:new Date(Date.now()+60000).toISOString()}});
+   const input=route.request().postDataJSON();expect(input.credential).toBe('verified-google-'+nonce);expect(input.session_token).toBeUndefined();completed++;return route.fulfill({json:{verification_required:true,challenge_id:'synthetic-challenge',masked_email:'s***@example.test',expires_at:new Date(Date.now()+600000).toISOString(),resend_at:new Date(Date.now()+60000).toISOString()}});
   }
-  if(path.endsWith('/auth/verify-email')){expect(route.request().postDataJSON().code).toBe('123456');return route.fulfill({json:account});}
+  if(path.endsWith('/auth/verify-email')){expect(route.request().postDataJSON().code).toBe('123456');expect(route.request().postDataJSON().session_token).toBeUndefined();accessToken='synthetic-server-session-token-'+attempts;return route.fulfill({json:{...account,session_token:accessToken}});}
   if(route.request().method()==='PATCH'){profile={...profile,...route.request().postDataJSON(),version:profile.version+1};return route.fulfill({json:profile});}
   if(path.endsWith('/onboarding/complete')){profile={...profile,...route.request().postDataJSON(),version:profile.version+1,onboarding_complete:true};return route.fulfill({json:profile});}
   if(path.endsWith('/auth/logout')){ended=true;return route.fulfill({json:{ok:true}});}
@@ -71,7 +71,7 @@ test('signed-out deep links and unavailable configuration never expose private U
 test('email-only registration accepts a non-Gmail address and verifies OTP without Google', async ({page}) => {
  let googleRequests=0;
  const account={id:'synthetic-email',name:'Synthetic Account',provider:'email',email:'synthetic-user@outlook.com',email_verified:true};
- let registration:{email:string;password:string;session_token:string;credential?:string}|undefined;
+ let registration:{email:string;password:string;session_token?:string;credential?:string}|undefined;
  page.on('request', request=>{if(request.url().startsWith('https://accounts.google.com/'))googleRequests++;});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
@@ -80,11 +80,13 @@ test('email-only registration accepts a non-Gmail address and verifies OTP witho
   if(path.endsWith('/auth/attempts/cancel'))return route.fulfill({json:{ok:true}});
   if(path.endsWith('/auth/complete')){
    registration=route.request().postDataJSON();
+   expect(registration?.session_token).toBeUndefined();
    return route.fulfill({json:{verification_required:true,challenge_id:'synthetic-challenge',masked_email:'s***@outlook.com',expires_at:new Date(Date.now()+600000).toISOString(),resend_at:new Date(Date.now()+60000).toISOString()}});
   }
   if(path.endsWith('/auth/verify-email')){
    expect(route.request().postDataJSON().code).toBe('123456');
-   return route.fulfill({json:account});
+   expect(route.request().postDataJSON().session_token).toBeUndefined();
+   return route.fulfill({json:{...account,session_token:'synthetic-email-server-session-token-123456'}});
   }
   if(path.endsWith('/auth/session'))return route.fulfill({json:account});
   if(path.endsWith('/school-categories'))return route.fulfill({json:[]});

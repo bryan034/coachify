@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 
@@ -7,7 +8,7 @@ def isolated_parse(data, extension, max_file_bytes):
     try:
         result = subprocess.run([sys.executable, '-m', 'app.workers.parse', extension, str(max_file_bytes)],
                                 input=data, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                timeout=20, check=True)
+                                timeout=20, env={'PATH': os.defpath}, check=True)
         payload = json.loads(result.stdout)
     except subprocess.TimeoutExpired as exc:
         raise ValueError('Processing took too long. Export a simpler PDF or DOCX and retry.') from exc

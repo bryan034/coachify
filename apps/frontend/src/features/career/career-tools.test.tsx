@@ -66,3 +66,19 @@ test('a direct historical link reads its exact version and never requests resear
  expect(vi.mocked(careerApi).mock.calls[0][0]).toBe('/goals/000000000000000000000070/interview-research?research_id=000000000000000000000081');
  expect(screen.queryByRole('button',{name:'Refresh research'})).toBeNull();
 });
+
+test('rejects path-traversal goal query params and unsafe source URL schemes',async()=>{
+ window.history.replaceState(null,'','/career-goal?goal=../../profile&research=../bad');
+ vi.mocked(careerApi).mockResolvedValue({
+  ...research,
+  research:{
+   ...research.research!,
+   sources:[{...research.research!.sources[0],url:'javascript:alert(1)'}],
+  },
+ });
+ render(<InterviewResearch current={current} token="synthetic"/>);
+ await screen.findByRole('heading',{name:'SQL'});
+ expect(vi.mocked(careerApi).mock.calls[0][0]).toBe('/goals/000000000000000000000071/interview-research');
+ fireEvent.click(screen.getByText(/Individual\/anecdotal report/));
+ expect(screen.queryByRole('link',{name:'Reported interview'})).toBeNull();
+});

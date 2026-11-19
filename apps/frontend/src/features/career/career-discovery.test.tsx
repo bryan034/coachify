@@ -4,7 +4,8 @@ import {CareerDiscovery} from './career-discovery';
 import {careerApi} from '@/lib/api/career';
 const push=vi.fn();
 const profileState=vi.hoisted(()=>({token:'synthetic'}));
-vi.mock('next/navigation',()=>({useRouter:()=>({push}),useSearchParams:()=>new URLSearchParams()}));
+const searchParamsState=vi.hoisted(()=>({params:new URLSearchParams()}));
+vi.mock('next/navigation',()=>({useRouter:()=>({push}),useSearchParams:()=>searchParamsState.params}));
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>profileState}));
 vi.mock('@/lib/api/career',()=>({careerApi:vi.fn()}));
 const introduction='Welcome to Career Discovery. Tell me a field, role or work you enjoy.';
@@ -26,7 +27,7 @@ function send(message='Software engineering, keep it broad'){
  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:message}});
  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
 }
-beforeEach(()=>{vi.clearAllMocks();profileState.token='synthetic';});
+beforeEach(()=>{vi.clearAllMocks();profileState.token='synthetic';searchParamsState.params=new URLSearchParams();});
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();});
 
 it('renders bundled clarification as questions without the repeated preface',async()=>{
@@ -57,6 +58,13 @@ it('opens an empty account with the Python introduction and makes no mutation re
  expect(screen.getByRole('log').querySelectorAll('.agent-message')).toHaveLength(1);
  expect(screen.queryByText(decision.reply)).toBeNull();
  expect(vi.mocked(careerApi).mock.calls).toHaveLength(1);
+ expect(vi.mocked(careerApi).mock.calls[0][0]).toBe('/discoveries/current');
+});
+
+it('ignores non-ObjectId session query parameters to prevent client-side path traversal',async()=>{
+ searchParamsState.params=new URLSearchParams('session=../../goals/current');
+ configure(()=>{throw new Error('Unexpected request');});
+ await open();
  expect(vi.mocked(careerApi).mock.calls[0][0]).toBe('/discoveries/current');
 });
 

@@ -14,10 +14,12 @@ class PasswordResetRepository:
         self.verification = verification
         self.resets.create_index('expires_at', expireAfterSeconds=0)
 
-    def request(self, email, settings, mailer):
+    def request(self, email, settings, mailer, background_tasks=None):
         provider = 'local_test' if settings.mode == 'local_test' else 'email'
         identity = provider + ':' + email
         self.verification.limit(settings.otp_secret, 'password-reset-send', identity, 5)
+        if mailer is None:
+            raise HTTPException(503, 'Email delivery unavailable. Please retry.')
         challenge = token_urlsafe(32)
         account = self.accounts.find_one({'identity': identity, 'email_verified': True,
                                           'migration_pending': {'$ne': True}})
@@ -28,14 +30,19 @@ class PasswordResetRepository:
                       'code_hash': keyed(settings.otp_secret, challenge, code),
                       'expires_at': now() + timedelta(minutes=10)}
             self.resets.insert_one(record)
-            try:
-                if mailer is None:
-                    raise HTTPException(503, 'Email delivery unavailable. Please retry.')
-                mailer.send_password_reset(email, code)
-            except Exception:
-                self.resets.delete_one({'_id': record['_id']})
-                raise
-            self.resets.update_one({'_id': record['_id']}, {'$set': {'delivered': True}})
+            def deliver():
+                try:
+                    mailer.send_password_reset(email, code)
+                except Exception:
+                    self.resets.delete_one({'_id': record['_id']})
+                    if background_tasks is None:
+                        raise
+                    return
+                self.resets.update_one({'_id': record['_id']}, {'$set': {'delivered': True}})
+            if background_tasks is not None:
+                background_tasks.add_task(deliver)
+            else:
+                deliver()
         return {'challenge_id': challenge,
                 'message': 'If an email/password account exists for this address, we sent a password reset code.'}
 

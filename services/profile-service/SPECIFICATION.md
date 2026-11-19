@@ -243,9 +243,10 @@ truth. The [README](README.md) lists available endpoints, and the
   requires its exact subject. The conditional replacement rejects concurrent
   changes and invalidates old account-bound proofs without inheriting owner data.
 - Start access using random `flow_id`/`attempt_id`, an increasing generation and
-  `intent`. The server returns a nonce. Complete with those IDs plus a random
-  `session_token`, and either email/password (optional display name on registration)
-  or a Google credential. The browser generates 256-bit secrets with Web Crypto.
+  `intent`. The server returns a nonce. Complete with those IDs and either
+  email/password (optional display name on registration) or a Google credential.
+  The server generates a random `session_token` exclusively server-side upon
+  authentication or email verification and returns it in the completion response.
   Provider attempts initially last ten minutes; a proved credential awaiting email
   verification has a 30-minute access window and TTL; completed flows retain a
   two-day TTL to cover their 24-hour sessions. New generations supersede old attempts.

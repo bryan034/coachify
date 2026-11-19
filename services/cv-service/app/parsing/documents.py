@@ -6,6 +6,9 @@ from defusedxml.common import DefusedXmlException
 from pypdf import PdfReader
 
 
+MAX_DOCX_XML_BYTES = 32 * 1024 * 1024
+
+
 def parse_document(data, extension, max_file_bytes=10 * 1024 * 1024, max_text_chars=100_000):
     if not data:
         raise ValueError('Choose a non-empty PDF or DOCX file.')
@@ -53,7 +56,11 @@ def parse_document(data, extension, max_file_bytes=10 * 1024 * 1024, max_text_ch
                     raise ValueError('Encrypted or macro-containing documents are not supported.')
                 if not {'[Content_Types].xml', 'word/document.xml'} <= names:
                     raise ValueError('The file content does not match DOCX format.')
-                root = ElementTree.fromstring(archive.read('word/document.xml'))
+                with archive.open('word/document.xml') as handle:
+                    xml_bytes = handle.read(MAX_DOCX_XML_BYTES + 1)
+                if len(xml_bytes) > MAX_DOCX_XML_BYTES:
+                    raise ValueError('This DOCX expands beyond the processing limit. Export a simpler CV.')
+                root = ElementTree.fromstring(xml_bytes)
                 namespace = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
                 for number, paragraph in enumerate(root.iter(namespace + 'p'), 1):
                     parts = []

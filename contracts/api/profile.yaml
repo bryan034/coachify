@@ -967,7 +967,7 @@
                 "schema": {
                   "anyOf": [
                     {
-                      "$ref": "#/components/schemas/AccountView"
+                      "$ref": "#/components/schemas/AuthenticatedSession"
                     },
                     {
                       "$ref": "#/components/schemas/PendingVerification"
@@ -979,10 +979,10 @@
             }
           },
           "401": {
-            "description": "Incorrect password or invalid provider credential."
+            "description": "Incorrect email/password or invalid provider credential."
           },
           "404": {
-            "description": "No account found. Choose Create new account."
+            "description": "No account found for Google sign-in. Choose Create new account."
           },
           "422": {
             "description": "Validation Error",
@@ -1020,7 +1020,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountView"
+                  "$ref": "#/components/schemas/AuthenticatedSession"
                 }
               }
             }
@@ -1656,6 +1656,70 @@
         ],
         "title": "AuthConfigView"
       },
+      "AuthenticatedSession": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "email_verified": {
+            "type": "boolean",
+            "title": "Email Verified"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "google",
+              "local_test",
+              "email"
+            ],
+            "title": "Provider"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "cv_review_scope": {
+            "type": "string",
+            "const": "item",
+            "title": "Cv Review Scope",
+            "default": "item"
+          },
+          "cv_review_policy_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Cv Review Policy Version",
+            "default": 1
+          },
+          "session_token": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Session Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email",
+          "email_verified",
+          "provider",
+          "expires_at",
+          "session_token"
+        ],
+        "title": "AuthenticatedSession"
+      },
       "AvailabilityPeriod": {
         "properties": {
           "id": {
@@ -2091,13 +2155,6 @@
             "pattern": "^[A-Za-z0-9_-]+$",
             "title": "Attempt Id"
           },
-          "session_token": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Session Token"
-          },
           "name": {
             "anyOf": [
               {
@@ -2152,8 +2209,7 @@
         "type": "object",
         "required": [
           "flow_id",
-          "attempt_id",
-          "session_token"
+          "attempt_id"
         ],
         "title": "Complete"
       },
@@ -3871,21 +3927,13 @@
             "minLength": 32,
             "pattern": "^[A-Za-z0-9_-]+$",
             "title": "Attempt Id"
-          },
-          "session_token": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Session Token"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "flow_id",
-          "attempt_id",
-          "session_token"
+          "attempt_id"
         ],
         "title": "VerificationAccess"
       },
@@ -3905,13 +3953,6 @@
             "pattern": "^[A-Za-z0-9_-]+$",
             "title": "Attempt Id"
           },
-          "session_token": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Session Token"
-          },
           "challenge_id": {
             "type": "string",
             "maxLength": 128,
@@ -3930,7 +3971,6 @@
         "required": [
           "flow_id",
           "attempt_id",
-          "session_token",
           "challenge_id",
           "code"
         ],

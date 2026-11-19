@@ -18,6 +18,9 @@ def test_password_source_accepts_only_the_gateway_peer(monkeypatch):
     assert source(gateway, client) == client
     assert source(client, '192.0.2.19') == client
     assert source(gateway, 'unrecognized') == gateway
+    monkeypatch.setenv('TRUSTED_PROXY_CIDRS', '10.10.0.0/16')
+    assert source('10.10.1.5', client) == client
+    assert source('10.11.1.5', client) == '10.11.1.5'
 
 
 def production(monkeypatch):

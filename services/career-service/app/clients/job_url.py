@@ -64,6 +64,32 @@ def network_timeout(deadline):
     return min(URL_NETWORK_TIMEOUT,remaining)
 
 
+NAT64_PREFIX = ipaddress.ip_network('64:ff9b::/96')
+NAT64_LOCAL_PREFIX = ipaddress.ip_network('64:ff9b:1::/48')
+
+
+def is_public_ip(raw_address: str) -> bool:
+    addr = ipaddress.ip_address(raw_address)
+    if isinstance(addr, ipaddress.IPv6Address):
+        if addr.ipv4_mapped is not None:
+            addr = addr.ipv4_mapped
+        elif addr.sixtofour is not None:
+            addr = addr.sixtofour
+        elif addr.teredo is not None:
+            return is_public_ip(str(addr.teredo[0])) and is_public_ip(str(addr.teredo[1]))
+        elif addr in NAT64_PREFIX or addr in NAT64_LOCAL_PREFIX:
+            return False
+    return (
+        addr.is_global
+        and not addr.is_multicast
+        and not addr.is_private
+        and not addr.is_loopback
+        and not addr.is_link_local
+        and not addr.is_reserved
+        and not addr.is_unspecified
+    )
+
+
 def destination(url):
     try:
         if any(ord(c) <= 32 or ord(c) == 127 for c in url) or '\\' in url:
@@ -81,7 +107,7 @@ def destination(url):
         raise AccessBlocked()
     try:
         addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-        if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
+        if not addresses or any(not is_public_ip(a[4][0]) for a in addresses):
             raise ValueError('Private, local and internal addresses cannot be imported. Paste the description instead.')
     except socket.gaierror as exc:
         raise ValueError('The website could not be found. Check the URL or paste the description.') from exc
@@ -109,7 +135,13 @@ def request_page(url, deadline):
             return response.status, headers, b''
         if headers.get('content-encoding', 'identity').lower() != 'identity':
             raise ValueError('This website uses an unsupported response format. Paste the description instead.')
-        if int(headers.get('content-length', '0')) > MAX_DOWNLOAD:
+        try:
+            declared_length = int(headers.get('content-length', '0').strip())
+        except ValueError as exc:
+            raise ValueError('The website returned an invalid response size. Paste the description instead.') from exc
+        if declared_length < 0:
+            raise ValueError('The website returned an invalid response size. Paste the description instead.')
+        if declared_length > MAX_DOWNLOAD:
             raise ValueError('The webpage is too large. Paste just the job description instead.')
         data = bytearray()
         while True:

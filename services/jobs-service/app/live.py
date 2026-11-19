@@ -1,4 +1,5 @@
 """Request-time public board reads. Listings are never persisted or served from a catalogue."""
+import copy
 import os
 import re
 import time
@@ -15,29 +16,50 @@ from app.providers import USER_AGENT, ProviderUnavailable, fetch_json, read_boar
 from app.store import EPOCH, _decode_cursor, _encode_cursor, _posting_view
 from app.registry import load_sources
 
+DEFAULT_CACHE_TTL = timedelta(minutes=5)
+
 
 class LiveJobs:
-    def __init__(self, sources=None, fetch=None, clock=None):
+    def __init__(self, sources=None, fetch=None, clock=None, cache_ttl=None):
         self.sources = ([] if os.getenv('ELO_SYNTHETIC_TEST_FIXTURES') == '1' else load_sources()) if sources is None else sources
         self.fetch = fetch
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        if cache_ttl is None:
+            env_ttl = os.getenv('JOBS_CACHE_TTL_SECONDS')
+            self.cache_ttl = timedelta(seconds=max(0, int(env_ttl))) if env_ttl is not None else DEFAULT_CACHE_TTL
+        elif isinstance(cache_ttl, (int, float)):
+            self.cache_ttl = timedelta(seconds=max(0, cache_ttl))
+        else:
+            self.cache_ttl = cache_ttl
         self._lock = Lock()
         self._flight = None
+        self._cache = None
 
     def read(self, query=None):
         # All routes share public board data, never owner-specific application records.
-        # Keep only an active operation: completed results are not cached.
+        # Completed results are cached within the short TTL window; failed reads are never cached.
+        now = self.clock()
         with self._lock:
+            if self._cache is not None and now < self._cache[0]:
+                rows, failures, retrieved_at = self._cache[1]
+                return copy.deepcopy(rows), list(failures), retrieved_at
             leader = self._flight is None
             if leader:
                 self._flight = Future()
             flight = self._flight
         if not leader:
-            return flight.result()
+            rows, failures, retrieved_at = flight.result()
+            return copy.deepcopy(rows), list(failures), retrieved_at
         try:
             result = self._read_boards()
+            with self._lock:
+                if self.cache_ttl > timedelta(0):
+                    self._cache = (result[2] + self.cache_ttl, result)
+                else:
+                    self._cache = None
             flight.set_result(result)
-            return result
+            rows, failures, retrieved_at = result
+            return copy.deepcopy(rows), list(failures), retrieved_at
         except BaseException as error:
             flight.set_exception(error)
             raise
@@ -101,8 +123,13 @@ class LiveJobs:
             if cursor:
                 try:
                     decoded=json.loads(base64.urlsafe_b64decode(cursor))
-                    if decoded['v']!=1 or decoded['context']!=signature:raise ValueError
-                    boundary=tuple(decoded['position'])
+                    if not isinstance(decoded,dict) or decoded.get('v')!=1 or decoded.get('context')!=signature:raise ValueError
+                    pos=decoded.get('position')
+                    if (not isinstance(pos,list) or len(pos)!=3
+                        or isinstance(pos[0],bool) or not isinstance(pos[0],int)
+                        or not isinstance(pos[1],str) or not isinstance(pos[2],str)):
+                        raise ValueError
+                    boundary=tuple(pos)
                 except (ValueError,KeyError,TypeError):raise Problem('The recommended search changed. Start a new search.',409,'search_changed') from None
                 rows=[row for row in rows if order(row)<boundary]
             page=rows[:limit]

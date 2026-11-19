@@ -7,6 +7,9 @@ from pypdf import PdfReader
 from app.schemas.preview import MAX_FILE, MAX_TEXT
 
 
+MAX_DOCX_XML_BYTES = 32 * 1024 * 1024
+
+
 def validate_text(text, *, max_text=MAX_TEXT):
     if not text.strip():
         raise ValueError('No readable text was found. Paste the description or choose another file; scanned PDFs require OCR, which is not available yet.')
@@ -58,7 +61,11 @@ def document_text(data, extension):
                     raise ValueError('Encrypted or macro-containing documents are not supported.')
                 if not {'[Content_Types].xml', 'word/document.xml'} <= names:
                     raise ValueError('The file content does not match DOCX format.')
-                root = ElementTree.fromstring(archive.read('word/document.xml'))
+                with archive.open('word/document.xml') as handle:
+                    xml_bytes = handle.read(MAX_DOCX_XML_BYTES + 1)
+                if len(xml_bytes) > MAX_DOCX_XML_BYTES:
+                    raise ValueError('This DOCX expands beyond the processing limit. Paste the description instead.')
+                root = ElementTree.fromstring(xml_bytes)
                 w = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
                 paragraphs = []
                 for paragraph in root.iter(w + 'p'):

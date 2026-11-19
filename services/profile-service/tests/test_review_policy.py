@@ -18,10 +18,10 @@ class Accounts:
                 'provider': 'email', 'expires_at': datetime.now(timezone.utc), **self.records[token]}
 
     def finish(self, data, settings, verify_google, source):
-        return self.session('free-token', settings)
+        return {**self.session('free-token', settings), 'session_token': 's' * 43}
 
     def verify_email(self, data, settings):
-        return self.session('free-token', settings)
+        return {**self.session('free-token', settings), 'session_token': 's' * 43}
 
 
 def test_session_projects_same_current_review_policy_for_all_accounts():
@@ -39,10 +39,11 @@ def test_session_projects_same_current_review_policy_for_all_accounts():
 
 
 def test_sign_in_and_verification_also_project_current_review_policy():
-    body = {'flow_id': 'f' * 32, 'attempt_id': 'a' * 32, 'session_token': 's' * 32}
+    body = {'flow_id': 'f' * 32, 'attempt_id': 'a' * 32}
     with TestClient(create_app(repository=object(), accounts=Accounts(), capabilities=object())) as client:
         complete = client.post('/api/v1/profile/auth/complete', json=body)
         verify = client.post('/api/v1/profile/auth/verify-email', json={**body, 'challenge_id': 'c' * 32, 'code': '123456'})
         for response in (complete, verify):
             assert response.status_code == 200
             assert (response.json()['cv_review_scope'], response.json()['cv_review_policy_version']) == ('item', 1)
+            assert response.json()['session_token'] == 's' * 43

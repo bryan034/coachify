@@ -1,8 +1,9 @@
+import os
 from typing import Annotated, Literal
 from datetime import datetime
-from ipaddress import ip_address
+from ipaddress import ip_address, ip_network
 from socket import gaierror, getaddrinfo
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from app.core.auth import bearer, verify_google
@@ -21,7 +22,6 @@ class Begin(Attempt):
     generation: int = Field(strict=True, ge=1, le=9007199254740991)
 
 class Complete(Attempt):
-    session_token: Secret
     name: str | None = Field(None, max_length=80)
     email: str | None = Field(None, max_length=254)
     password: str | None = Field(None, min_length=8, max_length=128)
@@ -33,7 +33,7 @@ class Complete(Attempt):
         return normalize_email(value) if value is not None else None
 
 class VerificationAccess(Attempt):
-    session_token: Secret
+    pass
 
 class Verify(VerificationAccess):
     challenge_id: Secret
@@ -62,6 +62,9 @@ class AccountView(BaseModel):
         if isinstance(value, dict):
             return {**value, 'cv_review_scope': 'item', 'cv_review_policy_version': 1}
         return value
+
+class AuthenticatedSession(AccountView):
+    session_token: Secret
 
 class PendingVerification(BaseModel):
     verification_required: Literal[True]
@@ -107,17 +110,34 @@ def repo(request: Request):
     return request.app.state.accounts
 
 
+def _trusted_proxy(peer: str) -> bool:
+    configured = os.getenv('TRUSTED_PROXY_CIDRS', '')
+    if configured.strip():
+        try:
+            peer_ip = ip_address(peer)
+            for entry in configured.split(','):
+                cidr = entry.strip()
+                if cidr and peer_ip in ip_network(cidr, strict=False):
+                    return True
+        except ValueError:
+            pass
+    try:
+        return peer in {address[4][0] for address in getaddrinfo('gateway', None)}
+    except gaierror:
+        return False
+
+
 def password_source(request: Request):
     peer = request.client.host if request.client else 'unknown'
     forwarded = request.headers.get('x-real-ip')
     if forwarded:
-        # The Compose gateway replaces this header. Direct clients and other
-        # backend services cannot choose the address used for password limits.
+        # The Compose gateway or configured trusted proxy replaces this header.
+        # Direct clients and other backend services cannot spoof password limits.
         try:
             source = str(ip_address(forwarded))
-            if peer in {address[4][0] for address in getaddrinfo('gateway', None)}:
+            if _trusted_proxy(peer):
                 return source
-        except (ValueError, gaierror):
+        except ValueError:
             pass
     return peer
 
@@ -128,8 +148,8 @@ def local_accounts(request: Request, accounts=Depends(repo)):
     return accounts.local_accounts()
 
 @router.post('/forgot-password', response_model=ResetReceipt)
-def forgot_password(data: ResetRequest, request: Request, accounts=Depends(repo)):
-    return accounts.password_reset.request(data.email, request.app.state.auth_settings, accounts.mailer)
+def forgot_password(data: ResetRequest, request: Request, background_tasks: BackgroundTasks, accounts=Depends(repo)):
+    return accounts.password_reset.request(data.email, request.app.state.auth_settings, accounts.mailer, background_tasks)
 
 @router.post('/reset-password', response_model=Done)
 def reset_password(data: ResetComplete, request: Request, accounts=Depends(repo)):
@@ -144,14 +164,14 @@ def cancel(data: Attempt, accounts=Depends(repo)):
     accounts.cancel(data)
     return {'ok': True}
 
-@router.post('/complete', response_model=AccountView | PendingVerification, responses={
-    401: {'description': 'Incorrect password or invalid provider credential.'},
-    404: {'description': 'No account found. Choose Create new account.'},
+@router.post('/complete', response_model=AuthenticatedSession | PendingVerification, responses={
+    401: {'description': 'Incorrect email/password or invalid provider credential.'},
+    404: {'description': 'No account found for Google sign-in. Choose Create new account.'},
 })
 def complete(data: Complete, request: Request, accounts=Depends(repo)):
     return accounts.finish(data, request.app.state.auth_settings, verify_google, password_source(request))
 
-@router.post('/verify-email', response_model=AccountView)
+@router.post('/verify-email', response_model=AuthenticatedSession)
 def verify(data: Verify, request: Request, accounts=Depends(repo)):
     return accounts.verify_email(data, request.app.state.auth_settings)
 

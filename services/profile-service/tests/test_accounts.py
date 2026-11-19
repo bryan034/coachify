@@ -48,11 +48,11 @@ def complete(client, attempt, **fields):
         account = client.app.state.accounts.accounts.find_one({'id': selected}) if selected else None
         fields.setdefault('email', account['email'] if account else uuid4().hex + '@example.test')
         fields.setdefault('password', PASSWORD)
-    body = {'flow_id': attempt['flow_id'], 'attempt_id': attempt['attempt_id'], 'session_token': fields.pop('session_token', token_urlsafe(32)), **fields}
+    body = {'flow_id': attempt['flow_id'], 'attempt_id': attempt['attempt_id'], **fields}
     response=client.post(BASE + '/auth/complete', json=body)
     if response.status_code==200 and response.json().get('verification_required'):
         code=client.app.state.accounts.mailer.messages[-1][1]
-        response=client.post(BASE+'/auth/verify-email',json={k:body[k] for k in ('flow_id','attempt_id','session_token')}|{'challenge_id':response.json()['challenge_id'],'code':code})
+        response=client.post(BASE+'/auth/verify-email',json={k:body[k] for k in ('flow_id','attempt_id')}|{'challenge_id':response.json()['challenge_id'],'code':code})
     return response, body
 
 
@@ -60,7 +60,7 @@ def register(client, name='Synthetic Account'):
     attempt = begin(client)
     response, body = complete(client, attempt, name=name)
     assert response.status_code == 200, response.text
-    return response.json(), {'Authorization': 'Bearer ' + body['session_token']}, body, attempt
+    return response.json(), {'Authorization': 'Bearer ' + response.json()['session_token']}, body, attempt
 
 
 def test_registration_retries_names_and_private_ownership(setup):
@@ -77,8 +77,8 @@ def test_registration_retries_names_and_private_ownership(setup):
     assert client.get(BASE + '/versions/1', headers=other).status_code == 404
     assert len(client.get(BASE + '/auth/local-accounts').json()) == 2
     assert client.get(BASE + '?owner=other', headers={**headers, 'X-User-Id': b['id']}).json()['version'] == 1
-    assert repo.sessions.find_one({'_id': digest(body['session_token'])})
-    assert not repo.sessions.find_one({'token': body['session_token']})
+    assert repo.sessions.find_one({'_id': digest(a['session_token'])})
+    assert not repo.sessions.find_one({'token': a['session_token']})
 
 
 def test_cv_review_policy_is_the_same_for_all_accounts(setup):
@@ -103,9 +103,9 @@ def test_logout_revokes_replay_and_preserves_history_and_reentry(setup):
     assert client.get(BASE, headers=headers).status_code == 401
     assert client.get(BASE + '/auth/session', headers=headers).status_code == 401
     attempt = begin(client, 'login')
-    response, login = complete(client, attempt, account_id=a['id'])
+    response, _ = complete(client, attempt, account_id=a['id'])
     assert response.json()['id'] == a['id']
-    assert client.get(BASE + '/versions/1', headers={'Authorization': 'Bearer ' + login['session_token']}).json()['occupational_status'] == 'employed'
+    assert client.get(BASE + '/versions/1', headers={'Authorization': 'Bearer ' + response.json()['session_token']}).json()['occupational_status'] == 'employed'
 
 
 def test_stale_logout_cannot_revoke_new_account_session(setup):
@@ -113,9 +113,9 @@ def test_stale_logout_cannot_revoke_new_account_session(setup):
     a, headers, _, attempt = register(client)
     client.post(BASE + '/auth/logout', headers=headers)
     next_attempt = begin(client, flow=attempt['flow_id'], generation=2)
-    b, body = complete(client, next_attempt, name='Another account')
+    b, _ = complete(client, next_attempt, name='Another account')
     client.post(BASE + '/auth/logout', headers=headers)
-    assert client.get(BASE + '/auth/session', headers={'Authorization': 'Bearer ' + body['session_token']}).json()['id'] == b.json()['id']
+    assert client.get(BASE + '/auth/session', headers={'Authorization': 'Bearer ' + b.json()['session_token']}).json()['id'] == b.json()['id']
 
 
 def test_cancelled_superseded_out_of_order_and_changed_retries(setup):
@@ -128,19 +128,19 @@ def test_cancelled_superseded_out_of_order_and_changed_retries(setup):
     assert response.status_code == 200
     assert client.post(BASE + '/auth/complete', json={**body, 'name': 'Changed'}).status_code == 409
     client.post(BASE + '/auth/attempts/cancel', json={k: second[k] for k in ('flow_id', 'attempt_id')})
-    assert client.get(BASE, headers={'Authorization': 'Bearer ' + body['session_token']}).status_code == 401
+    assert client.get(BASE, headers={'Authorization': 'Bearer ' + response.json()['session_token']}).status_code == 401
     assert client.post(BASE + '/auth/complete', json=body).status_code == 409
 
 
 @pytest.mark.parametrize('mode', ['local_test', 'email', 'google'])
-def test_unknown_email_login_directs_to_registration_without_creating_an_account(setup, mode):
+def test_unknown_email_login_returns_uniform_401_without_creating_an_account(setup, mode):
     from dataclasses import replace
     client, repo = setup
     client.app.state.auth_settings = replace(client.app.state.auth_settings, mode=mode)
     attempt = begin(client, 'login')
     response, _ = complete(client, attempt, email='new@example.test')
-    assert response.status_code == 404
-    assert response.json()['detail'] == 'No account was found for this email address. Create a new account to get started.'
+    assert response.status_code == 401
+    assert response.json()['detail'] == 'Email or password is incorrect.'
     assert repo.accounts.count_documents({}) == 0
     assert repo.sessions.count_documents({}) == 0
     assert repo.mailer.messages == []
@@ -159,8 +159,8 @@ def test_registration_and_sign_in_accept_password_length_boundaries(setup, passw
 
 def test_expiry_and_direct_google_bearer_rejected(setup):
     client, repo = setup
-    _, headers, body, attempt = register(client)
-    repo.sessions.update_one({'_id': digest(body['session_token'])}, {'$set': {'expires_at': now() - timedelta(seconds=1)}})
+    a, headers, _, _ = register(client)
+    repo.sessions.update_one({'_id': digest(a['session_token'])}, {'$set': {'expires_at': now() - timedelta(seconds=1)}})
     assert client.get(BASE, headers=headers).status_code == 401
     assert client.get(BASE, headers={'Authorization': 'Bearer google-id-token'}).status_code == 401
     pending = begin(client)
@@ -183,19 +183,19 @@ def test_google_verified_registration_existing_identity_and_name_changes(setup):
     assert client.get(BASE + '/auth/local-accounts').status_code == 404
     attempt = begin(client)
     with patch('app.core.auth.id_token.verify_oauth2_token', return_value=claims(attempt)):
-        response, body = complete(client, attempt, credential='google-credential')
+        response, _ = complete(client, attempt, credential='google-credential')
     assert response.status_code == 200
     user = response.json()
-    headers = {'Authorization': 'Bearer ' + body['session_token']}
+    headers = {'Authorization': 'Bearer ' + user['session_token']}
     client.patch(BASE, headers=headers, json={'expected_version': 0, 'occupational_status': 'employed'})
     existing = begin(client)
     with patch('app.core.auth.id_token.verify_oauth2_token', return_value=claims(existing, name='Changed name', email='changed@example.test')):
         assert complete(client, existing, credential='different')[0].status_code == 409
     login = begin(client, 'login')
     with patch('app.core.auth.id_token.verify_oauth2_token', return_value=claims(login, name='Changed', email='another@example.test')):
-        signed_in, body = complete(client, login, credential='verified')
+        signed_in, _ = complete(client, login, credential='verified')
     assert signed_in.json()['id'] == user['id']
-    assert client.get(BASE, headers={'Authorization': 'Bearer ' + body['session_token']}).json()['version'] == 1
+    assert client.get(BASE, headers={'Authorization': 'Bearer ' + signed_in.json()['session_token']}).json()['version'] == 1
     assert repo.accounts.count_documents({}) == 1
 
 
@@ -213,10 +213,9 @@ def test_retry_after_committed_account_but_failed_session_write(setup):
     client, repo = setup
     google(client)
     attempt = begin(client)
-    token = token_urlsafe(32)
     with patch('app.core.auth.id_token.verify_oauth2_token', return_value=claims(attempt)):
-        with patch.object(repo.sessions, 'update_one', side_effect=AutoReconnect('synthetic outage')):
-            failed, body = complete(client, attempt, credential='verified', session_token=token)
+        with patch.object(repo.sessions, 'insert_one', side_effect=AutoReconnect('synthetic outage')):
+            failed, body = complete(client, attempt, credential='verified')
         assert failed.status_code == 503
         assert repo.accounts.count_documents({}) == 1
         assert client.post(BASE + '/auth/complete', json=body).status_code == 200
@@ -234,7 +233,6 @@ def test_concurrent_google_creation_has_one_account(setup):
         proofs = []
         for attempt in attempts:
             access = {key: attempt[key] for key in ('flow_id', 'attempt_id')}
-            access['session_token'] = token_urlsafe(32)
             pending = client.post(BASE + '/auth/complete', json={**access, 'credential': 'verified'})
             assert pending.status_code == 200
             proofs.append({**access, 'challenge_id': pending.json()['challenge_id'], 'code': repo.mailer.messages[-1][1]})
@@ -255,9 +253,9 @@ def test_logout_or_cancel_during_google_verification_cannot_start_session(setup)
         repo.cancel(type('Data', (), attempt))
         return {'sub': 'cancelled', 'name': 'Synthetic', 'email':'cancelled@example.test','email_verified':True}
     with patch('app.api.v1.accounts.verify_google', side_effect=verify):
-        response, body = complete(client, attempt, credential='verified')
+        response, _ = complete(client, attempt, credential='verified')
     assert response.status_code == 409
-    assert client.get(BASE, headers={'Authorization': 'Bearer ' + body['session_token']}).status_code == 401
+    assert repo.sessions.count_documents({}) == 0
 
 
 def test_invalid_fields_and_missing_google_configuration_never_fall_back(setup):
@@ -307,12 +305,12 @@ def test_logout_storage_failure_is_retryable_without_deleting_saved_data(setup):
 
 def pending_account(client, email=None, password=PASSWORD):
     attempt=begin(client)
-    body={'flow_id':attempt['flow_id'],'attempt_id':attempt['attempt_id'],'session_token':token_urlsafe(32),
+    body={'flow_id':attempt['flow_id'],'attempt_id':attempt['attempt_id'],
           'name':'Synthetic pending','email':email or uuid4().hex+'@example.test','password':password}
     response=client.post(BASE+'/auth/complete',json=body)
     assert response.status_code==200,response.text
     assert response.json()['verification_required']
-    verify={k:body[k] for k in ('flow_id','attempt_id','session_token')}
+    verify={k:body[k] for k in ('flow_id','attempt_id')}
     verify.update(challenge_id=response.json()['challenge_id'],code=client.app.state.accounts.mailer.messages[-1][1])
     return body,verify,response.json()
 
@@ -325,8 +323,8 @@ def test_unproved_registration_does_not_reserve_email_or_create_account(setup):
     verified = client.post(BASE + '/auth/verify-email', json=proof)
     assert verified.status_code == 200, verified.text
     assert repo.accounts.count_documents({}) == 1
-    assert client.get(BASE + '/auth/session', headers={'Authorization': 'Bearer ' + attacker['session_token']}).status_code == 401
-    assert client.get(BASE + '/auth/session', headers={'Authorization': 'Bearer ' + rightful['session_token']}).status_code == 200
+    assert repo.sessions.count_documents({}) == 1
+    assert client.get(BASE + '/auth/session', headers={'Authorization': 'Bearer ' + verified.json()['session_token']}).status_code == 200
 
 
 def legacy_reservation(client, repo, email=None):
@@ -342,9 +340,7 @@ def legacy_reservation(client, repo, email=None):
 def test_pending_account_requires_email_password_and_otp_before_private_session(setup):
     client,repo=setup
     body,verify,pending=pending_account(client)
-    headers={'Authorization':'Bearer '+body['session_token']}
-    assert client.get(BASE,headers=headers).status_code==401
-    assert client.get(BASE+'/auth/session',headers=headers).status_code==401
+    assert repo.sessions.count_documents({}) == 0
     assert repo.accounts.count_documents({}) == 0
     flow = repo.flows.find_one({'_id':digest(body['flow_id'])})
     account = flow['registration_candidate']
@@ -357,17 +353,18 @@ def test_pending_account_requires_email_password_and_otp_before_private_session(
     assert result.status_code==200
     assert result.json()['email_verified'] is True
     assert 'registration_candidate' not in repo.flows.find_one({'_id':flow['_id']})
+    headers={'Authorization':'Bearer '+result.json()['session_token']}
     assert client.get(BASE,headers=headers).json()['onboarding_state']=='missing'
     assert client.post(BASE+'/auth/verify-email',json=verify).json()==result.json()
-    assert client.post(BASE+'/auth/verify-email',json={**verify,'session_token':token_urlsafe(32)}).status_code==409
+    assert client.post(BASE+'/auth/verify-email',json={**verify,'session_token':token_urlsafe(32)}).status_code==422
 
 
 def test_invalid_email_password_and_owner_payloads_do_not_create_accounts(setup):
     client,repo=setup
     attempt=begin(client)
-    base={'flow_id':attempt['flow_id'],'attempt_id':attempt['attempt_id'],'session_token':token_urlsafe(32),
+    base={'flow_id':attempt['flow_id'],'attempt_id':attempt['attempt_id'],
           'email':'valid@example.test','password':PASSWORD}
-    for changes in [{'email':'not-an-email'},{'password':'short'},{'password':'x'*129},{'owner':'someone-else'}]:
+    for changes in [{'email':'not-an-email'},{'password':'short'},{'password':'x'*129},{'owner':'someone-else'},{'session_token':token_urlsafe(32)}]:
         response=client.post(BASE+'/auth/complete',json={**base,**changes})
         assert response.status_code==422
         assert PASSWORD not in response.text
@@ -385,13 +382,13 @@ def test_wrong_otp_exhaustion_and_expiry_fail_closed(setup):
     body,verify,_=pending_account(client)
     repo.flows.update_one({'_id':digest(body['flow_id'])},{'$set':{'code_expires_at':now()-timedelta(seconds=1)}})
     assert client.post(BASE+'/auth/verify-email',json=verify).status_code==400
-    assert client.get(BASE,headers={'Authorization':'Bearer '+body['session_token']}).status_code==401
+    assert repo.sessions.count_documents({}) == 0
 
 
 def test_resend_cooldown_invalidates_old_code_and_preserves_guesses(setup):
     client,repo=setup
     body,verify,_=pending_account(client)
-    access={k:body[k] for k in ('flow_id','attempt_id','session_token')}
+    access={k:body[k] for k in ('flow_id','attempt_id')}
     assert client.post(BASE+'/auth/resend-verification',json=access).status_code==429
     wrong='000000' if verify['code']!='000000' else '111111'
     client.post(BASE+'/auth/verify-email',json={**verify,'code':wrong})
@@ -407,7 +404,7 @@ def test_resend_cooldown_invalidates_old_code_and_preserves_guesses(setup):
 def test_resend_delivery_cap_is_enforced_per_email(setup):
     client,repo=setup
     body,verify,_=pending_account(client)
-    access={k:body[k] for k in ('flow_id','attempt_id','session_token')}
+    access={k:body[k] for k in ('flow_id','attempt_id')}
     for _ in range(4):
         repo.flows.update_one({'_id':digest(body['flow_id'])},{'$set':{'resend_at':now()-timedelta(seconds=1)}})
         assert client.post(BASE+'/auth/resend-verification',json=access).status_code==200
@@ -426,7 +423,7 @@ def test_delivery_failure_and_cancelled_codes_never_activate_accounts(setup):
     assert repo.accounts.count_documents({})==0
     retry=client.post(BASE+'/auth/complete',json=body)
     assert retry.json()['verification_required']
-    verify={k:body[k] for k in ('flow_id','attempt_id','session_token')}
+    verify={k:body[k] for k in ('flow_id','attempt_id')}
     verify.update(challenge_id=retry.json()['challenge_id'],code=repo.mailer.messages[-1][1])
     client.post(BASE+'/auth/attempts/cancel',json={k:body[k] for k in ('flow_id','attempt_id')})
     assert client.post(BASE+'/auth/verify-email',json=verify).status_code==409
@@ -453,8 +450,8 @@ def test_email_case_normalization_password_check_and_no_duplicate_registration(s
     unknown,_=complete(client,begin(client,'login'),email='unknown@example.test',password=PASSWORD)
     assert wrong.status_code==401
     assert wrong.json()['detail']=='Email or password is incorrect.'
-    assert unknown.status_code==404
-    assert 'No account was found for this email address' in unknown.json()['detail']
+    assert unknown.status_code==401
+    assert unknown.json()['detail']=='Email or password is incorrect.'
     good,_=complete(client,begin(client,'login'),email='CASE.TEST@example.test',password=PASSWORD)
     assert good.json()['id']==response.json()['id']
     duplicate,_=complete(client,begin(client),email='case.test@example.test',password='A different passphrase')
@@ -501,7 +498,7 @@ def test_pending_registration_retries_keep_one_candidate_and_cannot_change_crede
     assert repo.accounts.count_documents({}) == 0
     login, _ = complete(client, begin(client, 'login'), email=body['email'])
     # An unverified registration candidate has not created an account yet.
-    assert login.status_code == 404
+    assert login.status_code == 401
     assert client.post(BASE + '/auth/verify-email', json=proof).status_code == 200
 
 
@@ -551,7 +548,7 @@ def test_legacy_reservation_reclaim_uses_new_owner_and_invalidates_old_otp(setup
     assert repo.accounts.count_documents({}) == 1
     assert client.post(BASE + '/auth/verify-email', json=old_proof).status_code == 409
     assert client.post(BASE + '/auth/complete', json=old_body).status_code == 409
-    assert client.get(BASE, headers={'Authorization': 'Bearer ' + body['session_token']}).json()['version'] == 0
+    assert client.get(BASE, headers={'Authorization': 'Bearer ' + verified.json()['session_token']}).json()['version'] == 0
     rejected, _ = complete(client, begin(client, 'login'), email=body['email'], password=old_body['password'])
     assert rejected.status_code == 401
     accepted, _ = complete(client, begin(client, 'login'), email=body['email'], password=body['password'])
@@ -622,7 +619,6 @@ def test_unverified_google_reservation_requires_its_subject_login_and_is_not_rec
     google(client)
     attempt = begin(client)
     access = {key: attempt[key] for key in ('flow_id', 'attempt_id')}
-    access['session_token'] = token_urlsafe(32)
     with patch('app.core.auth.id_token.verify_oauth2_token', return_value=claims(attempt)):
         pending = client.post(BASE + '/auth/complete', json={**access, 'credential': 'verified'})
     assert pending.status_code == 200
@@ -743,7 +739,7 @@ def test_password_attempt_rate_limit_is_enforced_without_account_creation(setup)
     email='limited@example.test'
     for _ in range(10):
         response,_=complete(client,begin(client,'login'),email=email,password=PASSWORD)
-        assert response.status_code==404
+        assert response.status_code==401
     assert complete(client,begin(client,'login'),email=email,password=PASSWORD)[0].status_code==429
     assert repo.accounts.count_documents({})==0
 
@@ -760,17 +756,17 @@ def test_failed_password_sources_step_up_without_locking_out_mailbox_owner(setup
             limited, _ = complete(client, begin(client, 'login'), email=account['email'])
             assert limited.status_code == 429
     attempt = begin(client, 'login')
-    body = {'flow_id': attempt['flow_id'], 'attempt_id': attempt['attempt_id'], 'session_token': token_urlsafe(32),
+    body = {'flow_id': attempt['flow_id'], 'attempt_id': attempt['attempt_id'],
             'email': account['email'], 'password': PASSWORD}
     pending = client.post(BASE + '/auth/complete', json=body)
     assert pending.status_code == 200 and pending.json()['verification_required'] is True
     assert client.post(BASE + '/auth/complete', json=body).json() == pending.json()
-    headers = {'Authorization': 'Bearer ' + body['session_token']}
-    assert client.get(BASE + '/auth/session', headers=headers).status_code == 401
     assert client.get(BASE + '/auth/session', headers=existing_session).status_code == 200
-    proof = {k: body[k] for k in ('flow_id', 'attempt_id', 'session_token')}
+    proof = {k: body[k] for k in ('flow_id', 'attempt_id')}
     proof.update(challenge_id=pending.json()['challenge_id'], code=repo.mailer.messages[-1][1])
-    assert client.post(BASE + '/auth/verify-email', json=proof).json()['id'] == account['id']
+    verified = client.post(BASE + '/auth/verify-email', json=proof)
+    assert verified.json()['id'] == account['id']
+    headers = {'Authorization': 'Bearer ' + verified.json()['session_token']}
     assert client.get(BASE + '/auth/session', headers=headers).status_code == 200
 
 
@@ -778,7 +774,7 @@ def test_password_failure_limit_across_accounts_is_scoped_to_source(setup, monke
     client, _ = setup
     account, _, _, _ = register(client)
     monkeypatch.setattr('app.repositories.verification.SOURCE_FAILURE_LIMIT', 1)
-    assert complete(client, begin(client, 'login'), email='other@example.test')[0].status_code == 404
+    assert complete(client, begin(client, 'login'), email='other@example.test')[0].status_code == 401
     assert complete(client, begin(client, 'login'), email=account['email'])[0].status_code == 429
     with patch('app.api.v1.accounts.password_source', return_value='192.0.2.3'):
         accepted, _ = complete(client, begin(client, 'login'), email=account['email'])
@@ -833,11 +829,11 @@ def test_legacy_google_account_retains_owner_and_history_after_email_verificatio
     google(client)
     attempt=begin(client,'login')
     with patch('app.core.auth.id_token.verify_oauth2_token',return_value=claims(attempt)):
-        response,body=complete(client,attempt,credential='verified')
+        response,_=complete(client,attempt,credential='verified')
     assert response.status_code==200,response.text
     assert response.json()['id']=='legacy-google-id'
     assert response.json()['email_verified']
-    restored=client.get(BASE,headers={'Authorization':'Bearer '+body['session_token']}).json()
+    restored=client.get(BASE,headers={'Authorization':'Bearer '+response.json()['session_token']}).json()
     assert restored['version']==1 and restored['occupational_status']=='employed'
     assert repo.accounts.count_documents({})==1
 
@@ -857,7 +853,6 @@ def test_email_mode_accepts_any_domain_requires_otp_and_rejects_google(setup):
         body, verify, response = pending_account(client, email=email)
         assert response['verification_required'] is True
         assert repo.mailer.messages[-1][0] == email
-        assert client.get(BASE, headers={'Authorization':'Bearer '+body['session_token']}).status_code == 401
         verified = client.post(BASE+'/auth/verify-email', json=verify)
         assert verified.status_code == 200 and verified.json()['provider'] == 'email'
         assert verified.json()['email'] == email and verified.json()['email_verified'] is True

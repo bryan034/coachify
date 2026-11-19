@@ -15,7 +15,8 @@ def run_preview(kind, data, extension=''):
     try:
         result = subprocess.run([sys.executable, '-m', 'app.workers.preview', kind, extension],
             input=data, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            timeout=URL_WORKER_TIMEOUT if kind=='url' else DOCUMENT_WORKER_TIMEOUT, check=True)
+            timeout=URL_WORKER_TIMEOUT if kind=='url' else DOCUMENT_WORKER_TIMEOUT,
+            env={'PATH': os.defpath}, check=True)
         payload = json.loads(result.stdout)
     except subprocess.TimeoutExpired as exc:
         raise HTTPException(422, 'Processing took too long. Retry, paste the description or choose another document.') from exc

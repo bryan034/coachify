@@ -72,6 +72,7 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["Pragma"] = "no-cache"
+        response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 
     @app.exception_handler(RequestValidationError)

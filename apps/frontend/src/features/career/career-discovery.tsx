@@ -17,16 +17,18 @@ type Summary={skills:{name:string;requirement_type:string;learning_priority:stri
 type Session={messages?:{role:'user'|'assistant';content:string}[];summary?:Summary|null;id:string;version:number;status:string;stage:string|null;decision:Decision|null;scope:Scope|null;related_roles:string[];sources:ResearchSource[];stats:{name:string;requirement_type:string;mention_count:number;sample_size:number;source_ids:string[]}[];warnings:string[];listings_analysed:number;employers_analysed:number;coverage:string|null;error_code:string|null;limit_scope:string|null;provider:string|null;retry_after:number|null;review:SavedReview|null};
 type View={available:boolean;session:Session|null;introduction?:string};
 const phases:Record<string,string>={plan_research:'Planning job-listing searches',search_job_listings:'Finding relevant job listings',assess_job_listings:'Checking listing relevance and employer coverage',extract_requirements:'Extracting supported requirements',aggregate_requirements:'Comparing requirements across listings',generate_career_target:'Preparing your target for review'};
+const OBJECT_ID_PATTERN=/^[0-9a-f]{24}$/;
 export function CareerDiscovery(){
  const {token}=useProfile();
  return <DiscoveryConversation key={token||''} token={token}/>;
 }
 function DiscoveryConversation({token}:{token:string|undefined}){
  const params=useSearchParams();
- const requestedSession=params.get('session');
+ const rawSession=params.get('session');
+ const requestedSession=rawSession&&OBJECT_ID_PATTERN.test(rawSession)?rawSession:null;
  const [sessions,setSessions]=useState<{id:string;title:string;last_message:string}[]>([]),[historyOpen,setHistoryOpen]=useState(false);
  useEffect(()=>{if(!token||!historyOpen)return;const abort=new AbortController();void careerApi<{items:typeof sessions}>('/discoveries',token,{signal:abort.signal}).then(value=>{if(!abort.signal.aborted)setSessions(value.items);}).catch(()=>{});return()=>abort.abort();},[token,historyOpen]);
- async function openHistory(id:string){if(!token)return;try{receive(await careerApi<View>(`/discoveries/${id}`,token));setHistoryOpen(false);}catch{setError('This conversation could not be loaded. Try again.');}}
+ async function openHistory(id:string){if(!token||!OBJECT_ID_PATTERN.test(id))return;try{receive(await careerApi<View>(`/discoveries/${encodeURIComponent(id)}`,token));setHistoryOpen(false);}catch{setError('This conversation could not be loaded. Try again.');}}
  async function publishDirection(){if(!token||!view?.session)return;setBusy(true);setError('');try{const current=await careerApi<CurrentGoal>('/goals/current',token);const next=await post<View>(`/discoveries/${view.session.id}/publish`,{expected_version:view.session.version,expected_selection_version:current.selection_version});receive(next);}catch{setError('Your goal or discovery changed. Reload before trying again.');}finally{setBusy(false);}}
 
  const [introduction,setIntroduction]=useState('');
@@ -47,7 +49,7 @@ function DiscoveryConversation({token}:{token:string|undefined}){
   currentView.current=value;setSeconds(value.session?.retry_after||0);setView(value);
  }
  useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
- useEffect(()=>{if(!token)return;const abort=new AbortController();const requestGeneration=generation.current;const id=currentView.current?.session?.id;void careerApi<View>(id?`/discoveries/${id}`:requestedSession?`/discoveries/${requestedSession}`:'/discoveries/current',token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted&&requestGeneration===generation.current){receive(v,true);setError('');}}).catch(()=>{if(!abort.signal.aborted&&requestGeneration===generation.current)setError('Could not load your discovery. Retry to recover saved progress.');});return()=>abort.abort();},[token,reload]);
+ useEffect(()=>{if(!token)return;const abort=new AbortController();const requestGeneration=generation.current;const id=currentView.current?.session?.id;const validId=id&&OBJECT_ID_PATTERN.test(id)?id:null;void careerApi<View>(validId?`/discoveries/${encodeURIComponent(validId)}`:requestedSession?`/discoveries/${encodeURIComponent(requestedSession)}`:'/discoveries/current',token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted&&requestGeneration===generation.current){receive(v,true);setError('');}}).catch(()=>{if(!abort.signal.aborted&&requestGeneration===generation.current)setError('Could not load your discovery. Retry to recover saved progress.');});return()=>abort.abort();},[token,reload]);
  useEffect(()=>{if(!token||!session||busy||!['researching','waiting'].includes(session.status))return;const abort=new AbortController();const timer=setTimeout(()=>{void careerApi<View>(`/discoveries/${session.id}`,token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted)receive(v);}).catch(()=>{if(!abort.signal.aborted)setError('Connection interrupted. Saved research can resume when you reload.');});},2000);return()=>{clearTimeout(timer);abort.abort();};},[token,session,busy]);
  useEffect(()=>{setSeconds(session?.retry_after||0);const timer=setInterval(()=>setSeconds(v=>Math.max(0,v-1)),1000);return()=>clearInterval(timer);},[session?.retry_after]);
  async function post<T>(path:string,body:unknown,method='POST'){

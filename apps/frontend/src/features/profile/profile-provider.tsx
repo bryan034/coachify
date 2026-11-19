@@ -4,7 +4,8 @@ import { ApiError, profileApi } from '@/lib/api/profile';
 import type { Category, Profile } from './types';
 import { errorText } from '@/lib/errors';
 export type Account = { id: string; name: string; email?: string; email_verified?: boolean; provider: 'google' | 'local_test' | 'email'; expires_at?: string };
-type Access = { flow_id: string; attempt_id: string; session_token: string; nonce: string; epoch: string };
+type AuthenticatedAccount = Account & { session_token: string };
+type Access = { flow_id: string; attempt_id: string; nonce: string; epoch: string };
 type Mode = 'google' | 'email' | 'local_test';
 export type Verification = { verification_required: true; challenge_id: string; masked_email: string; expires_at: string; resend_at: string };
 type Credentials = { name?: string; email?: string; password?: string; credential?: string };
@@ -75,7 +76,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   try {
    await profileApi('/auth/logout', { method: 'POST' }, pending);
    if (sessionStorage.getItem(PENDING) === pending) { sessionStorage.removeItem(PENDING); setLogoutError(''); }
-  } catch {
+  } catch (error) {
+   if (error instanceof ApiError && error.status === 401) {
+    if (sessionStorage.getItem(PENDING) === pending) { sessionStorage.removeItem(PENDING); setLogoutError(''); }
+    return;
+   }
    if (sessionStorage.getItem(PENDING) === pending) setLogoutError('Server sign-out could not be confirmed. This browser remains locked. Retry sign-out or explicitly sign in again.');
   }
  }, []);
@@ -208,7 +213,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const epoch = nextEpoch();
   let flow = localStorage.getItem('elo.flow');
   if (!flow) { flow = secret(); localStorage.setItem('elo.flow', flow); }
-  const access: Access = { flow_id: flow, attempt_id: secret(), session_token: secret(), nonce: '', epoch };
+  const access: Access = { flow_id: flow, attempt_id: secret(), nonce: '', epoch };
   attempt.current = access;
   const result = await profileApi<{ nonce: string }>('/auth/attempts', { method: 'POST', body: JSON.stringify({ flow_id: flow, attempt_id: access.attempt_id, generation: Number(epoch), intent }) });
   if (attempt.current !== access || localStorage.getItem(EPOCH) !== epoch) {
@@ -217,17 +222,21 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }
   access.nonce = result.nonce; return access;
  }, [cancelAccess, clear]);
- const installAccount = useCallback((who: Account, access: Access) => {
+ const installAccount = useCallback((who: AuthenticatedAccount, access: Access) => {
   if (attempt.current !== access || localStorage.getItem(EPOCH) !== access.epoch) return false;
+  const { session_token: issuedToken, ...accountView } = who;
+  if (typeof issuedToken !== 'string' || issuedToken.length < 32 || !validAccount(accountView)) {
+   throw new Error('Session response could not be validated.');
+  }
   attempt.current = null; setVerification(null); sessionStorage.removeItem(PENDING); setLogoutError('');
-  sessionStorage.setItem(SESSION, JSON.stringify({ token: access.session_token, epoch: access.epoch }));
-  activeToken.current = access.session_token; activeEpoch.current = access.epoch; currentAccount.current = who; setToken(access.session_token); setAccount(who); setProfile(null); reload();
+  sessionStorage.setItem(SESSION, JSON.stringify({ token: issuedToken, epoch: access.epoch }));
+  activeToken.current = issuedToken; activeEpoch.current = access.epoch; currentAccount.current = accountView; setToken(issuedToken); setAccount(accountView); setProfile(null); reload();
   return true;
  }, [reload]);
  const completeAccess = useCallback(async (input: Credentials) => {
   const access = attempt.current;
   if (!access) throw new Error('Start a new access attempt.');
-  const result = await profileApi<Account | Verification>('/auth/complete', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, session_token: access.session_token, ...input }) });
+  const result = await profileApi<AuthenticatedAccount | Verification>('/auth/complete', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, ...input }) });
   if (attempt.current !== access || localStorage.getItem(EPOCH) !== access.epoch) return false;
   if ('verification_required' in result) { setVerification(result); return false; }
   return installAccount(result, access);
@@ -235,13 +244,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
  const verifyEmail = useCallback(async (code: string) => {
   const access = attempt.current;
   if (!access || !verification) throw new Error('Start a new verification attempt.');
-  const who = await profileApi<Account>('/auth/verify-email', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, session_token: access.session_token, challenge_id: verification.challenge_id, code }) });
+  const who = await profileApi<AuthenticatedAccount>('/auth/verify-email', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, challenge_id: verification.challenge_id, code }) });
   return installAccount(who, access);
  }, [verification, installAccount]);
  const resendVerification = useCallback(async () => {
   const access = attempt.current;
   if (!access) throw new Error('Start a new verification attempt.');
-  const result = await profileApi<Verification>('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, session_token: access.session_token }) });
+  const result = await profileApi<Verification>('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id }) });
   if (attempt.current === access && localStorage.getItem(EPOCH) === access.epoch) setVerification(result);
  }, []);
  const acceptProfile = useCallback((value: Profile) => {

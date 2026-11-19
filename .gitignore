@@ -50,3 +50,4 @@ work/
 # Browser test artifacts
 playwright-report/
 test-results/
+.playwright-mcp/

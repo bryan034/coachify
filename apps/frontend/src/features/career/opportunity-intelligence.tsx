@@ -207,7 +207,8 @@ function roleBody({findings,cards,digest,busy,loaded,fns,refsFor}:{findings:Inte
 export function OpportunityIntelligence({goalId,version,selectionVersion,roleCards=[],section='interview'}:{goalId:string;version:number;selectionVersion:number;roleCards?:RoleCardInput[];section?:'interview'|'role'}){
  const {token}=useProfile();const [data,setData]=useState<OpportunityView>(),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[busy,setBusy]=useState<IntelligenceCategory|'all'|null>(null);
  const command=useRef<{signature:string;key:string}|null>(null),controller=useRef<AbortController|null>(null);
- const path=`/goals/${goalId}/opportunity-research`;
+ const safeGoalId=encodeURIComponent(goalId);
+ const path=`/goals/${safeGoalId}/opportunity-research`;
  useEffect(()=>{
   if(!token)return;const abort=new AbortController();let timer:ReturnType<typeof setTimeout>;
   let loaded=false,stamp:string|null|undefined;
@@ -246,7 +247,7 @@ export function OpportunityIntelligence({goalId,version,selectionVersion,roleCar
  const [suggestions,setSuggestions]=useState<InterviewSuggestions|null>(null),[suggesting,setSuggesting]=useState(false),[suggestError,setSuggestError]=useState('');
  useEffect(()=>{
   // Once research settles, fill empty interview slots with labelled AI predictions (saved per goal version and research).
-  if(section!=='interview'||!token||!done)return;const abort=new AbortController();const prep=`/goals/${goalId}/interview-prep`;
+  if(section!=='interview'||!token||!done)return;const abort=new AbortController();const prep=`/goals/${safeGoalId}/interview-prep`;
   (async()=>{try{
    let view=await careerApi<InterviewSuggestionsView>(prep,token,{signal:abort.signal});
    if(view.status==='missing'){if(abort.signal.aborted)return;setSuggesting(true);setSuggestError('');
@@ -259,7 +260,7 @@ export function OpportunityIntelligence({goalId,version,selectionVersion,roleCar
  const [digest,setDigest]=useState<RoleSummary|null>(null),[digesting,setDigesting]=useState(false);
  useEffect(()=>{
   // Once research settles, condense each card into short cited bullets (saved per goal version and research).
-  if(section!=='role'||!token||!done)return;const abort=new AbortController();const url=`/goals/${goalId}/role-summary`;
+  if(section!=='role'||!token||!done)return;const abort=new AbortController();const url=`/goals/${safeGoalId}/role-summary`;
   (async()=>{try{
    let view=await careerApi<RoleSummaryView>(url,token,{signal:abort.signal});
    if(view.status==='missing'){if(abort.signal.aborted)return;setDigesting(true);
@@ -305,7 +306,7 @@ export function OpportunityIntelligence({goalId,version,selectionVersion,roleCar
   {body}
   {cited.length>0&&<footer className="research-sources">
    <h3>Sources</h3>
-   <ol>{cited.map(cite=><li key={cite.n} id={`${anchor}-${cite.n}`}><a href={cite.href} target="_blank" rel="noopener noreferrer">{cite.label} ↗</a></li>)}</ol>
+   <ol>{cited.map(cite=>{const link=sourceLink(cite.href);return <li key={cite.n} id={`${anchor}-${cite.n}`}>{link?<a href={link.url} target="_blank" rel="noopener noreferrer">{cite.label} ↗</a>:<span>{cite.label}</span>}</li>;})}</ol>
   </footer>}
  </section>;
 }

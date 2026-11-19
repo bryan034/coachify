@@ -1,6 +1,9 @@
 # Opt-in development override; combine with compose.yaml.
 # Mount source folders only, never the repository/service roots or .env files.
 services:
+  gateway:
+    volumes:
+      - ../gateway/dev-hmr.conf:/etc/nginx/extra.d/dev-hmr.conf:ro
   frontend:
     build:
       target: development

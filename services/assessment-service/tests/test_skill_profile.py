@@ -218,7 +218,14 @@ def _evaluated(sources, model):
 
 
 def test_reevaluating_one_skill_sends_only_that_skill_and_replaces_only_its_judgement():
+    from elo_shared.model_budget import current_budget_owner
     sources, model = Sources(), Recorder()
+    seen_owners = []
+    original_generate = model.generate
+    async def check_budget_generate(schema, instructions, context):
+        seen_owners.append(current_budget_owner())
+        return await original_generate(schema, instructions, context)
+    model.generate = check_budget_generate
     client = _evaluated(sources, model)
     before = client.get('/api/v1/assessments/current', headers=H).json()
     assert sorted(model.sent[0]) == ['Excel', 'Python']
@@ -227,6 +234,7 @@ def test_reevaluating_one_skill_sends_only_that_skill_and_replaces_only_its_judg
     sources.source['declarations_version'] = 2
     response = client.post('/api/v1/assessments/skills/reevaluate', json={'name': 'Python'}, headers=H)
     assert response.status_code == 200, response.text
+    assert seen_owners[-1] == seen_owners[0] and seen_owners[-1] is not None
     assert model.sent[-1] == ['Python'] and len(model.sent) == 2
     after = client.get('/api/v1/assessments/current', headers=H).json()
     assert after['stale'] is False and after['evaluation']['freshness'] == 'current'
