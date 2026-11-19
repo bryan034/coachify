@@ -22,3 +22,10 @@ addopts = "--import-mode=importlib"
 
 [tool.setuptools.package-data]
 app = ["data/*.json"]
+
+[tool.ruff]
+target-version = "py312"
+include = ["app/**/*.py"]
+
+[tool.ruff.lint]
+select = ["BLE001", "E402", "PLC0415", "PLR2004", "S110", "SIM105"]

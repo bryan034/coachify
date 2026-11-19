@@ -61,6 +61,7 @@ docs/                        App-wide docs only: setup.md, testing.md, api/READM
                              design/ (visual system, canvas)
 outputs/                     Historical deliverables (may describe old PostgreSQL design) — not current
 work/                        Git-ignored scratch/reports — not source
+tools/lint/                  Ruff + elo quick-fix checker, per-service baselines (baselines/*.json), checker tests
 .github/workflows/ci.yml     CI definition
 ```
 
@@ -85,7 +86,7 @@ Stale items to ignore: `*.egg-info` dirs (including `coachify_*` names from befo
 
 ## Run and verify
 
-Tooling: Node.js 24, Python 3.12 (pinned in `.python-version` and CI; the system `python3` may be newer, so create venvs with 3.12), Docker Compose. No linter or formatter is configured; follow `.editorconfig` (LF, 2-space indent, 4 for Python) and match surrounding code.
+Tooling: Node.js 24, Python 3.12 (pinned in `.python-version` and CI; the system `python3` may be newer, so create venvs with 3.12), Docker Compose. No formatter is configured; follow `.editorconfig` (LF, 2-space indent, 4 for Python) and match surrounding code. Career-service `app/` is linted by Ruff plus the elo quick-fix rules against a shrink-only baseline ([lint](tools/lint/README.md)); never add inline suppressions or grow the baseline.
 
 ```sh
 # Stack (from repo root; the user supplies the private .env)
@@ -101,10 +102,15 @@ npx playwright install chromium && npm run test:e2e --workspace apps/frontend
 # Backend (per service, from services/<name>-service)
 python -m pip install -e ../../packages/elo-shared -e '.[test]'
 python -m pytest
+
+# Lint (from repo root; career-service only)
+python -m pip install -r tools/lint/requirements.txt
+python -m pytest tools/lint
+python tools/lint/quickfix_check.py services/career-service           # add --prune after fixing a baselined violation
 ```
 
 - Profile, CV and Career integration tests need a disposable MongoDB (`MONGODB_TEST_URI`); ordinary unit tests do not. Career needs its tiktoken tokenizer cache (see CI). Full-stack browser journeys and fixtures: [testing](docs/testing.md), `compose.test.yaml`, `infrastructure/testing/`.
-- CI (`.github/workflows/ci.yml`) runs frontend typecheck/unit, Playwright, a backend matrix over all eight services, shared-package tests (via the assessment job), and Mongo integration jobs. Run the equivalent for what you touched. Changes to `elo-shared` affect every service: run more than one service's tests.
+- CI (`.github/workflows/ci.yml`) runs career-service lint, frontend typecheck/unit, Playwright, a backend matrix over all eight services, shared-package tests (via the assessment job), and Mongo integration jobs. Run the equivalent for what you touched. Changes to `elo-shared` affect every service: run more than one service's tests.
 - For logic changes, add meaningful coverage and keep fixing/rerunning relevant tests until they pass. Never remove, skip or weaken valid tests to get a pass; report blockers honestly. Report exact current results, not historical totals.
 - Review the final diff for unintended changes and secrets. Report changes, checks actually run and remaining limitations.
 

@@ -88,7 +88,9 @@ tests against a production Next.js build. Unit and browser test discovery are se
 There are no path filters that could skip required jobs. The final `Test gate` fails
 if any test job fails, is cancelled, or is skipped. Browser reports and failure
 traces are uploaded for seven days; use synthetic data because artifacts may contain
-page content. Linting is not configured yet.
+page content. The `lint` job runs Ruff and the elo quick-fix rules over career-service
+`app/` code against a shrink-only baseline; new violations and fixed-but-unpruned
+baseline entries fail it. See [lint](../tools/lint/README.md).
 
 MongoDB-backed jobs (`profile-integration`, `analysis-integration` and
 `local-ui-integration`) use `mongo:8.2` on `ubuntu-22.04` for kernel compatibility.
