@@ -18,10 +18,13 @@ test('uploaded CV review saves and resumes the same question after leaving and r
     }
   });
   await page.goto('/cv');
+  await expect(page.locator('.cv-workspace')).toHaveAttribute('aria-busy', 'false');
   await page.getByLabel('CV document', {exact: true}).setInputFiles(
     path.resolve(__dirname, '../fixtures/synthetic-clarification-cv.docx'),
   );
-  await page.getByRole('button', {name: 'Upload CV', exact: true}).click();
+  const upload = page.getByRole('button', {name: 'Upload CV', exact: true});
+  await expect(upload).toBeEnabled();
+  await upload.click();
   await expect(page).toHaveURL(/\/cv\?review=/);
   const cvId = new URL(page.url()).searchParams.get('review')!;
   const chat = page.getByRole('region', {name: 'CV conversation', exact: true});
