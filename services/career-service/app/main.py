@@ -123,6 +123,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                     if app.state.opportunities is not None:await app.state.opportunities.close()
                     await app.state.operations.close()
                     if app.state.workflow is not None: await app.state.workflow.close()
+                    if research_client is None: await app.state.research_client.aclose()
                     if mongo is not None: mongo.close()
 
     @asynccontextmanager

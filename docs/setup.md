@@ -258,7 +258,7 @@ chat, summaries and edits. Model inference and public search are configured inde
 Apply the following settings yourself in the existing private `infrastructure/docker/.env`,
 preserving other settings and credentials. Agents do not read or edit that file.
 
-The public template selects OpenRouter through the OpenAI-compatible API for Career, CV, Assessment and Roadmap. Their shared key remains server-side. Career's public search uses a separate provider and credential, such as Brave; OpenRouter model inference does not replace it.
+The public template selects OpenRouter through the OpenAI-compatible API for Career, CV, Assessment and Roadmap. Their shared key remains server-side. Career's public search defaults to OpenRouter model-native web search (`CAREER_RESEARCH_PROVIDER=openrouter`), with Brave LLM Context as a fallback that uses its own `CAREER_RESEARCH_API_KEY`.
 
 For a new installation, copy the public template as described above and privately fill `OPENROUTER_API_KEY`. For an existing installation, edit the existing private `infrastructure/docker/.env` yourself rather than copying over its database passwords or other settings. Set the following entries, replacing existing entries of the same names instead of adding duplicates:
 
@@ -303,7 +303,7 @@ Existing deployments retain their configured providers until their private setti
 
 Keep `AI_ENABLED=true` for Career inference and configure public search independently. SDK retries are disabled; each service retains its own retry, quota, timeout and validation policy.
 
-Career, CV, Assessment and Roadmap share a per-account allowance of 250 cloud model calls per UTC day. Each dispatch, including provider and validation retries, reserves one call for the account. Failed or timed-out attempts consume the reservation. Disabled models do not consume the allowance. Set `MODEL_BUDGET_OWNER_CALLS_PER_DAY` in `infrastructure/docker/.env` to override the Compose default (0 stops cloud calls). Compose supplies the default when the variable is absent or empty. The public `.env.example` documents optional settings and is not loaded into existing private files. Legacy unit-budget and deployment-wide quota variables can be removed from private files. `CAREER_RESEARCH_SEARCHES_PER_ACCOUNT_PER_DAY` caps Brave searches per account per UTC day (blank = unlimited); a reached allowance pauses research workflows until the next UTC day (rechecked hourly) and is reported immediately in chat, with saved results still available. `CAREER_RESEARCH_MAX_URLS_PER_SEARCH` (1–6) lowers the number of source URLs Brave reads per search; blank keeps the built-in 6/5/3 limits for goal research and chat, Discovery and Opportunity Intelligence.
+Career, CV, Assessment and Roadmap share a per-account allowance of 250 cloud model calls per UTC day. Each dispatch, including provider and validation retries, reserves one call for the account. Failed or timed-out attempts consume the reservation. Disabled models do not consume the allowance. Set `MODEL_BUDGET_OWNER_CALLS_PER_DAY` in `infrastructure/docker/.env` to override the Compose default (0 stops cloud calls). Compose supplies the default when the variable is absent or empty. The public `.env.example` documents optional settings and is not loaded into existing private files. Legacy unit-budget and deployment-wide quota variables can be removed from private files. `CAREER_RESEARCH_SEARCHES_PER_ACCOUNT_PER_DAY` caps public searches per account per UTC day (template 80, blank = unlimited; a Brave fallback is part of the same search); a reached allowance pauses research workflows until the next UTC day (rechecked hourly) and is reported immediately in chat, with saved results still available. `CAREER_RESEARCH_MAX_URLS_PER_SEARCH` (1–6) lowers the number of source URLs kept per search; blank keeps the built-in 6/5/3 limits for goal research and chat, Discovery and Opportunity Intelligence.
 
 The counters contain hashed account IDs and reside on the `model_budget` named volume. Keep this volume mounted across restarts and replicas on the same Docker host. Enforcing one per-account allowance across independent hosts requires a coordinated ledger. Provider billing depends on the selected model and its prices. For a direct service run, point `MODEL_BUDGET_PATH` at the same writable SQLite file for all four processes.
 
@@ -339,8 +339,32 @@ changing model settings. The `*_LLM_ALLOW_HTTP` flags exist only for synthetic
 fixture providers in disposable development stacks; they require `APP_ENV=development`
 and must not be used as a production shortcut.
 
-`CAREER_RESEARCH_PROVIDER=brave` (the only supported search provider) uses the
-existing `GET /res/v1/llm/context` API. Only returned page snippets are accepted as
+`CAREER_RESEARCH_PROVIDER=openrouter` (template default) sends one bounded Chat
+Completions request per search to `CAREER_RESEARCH_MODEL` (default
+`openai/gpt-4.1-mini`) with the `openrouter:web_search` server tool on engine
+`native`, so the model's provider runs its own web search. With an OpenRouter BYOK
+key, the provider bills that search to the linked account. The model must support
+native search (OpenAI: GPT-4.1 family, GPT-5 and later, o3, o4-mini); OpenRouter
+substitutes Exa for older models such as `gpt-4o-mini`. The key is
+`CAREER_LLM_API_KEY` when Career's model endpoint is OpenRouter, otherwise
+`OPENROUTER_API_KEY`. `CAREER_RESEARCH_MAX_TOOL_CALLS` (1–10, default 3) bounds
+server-side tool steps and `CAREER_RESEARCH_TIMEOUT_SECONDS` (5–20, default 15)
+is a total deadline for the request. One search, fallback included, finishes within
+28 seconds, below Discovery's 30-second per-search limit. Only cited `url_citation` annotations become sources: the
+provider's excerpt when returned, otherwise the model's cited answer line, prefixed
+"Search model summary of this page, not a quote:" so synthesis and readers do not
+take it as page text. OpenRouter results use their own cache policy, so switching
+provider does not serve research cached under the other backend. Native search returns few
+structured job-posting fields, so Discovery identifies employers less often than
+with Brave.
+
+`CAREER_RESEARCH_FALLBACK_PROVIDER=brave` retries the same search with Brave when
+OpenRouter returns HTTP 429/402/401/403/5xx, times out, returns an unreadable
+response or no cited sources. It needs `CAREER_RESEARCH_API_KEY`; leave either
+blank to disable it. With no OpenRouter key, searches go straight to Brave without
+logging a fallback. Fallbacks log only a fixed reason code and are not charged as
+a second search. `CAREER_RESEARCH_PROVIDER=brave` uses only the existing
+`GET /res/v1/llm/context` API. Only returned page snippets are accepted as
 evidence. Saved-goal question queries stay within 128 characters while retaining
 their public context/focus. Response size, source counts, URL validation, retries
 and citation checks remain bounded. Search results are untrusted. No raw JD, private

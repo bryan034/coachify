@@ -16,7 +16,7 @@ const words=(value:string)=>value.replaceAll('_',' ');
 const availabilityMessages:Record<OpportunityAvailabilityIssue,string>={
  research_disabled:'Opportunity research is turned off on the server.',
  reasoning_disabled:'The research reasoning provider is disabled on the server.',
- brave_not_configured:'Brave is not connected to the Career service.',
+ brave_not_configured:'Web search is not connected to the Career service.',
  model_not_configured:'The configured model is not connected to the Career service.',
  search_not_configured:'The configured search provider is not connected to the Career service.',
  brave_llm_context_required:'The Brave connection needs LLM Context mode for opportunity research.'

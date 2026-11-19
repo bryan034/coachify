@@ -15,7 +15,7 @@ Before CV clarification uses the current goal, the user explicitly confirms its 
 - Development infrastructure: Docker Compose; optional local MongoDB container.
 - Proposed production database: MongoDB Atlas, external to the application containers.
 - Account access: email/password accounts with OTP email verification, emailed-code password recovery, and revocable 24-hour sessions. Development supports either Mailpit capture or real delivery with Gmail SMTP; production uses authenticated encrypted SMTP.
-- AI: Model calls use the OpenAI Python SDK. The public deployment template configures OpenRouter for Career, CV, Assessment and Roadmap using one server-side key and a shared model setting; other compatible providers remain configurable. Career public research uses a separate Brave LLM Context integration. CV extraction uses schema-constrained output and validated repair. Preview endpoints make no model calls. See [model setup](docs/setup.md#career-model-and-search-configuration).
+- AI: Model calls use the OpenAI Python SDK. The public deployment template configures OpenRouter for Career, CV, Assessment and Roadmap using one server-side key and a shared model setting; other compatible providers remain configurable. Career public research uses OpenRouter model-native web search, falling back to Brave LLM Context. CV extraction uses schema-constrained output and validated repair. Preview endpoints make no model calls. See [model setup](docs/setup.md#career-model-and-search-configuration).
 
 ## Repository layout
 

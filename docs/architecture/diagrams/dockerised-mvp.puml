@@ -16,7 +16,7 @@ component "Existing Profile / account APIs\nAuthentication, onboarding, planning
 cloud "Configured CV model API\nOpenAI-compatible extraction, routing and interpretation" as CVLLM
 cloud "Career model API\nOpenAI-compatible HTTPS (OpenRouter default)\nShared adapter: extraction, chat, research coordination" as LLM
 cloud "Public employer job boards\nGreenhouse / Lever / Ashby" as JobBoards
-cloud "Public search API\nBrave LLM Context" as Sources
+cloud "Public web search\nOpenRouter native search\n(Brave LLM Context fallback)" as Sources
 
 node "Docker Compose — focused design" {
   node "Next.js / React / TypeScript" as Web <<Docker container>>
@@ -124,7 +124,8 @@ legend bottom
   Current implementation: Profile/auth, temporary Career JD previews,
   optional-CV exploration, one autosaved current goal/chat, LangGraph research, saved CV upload/review/chat and data contracts.
   Importance review, advisory skills and versioned research orchestration/review are implemented.
-  Brave uses LLM Context. Historical attribution remains readable.
+  OpenRouter runs the model provider's native web search;
+  Brave LLM Context is the fallback. Historical attribution remains readable.
   Source-linked CV interpretation is implemented; Assessment comparison and Roadmap adviser are implemented with synthetic verification; live quality remains unverified.
   Synthetic tests do not establish live-provider quality or deployed readiness.
   career_state (including version-bound CV acknowledgement) and research_contexts are operational metadata.
