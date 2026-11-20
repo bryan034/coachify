@@ -258,7 +258,7 @@ career_state --> career_goals : exact current goal reference
 note for cvs "Evidence may be a source-supported summary; semantic approval is transient. Bounded source-linked other_information retains uncategorised content; extraction dates are optional hints. CV-owned structured evidence, overlays, interpretation and history. UUID IDs and private temporary originals; public reads expose no path or owner metadata. Transient extraction/repair graph state is not checkpointed; only validated evidence and generation metadata persist. Deleted sources retain content-free receipts, excluded from reads and saved-record quota."
 note for cv_conversations "Nullable CV permits manual-only entry. Bounded messages/action receipts have separate transcript revisions; no automatic history expiry."
 note for career_state "Automatic goal saving is distinct from explicit CV confirmation. Stamp binds goal ID/version, selection revision and projection hash. Changes invalidate it without another goal record or deleting CV facts."
-note for career_goals "Older UUID reviewed-target documents remain retained history, excluded from canonical ObjectId reads. Canonical create_key metadata preserves the legacy uniqueness index; no destructive migration."
+note for career_goals "Older UUID reviewed-target documents remain retained history, excluded from canonical ObjectId reads. The stored-shape upgrade drops the retired (user_id, create_key) index; historical documents are kept."
 
 class assessment_workspaces {
     <<operational Assessment database>>
@@ -312,7 +312,7 @@ assessment_workspaces --> skill_gap_analyses : current immutable result
 users --> roadmap_workspaces : owner API
 roadmap_workspaces --> roadmaps : automatic or reviewed activation and history
 roadmaps --> skill_gap_analyses : Assessment API snapshot
-note for skill_gap_analyses "New Assessment-owned database. UUID results use assessment-v1; old analysis-v1 Career contracts/records remain legacy with no automatic migration."
+note for skill_gap_analyses "Assessment-owned database. UUID results use assessment-v1."
 note for roadmaps "Separate Roadmap-owned database with owner-scoped immutable snapshots. Editable tasks retain student changes, status and removals; assignments are a compatibility projection. Earlier records remain readable."
 
 %% Saved-goal question research reuses immutable interview_research.question_findings snapshots.

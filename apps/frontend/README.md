@@ -195,8 +195,8 @@ is shown only when established. No-company employer sections are not applicable.
 
 Career Discovery uses the AI model for direction setting and no CV inputs. Its research
 review groups core, specialisation-specific and optional skills, with sample counts,
-coverage, qualifications, responsibilities and source links. Removing a requirement
-saves through the existing review API; explicit confirmation uses `/goals/confirm`.
+coverage, qualifications, responsibilities and source links. A ready direction is
+published through `/discoveries/{id}/publish`.
 The initial chat response and composer wait for extraction and complete research;
 saved-goal backend APIs remain available during research waits/failures. A
 pending chat request's own quota recovery pauses that submission. Wait labels identify

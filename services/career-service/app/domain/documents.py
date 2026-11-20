@@ -6,6 +6,12 @@ from defusedxml.common import DefusedXmlException
 from pypdf import PdfReader
 from app.schemas.preview import MAX_FILE, MAX_TEXT
 
+FIRST_PRINTABLE = ' '
+MAX_PDF_PAGES = 100
+
+MAX_DOCX_ENTRIES = 1000
+MAX_DOCX_EXPANDED_BYTES = 32 * 1024 * 1024
+
 
 def validate_text(text, *, max_text=MAX_TEXT):
     if not text.strip():
@@ -24,7 +30,7 @@ def document_text(data, extension):
             text = data.decode('utf-8-sig')
         except UnicodeDecodeError as exc:
             raise ValueError('TXT files must use UTF-8 encoding. Save as UTF-8 or paste the description.') from exc
-        if any(ord(c) < 32 and c not in '\n\r\t' for c in text):
+        if any(c < FIRST_PRINTABLE and c not in '\n\r\t' for c in text):
             raise ValueError('This is not a readable TXT document. Choose PDF, DOCX or UTF-8 TXT.')
     elif extension == '.pdf':
         if not data.startswith(b'%PDF-'):
@@ -33,7 +39,7 @@ def document_text(data, extension):
             reader = PdfReader(BytesIO(data), strict=True)
             if reader.is_encrypted:
                 raise ValueError('Password-protected PDFs are not supported. Upload an unencrypted copy or paste the text.')
-            if len(reader.pages) > 100:
+            if len(reader.pages) > MAX_PDF_PAGES:
                 raise ValueError('Choose a document with at most 100 pages.')
             pages = []
             for page in reader.pages:
@@ -52,7 +58,7 @@ def document_text(data, extension):
             with ZipFile(BytesIO(data)) as archive:
                 info = archive.infolist()
                 names = set(archive.namelist())
-                if len(info) > 1000 or sum(i.file_size for i in info) > 32 * 1024 * 1024:
+                if len(info) > MAX_DOCX_ENTRIES or sum(i.file_size for i in info) > MAX_DOCX_EXPANDED_BYTES:
                     raise ValueError('This DOCX expands beyond the processing limit. Paste the description instead.')
                 if any(i.flag_bits & 1 for i in info) or any('vbaproject' in n.lower() for n in names):
                     raise ValueError('Encrypted or macro-containing documents are not supported.')

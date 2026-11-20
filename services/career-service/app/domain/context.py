@@ -6,6 +6,7 @@ from app.domain.questions import facts_for,opportunity_findings
 
 INDEX_TOKENS=1800
 FACT_TOKENS=1600
+SUMMARY_CHARS=300
 PREFIXES={'s':('skills','skills'),'c':('requirements','non_skill_requirements'),
           'i':('interview_skills','skills'),'p':('interview_process','stages'),'r':('opportunity','opportunity_findings')}
 
@@ -16,7 +17,8 @@ def token_count(value):
 
 
 def context_index(goal,research,pending=None):
-    result={'goal':{k:goal[k] for k in ('role','field','company','location','seniority_level') if goal.get(k)},
+    result={'goal':{**{k:goal[k] for k in ('role','field','company','location','seniority_level') if goal.get(k)},
+                    **({'summary':str(goal['summary'])[:SUMMARY_CHARS]} if goal.get('summary') else {})},
             'items':[], 'partial':False,
             'sections':{'skills':len(goal.get('skills',[])), 'requirements':len(goal.get('non_skill_requirements',[])),
                         'interview_skills':len(research.get('skills',[])), 'interview_process':bool(research.get('process') or any(s.get('interview_stage') for s in research.get('skills',[])))}}

@@ -7,6 +7,7 @@ import time
 from types import SimpleNamespace
 
 import pytest
+from app.ai.qa_contracts import QuestionRoute
 
 from app.ai.jd_scope import JobIdentity,CareerScopeError
 from app.ai.context_contracts import ContextPlan
@@ -14,7 +15,7 @@ from app.domain.context import context_index,selected_facts
 from app.domain.questions import REFUSAL
 from app.schemas.analysis import ResearchSource
 from app.workflows.jd_prefetch import matches
-from app.schemas.opportunity import CATEGORIES
+from app.schemas.opportunity import CATEGORIES, SUMMARY_UNAVAILABLE
 from app.workflows.opportunity.topics import TOPICS,category_topics,owner
 from tests.test_opportunity import opportunity_flow,research,RUN_SEARCHES
 from tests.test_workspace import flow,headers,BASE,ingest,wait,OWNER
@@ -89,7 +90,7 @@ def test_public_research_starts_before_full_extraction_and_is_not_repeated(oppor
     assert SOURCE not in serialized
 
 
-@pytest.mark.parametrize('path',['/workspace/jd','/jd/extract'])
+@pytest.mark.parametrize('path',['/workspace/jd'])
 def test_unrelated_document_is_rejected_before_full_extraction_or_search(flow,path):
     client,db,ai,sources=flow
     async def reject(request,operation,**kwargs):
@@ -105,12 +106,17 @@ def test_unrelated_document_is_rejected_before_full_extraction_or_search(flow,pa
 @pytest.mark.parametrize('mode',['question','refine'])
 def test_goal_words_do_not_bypass_unrelated_task_guardrails(flow,mode):
     assert ingest(flow).status_code==202
-    current=wait(flow);client,db,ai,_=flow;before=len(ai.calls)
+    current=wait(flow);client,db,ai,_=flow;before=len(ai.calls);original=ai.generate
+    async def generate(request,operation,**kwargs):
+        if request.stage=='question_route':
+            ai.calls.append(request);return SimpleNamespace(data=QuestionRoute(topic='off_topic'))
+        return await original(request,operation,**kwargs)
+    ai.generate=generate
     result=client.post(BASE+'/messages',headers=headers(),json={'session_id':current['session_id'],
         'expected_version':current['current']['goal']['version'],'mode':mode,
         'message':'Explain this career goal and also write a recipe for soup.'})
     assert result.status_code==200 and result.json()['reply']==REFUSAL
-    assert len(ai.calls)==before
+    assert [call.stage for call in ai.calls[before:]]==['question_route']
     assert client.get(BASE,headers=headers()).json()['revision']==current['revision']
 
 
@@ -149,7 +155,7 @@ def test_early_retrieval_rate_limit_preserves_the_real_provider_delay(opportunit
         if request.stage=='jd_extraction':result.data.location='Singapore'
         return result
     async def limited(context,query,**kwargs):
-        search.calls.append(query);raise SourceRateLimit(90)
+        search.calls.append(query);raise SourceRateLimit(90,'brave')
     primary.generate=generate;search.collect_opportunity_query=limited
     response=client.post(BASE+'/jd',headers=headers(),json={'text':SOURCE})
     assert response.status_code==202
@@ -201,7 +207,7 @@ def test_combined_readiness_waits_for_structuring_without_another_retrieval(oppo
 
 
 def test_structuring_quota_resumes_automatically_without_opening_chat_early(opportunity_flow):
-    from app.ai.adapter import AIError
+    from app.ai.errors import AIError
     client,db,primary,context_model,search=opportunity_flow
     original=primary.generate;attempts=[]
     async def generate(request,operation,**kwargs):
@@ -221,7 +227,7 @@ def test_structuring_quota_resumes_automatically_without_opening_chat_early(oppo
 
 
 def test_structuring_provider_failure_preserves_other_categories_and_can_retry(opportunity_flow):
-    from app.ai.adapter import AIError
+    from app.ai.errors import AIError
     client,db,primary,context_model,search=opportunity_flow
     original=primary.generate;attempts=[]
     async def generate(request,operation,**kwargs):
@@ -252,7 +258,7 @@ def test_a_failed_category_does_not_publish_the_combined_response(opportunity_fl
 
 
 def test_structuring_configuration_failure_keeps_goal_and_other_findings(opportunity_flow):
-    from app.ai.adapter import AIError
+    from app.ai.errors import AIError
     primary=opportunity_flow[2];original=primary.generate;attempts=[]
     async def generate(request,operation,**kwargs):
         if request.stage=='opportunity_structure' and json.loads(request.context)['category']=='interview_intelligence':
@@ -288,7 +294,7 @@ def test_old_cached_missing_overview_is_built_without_another_model_call_or_retr
     engine=client.app.state.opportunities
     record=engine.store.research.records.get_research(current['research_id'])
     cached=record.model_copy(update={'intelligence':record.intelligence.model_copy(update={
-        'warnings':['Overall summary unavailable; validated category findings remain available.'],
+        'warnings':[SUMMARY_UNAVAILABLE],'summary_unavailable':True,
         'summary':Summary()})})
     engine.store.cached=lambda context:cached
     before=len(search.calls);model_calls=len(context_model.calls)+len(primary.calls)

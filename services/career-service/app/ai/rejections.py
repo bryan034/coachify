@@ -2,6 +2,9 @@
 import json
 import re
 
+HTTP_STATUSES = range(100, 600)
+MAX_DIAGNOSTIC = 512
+
 CODES=frozenset({
     'model_not_found','model_decommissioned','json_validate_failed','context_length_exceeded',
     'unsupported_parameter','invalid_request_error','INVALID_ARGUMENT','NOT_FOUND',
@@ -14,7 +17,7 @@ FIELDS=frozenset({'model','messages','response_format','json_schema','schema','s
 
 
 def safe_diagnostic(value):
-    if not isinstance(value,dict) or type(value.get('http_status')) is not int or not 100<=value['http_status']<=599:return None
+    if not isinstance(value,dict) or type(value.get('http_status')) is not int or value['http_status'] not in HTTP_STATUSES:return None
     result={'http_status':value['http_status'],'provider':value.get('provider') if value.get('provider')=='compatible' else 'other'}
     code=value.get('code')
     if isinstance(code,str) and code in CODES:result['code']=code
@@ -37,7 +40,7 @@ def classify(raw,status,provider):
     if isinstance(native_status,str) and native_status in CODES:code=native_status
     fields=set()
     def field_path(value):
-        if not isinstance(value,str) or len(value)>512:return
+        if not isinstance(value,str) or len(value)>MAX_DIAGNOSTIC:return
         for token in re.findall(r'[A-Za-z_]+',value):
             if token in FIELDS:fields.add(token)
             if token in ('response_schema','responseSchema'):fields.add('response_format')

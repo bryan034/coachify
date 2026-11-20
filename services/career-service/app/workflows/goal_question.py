@@ -7,6 +7,9 @@ from app.repositories.goals import GoalError
 from app.workflows.activity import activity
 from app.clients.search_sources import SourceRateLimit, SearchAllowanceExceeded
 from app.ai.waiting import quota_progress, quota_reason
+from app.domain.source_scope import SINGAPORE,target_place
+
+SEARCH_ATTEMPTS = 4
 
 FOCUSES = {
     'location': 'work location office internship location remote hybrid',
@@ -26,13 +29,11 @@ MAX_QUESTION_SEARCHES = 3
 
 def question_queries(title, focus, terms=None):
     # Only a bounded public subject produced by the router crosses the search boundary.
-    from app.domain.questions import blocked_task
     if terms:
-        if not re.fullmatch(r'[A-Za-z][A-Za-z -]{2,99}', terms) or blocked_task(terms) or re.search(
+        if not re.fullmatch(r'[A-Za-z][A-Za-z -]{2,99}', terms) or re.search(
                 r'\b(?:my|email|phone|password|secret|passport|address|resume|cv)\b', terms, re.I):
             terms=None
     subject=terms or FOCUSES[focus]
-    from app.domain.source_scope import SINGAPORE,target_place
     company,role=(str(title.get(key) or '').strip() for key in ('company','role'))
     place=target_place(title)
     market='Singapore' if place==SINGAPORE else place
@@ -59,7 +60,7 @@ async def research_question(request, title, focus, check, *, query=None):
     query = query or question_queries(title,focus)[0]
     await check()
     activity('searching_question')
-    for attempt in range(4):
+    for attempt in range(SEARCH_ATTEMPTS):
         try:
             sources = normalize_sources(await collect(context, query))[:6]
             break
@@ -67,7 +68,7 @@ async def research_question(request, title, focus, check, *, query=None):
             raise
         except SourceRateLimit as error:
             observer = quota_progress.get()
-            if observer is None or attempt == 3:
+            if observer is None or attempt == SEARCH_ATTEMPTS - 1:
                 raise
             token = quota_reason.set({'provider': error.provider, 'limit_scope': 'provider'})
             try:

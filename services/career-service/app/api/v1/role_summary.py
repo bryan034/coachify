@@ -3,7 +3,7 @@ import asyncio
 
 from fastapi import APIRouter,Depends,Request
 from fastapi.encoders import jsonable_encoder
-from app.api.v1.goals import owner
+from app.api.v1.dependencies import owner
 from app.api.v1.interview_prep import owned_goal,research_state
 from app.repositories.goals import GoalError
 from app.schemas.role_summary import SummaryCommand
@@ -13,10 +13,7 @@ router=APIRouter(prefix='/api/v1/career/goals',tags=['About the role summary'])
 
 
 async def generate_once(request, account, goal, record):
-    state = request.app.state
-    if not hasattr(state, 'role_summary_tasks'):
-        state.role_summary_tasks = {}
-    pending = state.role_summary_tasks
+    pending = request.app.state.role_summary_tasks
     key = (account, goal.id, goal.version, digest.research_key(record))
     task = pending.get(key)
     if task is None:

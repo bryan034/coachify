@@ -667,11 +667,8 @@
       "additionalProperties": false,
       "properties": {
         "schema_version": {
+          "const": 2,
           "default": 2,
-          "enum": [
-            1,
-            2
-          ],
           "title": "Schema Version",
           "type": "integer"
         },
@@ -762,6 +759,11 @@
           "maxItems": 10,
           "title": "Warnings",
           "type": "array"
+        },
+        "summary_unavailable": {
+          "default": false,
+          "title": "Summary Unavailable",
+          "type": "boolean"
         },
         "models": {
           "additionalProperties": {

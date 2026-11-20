@@ -46,7 +46,7 @@ def test_startup_enables_research_with_keys_independently_of_legacy_modes(monkey
     mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_startup_test_'+uuid4().hex]
     monkeypatch.setattr(AISettings,'from_env',classmethod(lambda cls:AISettings(enabled=True,api_key='synthetic-key')))
     monkeypatch.setattr(OpportunitySettings,'from_env',classmethod(lambda cls:OpportunitySettings()))
-    monkeypatch.setattr(SourceAPIs,'from_environment',classmethod(lambda cls,client:SourceAPIs(client,brave_key='synthetic-brave',brave_mode=mode)))
+    monkeypatch.setattr(SourceAPIs,'from_environment',classmethod(lambda cls,client:SourceAPIs(client,brave_key='synthetic-brave',brave_mode=mode,backend='brave')))
     profile=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(lambda _:httpx.Response(200,json={})))
     try:
         with TestClient(create_app(database=db,profile_client=profile)) as client:
@@ -72,7 +72,7 @@ def test_startup_enables_research_with_keys_independently_of_legacy_modes(monkey
 ])
 def test_unavailability_identifies_the_failed_gate_without_exposing_credentials(changes,expected):
     ai=SimpleNamespace(settings=SimpleNamespace(enabled=changes.get('primary',True)),context_enabled=changes.get('gemini',True))
-    source=SourceAPIs(None,brave_key=changes.get('key','PRIVATE_SYNTHETIC_KEY'),brave_mode=changes.get('mode','llm_context'))
+    source=SourceAPIs(None,brave_key=changes.get('key','PRIVATE_SYNTHETIC_KEY'),brave_mode=changes.get('mode','llm_context'),backend='brave')
     if 'mode' in changes:source.brave_mode=changes['mode']  # Simulate an incompatible injected adapter.
     issues=availability_issues(OpportunitySettings(enabled=changes.get('enabled',True)),ai,source)
     assert issues==expected and 'PRIVATE' not in str(issues)

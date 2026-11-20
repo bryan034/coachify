@@ -5,6 +5,7 @@ from uuid import uuid4
 from app.domain.skills import canonical_skill_id
 from app.repositories.goals import GoalError
 from app.schemas.jd import JDExtraction
+from app.domain.competence import target_for
 
 REGISTRY = json.loads((Path(__file__).parents[1] / 'data' / 'skill-registry.json').read_text())
 MAPPING_VERSION = REGISTRY['version']
@@ -67,9 +68,8 @@ def prepare(content, previous=None, *, extracted=False, map_skills=True):
                 raise GoalError('AI planning importance must stay advisory.', 422)
             item['correction'] = 'extracted' if extracted else old.get(item[key], {}).get('correction', 'user') if comparable == original else 'user'
     result=JDExtraction.model_validate(data)
-    from app.domain.competence import target_for
     # Untouched skills keep their saved target; a change to the skill's or goal's target inputs recomputes it.
-    role_same=previous is not None and all(getattr(previous,key)==getattr(result,key) for key in ('role','seniority_level','employment_type','field','company'))
+    role_same=previous is not None and all(getattr(previous,key)==getattr(result,key) for key in ('role','seniority_level','employment_type'))
     for skill in result.skills:
         prior=old.get(skill.item_id)
         unchanged=role_same and prior and all(getattr(skill,key)==prior.get(key) for key in

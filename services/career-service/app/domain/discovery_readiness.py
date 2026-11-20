@@ -1,5 +1,4 @@
 """Discovery-only, evidence-backed readiness checks; no model or network calls."""
-import re
 from app.schemas.discovery import DiscoveryAnswer,DiscoveryUnderstanding,Decision
 
 # Seven stored answers, presented as the user's six requested question topics.
@@ -40,14 +39,14 @@ def grounded_understanding(proposed, previous, messages, *, changed_field=False,
         for name in ('field','role_family_or_work','interest','skill_ambiguity'):
             setattr(result,name,DiscoveryAnswer())
     user_messages=[m['content'] for m in messages if m['role']=='user']+[current_message]
+    # A quote consisting only of another topic's stated answer cannot express uncertainty.
+    answering={' '.join(getattr(proposed,name).value.casefold().split()) for name in DiscoveryUnderstanding.model_fields
+               if getattr(proposed,name).status=='known' and getattr(proposed,name).value}
     for name in DiscoveryUnderstanding.model_fields:
         answer=getattr(proposed,name)
         if answer.status=='unanswered':continue
         if not answer.evidence or not any(answer.evidence in text for text in user_messages):continue
-        if answer.status in ('unsure','skipped') and not re.search(
-            r"\b(?:unsure|uncertain|undecided|unknown|unspecified|not sure|not decided|not certain|don['’]?t know|do not know|idk|skip|"
-            r"leave.{0,12}open|no preference|no particular|any(?:thing|where)?|open to|don['’]?t mind|do not mind)\b",
-            answer.evidence,re.I):continue
+        if answer.status in ('unsure','skipped') and (answer.value or ' '.join(answer.evidence.casefold().split()) in answering):continue
         if changed_field and name in ('field','role_family_or_work','interest','skill_ambiguity') and answer.evidence not in current_message:continue
         if answer.status=='known' and not answer.value:continue
         if name=='skill_ambiguity' and answer.status=='known' and answer.value not in ('material','resolved'):continue

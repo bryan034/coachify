@@ -53,7 +53,7 @@ def test_configured_output_limit_only_lowers_a_stage_cap(ceiling,expected):
 
 
 def test_unknown_stages_fall_back_to_the_default_cap():
-    payload=AIAdapter(unlimited(),None)._payload(AIInput(stage='chat',context='{}',conversation=[{'role':'user','content':'Hi'}]))
+    payload=AIAdapter(unlimited(),None)._payload(AIInput(stage='exploration',context='{}',conversation=[{'role':'user','content':'Hi'}]))
     assert payload['max_tokens']==DEFAULT_OUTPUT_TOKENS
 
 
@@ -70,7 +70,7 @@ def test_unlimited_context_sends_large_evidence_whole():
 
 def test_unlimited_chat_keeps_the_full_conversation():
     history=[{'role':'user' if i%2==0 else 'assistant','content':f'Turn {i}'+' career detail'*280} for i in range(29)]
-    payload=AIAdapter(unlimited(),None)._payload(AIInput(stage='chat',context='{}',conversation=history))
+    payload=AIAdapter(unlimited(),None)._payload(AIInput(stage='career_guidance',context='{}',conversation=history))
     assert json.loads(payload['messages'][1]['content'])['conversation']==history
 
 

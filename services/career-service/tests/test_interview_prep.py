@@ -3,7 +3,7 @@ import asyncio
 import json
 from types import SimpleNamespace as NS
 import pytest
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.interview_prep import PrepSuggestions,prep_schema
 from app.repositories.goals import GoalError
 from app.workflows import interview_prep as prep
@@ -105,7 +105,7 @@ def client(output,job):
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
     from fastapi.testclient import TestClient
-    from app.api.v1.goals import owner
+    from app.api.v1.dependencies import owner
     from app.api.v1.interview_prep import router
     req,calls=request(output)
     req.app.state.opportunities=NS(store=NS(latest=lambda *a:job,research=NS(records=NS(get_research=lambda i:record()))))

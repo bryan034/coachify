@@ -1,7 +1,8 @@
 """Every Career model request stays within what OpenAI accepts through OpenRouter."""
 import json
 import pytest
-from app.ai.adapter import AIAdapter, AIError, MODEL_OUTPUTS
+from app.ai.adapter import AIAdapter, MODEL_OUTPUTS
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput, Message
 from app.ai.opportunity_contracts import FIELDS

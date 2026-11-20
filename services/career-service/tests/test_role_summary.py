@@ -3,7 +3,7 @@ import asyncio
 import json
 from types import SimpleNamespace as NS
 import pytest
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.role_summary import RoleDigest,role_summary_schema
 from app.repositories.goals import GoalError
 from app.workflows import role_summary as digest
@@ -39,7 +39,7 @@ def request(output):
         return NS(data=output)
     saved=goal()
     store=NS(current=lambda owner:{'goal':saved},goals=NS(database={'role_summaries':Collection()}))
-    return NS(app=NS(state=NS(ai=NS(generate=generate,context_enabled=True),goal_store=store))),calls
+    return NS(app=NS(state=NS(ai=NS(generate=generate,context_enabled=True),goal_store=store,role_summary_tasks={}))),calls
 
 
 def output(*cards,fills=()):
@@ -105,7 +105,7 @@ def client(job):
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
     from fastapi.testclient import TestClient
-    from app.api.v1.goals import owner
+    from app.api.v1.dependencies import owner
     from app.api.v1.role_summary import router
     req,calls=request(good())
     req.app.state.opportunities=NS(store=NS(latest=lambda *a:job,research=NS(records=NS(get_research=lambda i:record()))))

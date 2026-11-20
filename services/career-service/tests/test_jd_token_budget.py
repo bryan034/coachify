@@ -7,11 +7,12 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.ai.adapter import AIAdapter, AIError, Operation, compact_schema
+from app.ai.adapter import AIAdapter, Operation, compact_schema
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.jd_contracts import ExtractedJD, ExtractedSkill
-from app.api.v1.jd import validate_skills
+from app.domain.extraction import validate_skills
 from app.schemas.jd import JDExtraction
 
 
@@ -31,7 +32,7 @@ def completion(output, usage=None):
 
 
 def chat_input(message='Explain SQL'):
-    return AIInput(stage='jd_chat',context=json.dumps({'career_goal':GOAL}),
+    return AIInput(stage='workspace_chat',context=json.dumps({'career_goal':GOAL}),
                    conversation=[{'role':'user','content':message}])
 
 
@@ -41,16 +42,13 @@ def test_each_operation_has_only_its_own_prompt_and_schema():
             adapter=AIAdapter(config(),client)
             extract=adapter._payload(AIInput(stage='jd_extraction',source_text='SQL required'))
             chat=adapter._payload(chat_input())
-            edit=adapter._payload(chat_input().model_copy(update={'stage':'jd_edit'}))
             extract_prompt=extract['messages'][0]['content']
             assert 'Read and understand the whole JD' in extract_prompt
-            assert 'edit_requested' not in extract_prompt and 'Return keep' not in extract_prompt
+            assert 'keep references' not in extract_prompt
             assert 'Read and understand the whole JD' not in chat['messages'][0]['content']
-            assert 'Return keep' not in chat['messages'][0]['content']
-            assert 'Return keep' in edit['messages'][0]['content']
+            assert 'keep references' in chat['messages'][0]['content']
             chat_schema=chat['response_format']['json_schema']['schema']
-            assert set(chat_schema['properties'])=={'reply','edit_requested'}
-            assert '$defs' not in chat_schema
+            assert set(chat_schema['properties'])=={'reply','edits'}
             schema=extract['response_format']['json_schema']['schema']
             assert schema['additionalProperties'] is False
             assert schema['required']==list(schema['properties'])
@@ -60,7 +58,7 @@ def test_each_operation_has_only_its_own_prompt_and_schema():
             assert not {'skill_id','item_id','correction','source_urls'} & properties.keys()
             conditions=deref(schema['properties']['non_skill_requirements']['items'])['properties']
             assert not {'requirement_id','correction','source_urls'} & conditions.keys()
-            for payload in (extract,chat,edit):
+            for payload in (extract,chat):
                 assert 'JSON schema:' not in payload['messages'][0]['content']
     asyncio.run(invoke())
 
@@ -89,30 +87,29 @@ def test_explanation_uses_one_call_without_edit_schema_or_machine_metadata(caplo
     async def invoke():
         def handler(req):
             calls.append(json.loads(req.content))
-            return completion({'reply':'SQL queries relational data.','edit_requested':False})
+            return completion({'reply':'SQL queries relational data.','edits':None})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter=AIAdapter(config(),client)
-            result=await adapter.generate(chat_input(),Operation('owner','1','jd_chat'),current_revision=lambda:'1')
+            result=await adapter.generate(chat_input(),Operation('owner','1','workspace_chat'),current_revision=lambda:'1')
             assert result.data.proposed_skills is None
     with caplog.at_level(logging.INFO,logger='uvicorn.error.ai_usage'):
         asyncio.run(invoke())
     assert len(calls)==1
     context=json.loads(calls[0]['messages'][1]['content'])['context']
     skill=context['career_goal']['skills'][0]
-    assert not {'skill_id','item_id','source_urls','correction','evidence'} & skill.keys()
-    assert skill['context']=='Query relational data'
+    assert not {'skill_id','item_id','source_urls','correction'} & skill.keys()
+    assert skill['context']=='Query relational data' and skill['ref']=='0'
     assert '"prompt_tokens":100' in caplog.text
-    assert 'stage=jd_chat attempt=1 provider_attempt=1' in caplog.text
+    assert 'stage=workspace_chat attempt=1 provider_attempt=1' in caplog.text
     assert 'relational data' not in caplog.text and 'synthetic' not in caplog.text
 
 
 @pytest.mark.parametrize('defect',[None,'reference','duplicate_reference','employer_addition','missing_quote'])
-def test_edit_second_call_preserves_existing_identity_and_validates_new_items(defect):
+def test_edit_preserves_existing_identity_and_validates_new_items(defect):
     calls=[]
     async def invoke():
         def handler(req):
             calls.append(json.loads(req.content))
-            if len(calls)==1: return completion({'reply':'Review this proposed addition.','edit_requested':True})
             addition={'name':'Python','category':'Technical','priority':'suggested',
                       'origin':'user_declaration','evidence':'Add Python'}
             keep=['0']
@@ -120,23 +117,22 @@ def test_edit_second_call_preserves_existing_identity_and_validates_new_items(de
             if defect=='duplicate_reference': keep=['0','0']
             if defect=='employer_addition': addition.update(origin='employer',priority='required')
             if defect=='missing_quote': addition['evidence']='Fabricated quote'
-            return completion({'keep':keep,'add':[addition]})
+            return completion({'reply':'Review this proposed addition.','edits':{'keep':keep,'add':[addition]}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter=AIAdapter(config(),client)
             def validate(output):
                 validate_skills(output.proposed_skills,'Add Python',JDExtraction.model_validate(GOAL).skills)
-            pending=adapter.generate(chat_input('Add Python'),Operation('owner','1','jd_chat'),current_revision=lambda:'1',validate_output=validate)
+            pending=adapter.generate(chat_input('Add Python'),Operation('owner','1','workspace_chat'),current_revision=lambda:'1',validate_output=validate)
             if defect:
                 with pytest.raises(AIError,match='invalid_output'): await pending
             else:
                 result=await pending
                 assert result.data.proposed_skills[0]==JDExtraction.model_validate(GOAL).skills[0]
                 assert result.data.proposed_skills[1].origin=='user_declaration'
-            assert len(calls)==2
+            assert len(calls)==1
     asyncio.run(invoke())
-    assert len(calls)==2
-    assert calls[1]['response_format']['json_schema']['name']=='jd_edit'
-    goal=json.loads(calls[1]['messages'][1]['content'])['context']['career_goal']
+    assert calls[0]['response_format']['json_schema']['name']=='workspace_chat'
+    goal=json.loads(calls[0]['messages'][1]['content'])['context']['career_goal']
     assert goal['skills'][0]['ref']=='0'
     assert 'saved-sql' not in json.dumps(calls)
 
@@ -146,17 +142,16 @@ def test_edit_cooldown_and_stale_response_cannot_publish():
         calls=[];revision=['1']
         def handler(req):
             calls.append(req)
-            if len(calls)==1: return completion({'reply':'Review a change.','edit_requested':True})
             if stale:
                 revision[0]='2'
-                return completion({'keep':['0'],'add':[]})
+                return completion({'reply':'Review a change.','edits':{'keep':['0'],'add':[]}})
             return httpx.Response(429,headers={'retry-after':'40'})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter=AIAdapter(config(),client)
-            operation=Operation('owner','1','jd_chat')
+            operation=Operation('owner','1','workspace_chat')
             with pytest.raises(AIError,match='stale_input' if stale else 'rate_limited'):
                 await adapter.generate(chat_input('Add Python'),operation,current_revision=lambda:revision[0])
-            assert operation.status=='failed' and len(calls)==2
+            assert operation.status=='failed' and len(calls)==1
     asyncio.run(invoke(False));asyncio.run(invoke(True))
 
 

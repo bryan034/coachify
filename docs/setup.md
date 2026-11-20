@@ -35,6 +35,28 @@ old database/URI, SMTP sender label, test project variable or file path yourself
 Keep the actual Jira workspace URL unchanged; renaming the product does not move
 an external Atlassian workspace.
 
+## Career stored-shape upgrade
+
+Career no longer reads records saved in older shapes. Existing installations run a
+one-off upgrade once, right after deploying this Career image and before users
+continue. It drops the retired `(user_id, create_key)` goal index (until then, saving
+a second goal can fail where that index exists) and removes the unused `create_key`
+and review `baseline` fields. It also removes stored Discovery introductions, folds
+old `broad_exploration`/`industry` answers into current fields, and makes each
+account's latest earlier Discovery chat active. Finally it clears version 1
+Opportunity reports so the next request researches again, flags reports whose
+overall summary failed, completes unfinished three-category research jobs, and
+removes links to unverified question research. Historical target documents are kept.
+
+```sh
+source infrastructure/docker/dev-shell.sh
+dc exec career-service python -m app.workers.upgrade_stored_shapes          # dry run: counts per step
+dc exec career-service python -m app.workers.upgrade_stored_shapes --apply  # rewrite
+```
+
+The upgrade is idempotent; a second `--apply` reports zero records. Back up
+`elo_career` first if the data matters.
+
 ## Configure and start
 
 From the repository root, copy the environment example if you do not already have

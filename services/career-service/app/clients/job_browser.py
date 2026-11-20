@@ -1,8 +1,10 @@
 """Disposable JavaScript rendering, with every network read through the pinned fetcher."""
+from contextlib import suppress
 import time
 import tempfile
 from urllib.parse import urlsplit
 from app.clients import job_url
+from playwright.sync_api import sync_playwright,TimeoutError as BrowserTimeout,Error as BrowserError
 
 MAX_REQUESTS=64
 MAX_TOTAL_BYTES=16*1024*1024
@@ -37,7 +39,7 @@ class BrowserAcquisition:
             redirects=0
             while previous is not None:
                 redirects+=1;previous=previous.redirected_from
-                if redirects>3:raise ValueError('The website redirects too many times. Paste the description instead.')
+                if redirects>job_url.MAX_REDIRECTS:raise ValueError('The website redirects too many times. Paste the description instead.')
             job_url.destination(request.url)
             status,headers,data=self.read(request.url)
             if request.is_navigation_request():
@@ -61,7 +63,6 @@ class BrowserAcquisition:
 
 
 def render_url(url,deadline,fetch=job_url.request_page):
-    from playwright.sync_api import sync_playwright,TimeoutError as BrowserTimeout,Error as BrowserError
     job_url.destination(url)
     acquisition=BrowserAcquisition(deadline,fetch)
     try:
@@ -79,11 +80,9 @@ def render_url(url,deadline,fetch=job_url.request_page):
                 page=context.new_page()
                 page.on('dialog',lambda dialog:dialog.dismiss())
                 page.goto(url,wait_until='domcontentloaded',timeout=max(1,(deadline-time.monotonic())*1000))
-                try:
+                with suppress(BrowserTimeout):
                     page.wait_for_function("""() => Array.from(document.querySelectorAll('script[type="application/ld+json"]')).some(s => s.textContent.includes('JobPosting')) || (document.body && document.body.innerText.length >= 200 && !/enable javascript/i.test(document.body.innerText))""",
                         timeout=max(1,min(8000,(deadline-time.monotonic())*1000)))
-                except BrowserTimeout:
-                    pass
                 if acquisition.failure:raise acquisition.failure
                 content=page.content().encode('utf-8')
                 if len(content)>job_url.MAX_DOWNLOAD:raise ValueError('The rendered page is too large. Paste the description instead.')

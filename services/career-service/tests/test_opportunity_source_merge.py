@@ -1,7 +1,7 @@
 """A cited passage must survive source merging, and each category is checked against its own sources."""
 from app.clients.search_sources import OPPORTUNITY_EXCERPT_LIMIT
 from app.schemas.analysis import ResearchSource
-from app.workflows.opportunity.sources import category_sources,merge_sources,pool
+from app.workflows.opportunity.sources import category_sources,pool
 
 URL='https://example.test/interview'
 
@@ -18,9 +18,8 @@ def long_text(marker,size):
 def test_new_text_for_a_known_page_never_pushes_out_the_text_already_cited():
     saved=long_text('QUOTED-FIRST-ROUND',OPPORTUNITY_EXCERPT_LIMIT-500)
     fresh=long_text('SECOND-SEARCH',OPPORTUNITY_EXCERPT_LIMIT-500)
-    kept=merge_sources([source(saved)],[source(fresh)])[0].evidence
+    kept=pool([source(saved),source(fresh)])[0].evidence
     assert 'QUOTED-FIRST-ROUND' in kept and len(kept)<=OPPORTUNITY_EXCERPT_LIMIT
-    assert 'QUOTED-FIRST-ROUND' in pool([source(saved),source(fresh)])[0].evidence
     assert saved.rstrip() not in pool([source(fresh),source(saved)])[0].evidence
 
 
@@ -32,19 +31,6 @@ def test_a_page_shared_with_another_category_keeps_each_categorys_full_text():
     assert 'COMPANY-QUOTE' not in combined
     own=list(category_sources(job,'company_intelligence').values())[0].evidence
     assert 'COMPANY-QUOTE' in own and 'INTERVIEW-QUOTE' not in own
-
-
-def test_followup_pages_lead_evaluation_without_replacing_saved_page_text():
-    saved=long_text('SAVED-CITATION',OPPORTUNITY_EXCERPT_LIMIT-500)
-    fresh=long_text('FRESH-EXCERPT',OPPORTUNITY_EXCERPT_LIMIT-500)
-    merged=merge_sources([source(saved),source('Earlier result.',URL+'/old')],
-        [source('Follow-up result.',URL+'/new'),source(fresh)])
-    assert [s.url for s in merged]==[URL+'/new',URL,URL+'/old']
-    assert saved in merged[1].evidence
-    assert len(merged[1].evidence)<=OPPORTUNITY_EXCERPT_LIMIT
-    restored=pool([s.model_dump(mode='json') for s in merged])
-    assert [s.url for s in restored]==[s.url for s in merged]
-    assert saved in restored[1].evidence
 
 
 def test_category_sources_fall_back_to_unevaluated_evidence_and_unknown_categories():

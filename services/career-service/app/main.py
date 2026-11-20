@@ -15,16 +15,13 @@ from elo_shared.model_budget import reserve_provider_call
 from app.ai.adapter import AIAdapter
 from app.ai.config import AISettings
 from app.ai.routing import ModelRouter,opportunity_models
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.jd_scope import CareerScopeError
 from app.clients.cvs import CvClient
 from app.repositories.goals import GoalStore, GoalError
+from app.api.v1.assessment_input import router as assessment_input_router
 from app.api.v1.goals import router as goals_router
 from app.api.v1.cv_confirmation import router as cv_confirmation_router
-from app.api.v1.jd import router as jd_router
-from app.api.v1.reviews import router as reviews_router
-from app.api.v1.guidance import router as guidance_router
-from app.api.v1.research import router as research_router
 from app.repositories.research import ResearchStore
 from app.clients.search_sources import SourceAPIs
 from app.repositories.workspace import WorkspaceStore
@@ -51,7 +48,7 @@ class BodyLimit:
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
             return await self.app(scope, receive, send)
-        maximum = MAX_BODY if scope['path'].endswith('/document') else 256 * 1024 if '/career/targets' in scope['path'] or '/career/jd/' in scope['path'] or '/career/workspace/' in scope['path'] or scope['path'].endswith('/review') else 96 * 1024 if '/explorations/' in scope['path'] else 16 * 1024
+        maximum = MAX_BODY if scope['path'].endswith('/document') else 256 * 1024 if '/career/workspace/' in scope['path'] else 96 * 1024 if '/explorations/' in scope['path'] else 16 * 1024
         headers = dict(scope.get('headers', []))
         try: declared = int(headers.get(b'content-length', b'0'))
         except ValueError: declared = maximum + 1
@@ -69,16 +66,11 @@ class BodyLimit:
         await self.app(scope, limited_receive, send)
 
 
-def create_app(profile_client=None, processor=run_preview, database=None, ai=None, cv_client=None, review_store=None, research_client=None, context_ai=None, target_repository=None):
+def create_app(profile_client=None, processor=run_preview, database=None, ai=None, cv_client=None, review_store=None, research_client=None, context_ai=None):
     @asynccontextmanager
     async def lifespan(app):
-        # Explicit legacy test adapter only.
-        if target_repository is not None:
-            from anyio import CapacityLimiter
-            app.state.target_repository=target_repository
-            app.state.target_database=None
-            app.state.target_limiter=CapacityLimiter(8)
         app.state.operations = Operations()
+        app.state.role_summary_tasks = {}
         mongo = None
         db = database
         if db is None and os.getenv('MONGODB_URI'):
@@ -140,7 +132,6 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     app = FastAPI(title='elo Career API', version='0.2.0', lifespan=lifespan,
         description='One automatically saved career workspace per account. Validated job identity enables concurrent JD extraction and public research, with observed progress and scoped chat. Exploration follows a separate graph.')
     app.add_middleware(BodyLimit)
-    from app.api.v1.assessment_input import router as assessment_input_router
     app.include_router(assessment_input_router)
     app.include_router(discovery_router)
     app.include_router(opportunity_router)
@@ -149,13 +140,6 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     app.include_router(workspace_router)
     app.include_router(cv_confirmation_router)
     app.include_router(goals_router)
-    if target_repository is not None:
-        from app.api.v1.targets import router as legacy_targets_router
-        app.include_router(legacy_targets_router)
-    app.include_router(jd_router)
-    app.include_router(research_router)
-    app.include_router(guidance_router)
-    app.include_router(reviews_router)
 
     @app.exception_handler(ValidationError)
     async def model_error(request, error):
@@ -213,8 +197,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                 'response_envelope':'The model returned an unexpected response format.',
                 'provenance':'The AI response could not be matched to its approved evidence or citations.',
             }
-            action='retry extraction' if request.url.path.endswith('/jd/extract') else 'retry your message'
-            payload['detail']=descriptions[error.reason]+' Your previous inputs and saved progress are unchanged; '+action+'.'
+            payload['detail']=descriptions[error.reason]+' Your previous inputs and saved progress are unchanged; retry your message.'
             payload['diagnostic']={'reason':error.reason,'fields':list(error.fields)}
             if error.violations:payload['diagnostic']['violations']=list(error.violations)
         operation_id=request.path_params.get('operation_id')

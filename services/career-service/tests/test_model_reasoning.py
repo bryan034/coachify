@@ -5,7 +5,8 @@ import json
 import httpx
 import pytest
 
-from app.ai.adapter import AIAdapter,AIError,MODEL_OUTPUTS,Operation
+from app.ai.adapter import AIAdapter, MODEL_OUTPUTS, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.opportunity_config import OpportunitySettings
@@ -85,7 +86,7 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
                 'confidence':'medium','evidence_type':'candidate_reported','scope':'exact'} for field,text in passages.items()]}
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(result)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            sources=await SourceAPIs(client,brave_key='synthetic-brave').collect_opportunity_query(
+            sources=await SourceAPIs(client,brave_key='synthetic-brave',backend='brave').collect_opportunity_query(
                 ResearchContext(role='Analyst Intern',field='Data',company='Example'),f'Example internship {category}')
             selected=select_evidence(sources,OpportunitySettings().evidence_tokens)
             context=structure_input({},category,selected)

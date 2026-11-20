@@ -76,16 +76,6 @@ def choose_reads(due,found,flags,read):
     return list(chosen.values()),reads
 
 
-def merge_sources(saved,fresh):
-    """Present fresh URLs first while preserving previously cited text within each page.
-
-    Saved sources are pooled first, then the merged pages are reordered so new results come first.
-    """
-    merged=pool([*saved,*fresh])
-    priority={s.source_id:index for index,s in enumerate(pool(fresh))}
-    return sorted(merged,key=lambda s:priority.get(s.source_id,len(priority)))
-
-
 def category_sources(job,category):
     """A category's own saved sources; a page shared with another category is never merged in."""
     retained=job.get('retained_sources')

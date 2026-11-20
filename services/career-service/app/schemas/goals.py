@@ -1,10 +1,10 @@
 """Private drafts, bounded conversational context and explicit selection."""
-from app.schemas.analysis import EmploymentType
+from app.schemas.analysis import EmploymentType, Contract, Document, DomainId, Evidence, Generation, Text, SourceUrl, AccountId, CvReference, CvText
 
 from typing import Literal
 from pydantic import Field, model_validator
-from app.schemas.analysis import (Contract, Document, DomainId, Evidence, Generation, Text, TargetSkill,
-    NonSkillRequirement, SourceUrl, AccountId, CvReference, CvText)
+
+MAX_TURN_CHARS = 600
 
 Question = Literal['aspirations', 'education', 'experience', 'skills', 'interests', 'preferences']
 QUESTIONS = {
@@ -48,7 +48,7 @@ class ExplorationOutput(Contract):
 
     @model_validator(mode='after')
     def bounded_message(self):
-        if len(self.reply) + len(self.follow_up or '') + 2 > 600:
+        if len(self.reply) + len(self.follow_up or '') + 2 > MAX_TURN_CHARS:
             raise ValueError('Keep the complete agent message within 600 characters.')
         if len({u.topic for u in self.context_updates}) != len(self.context_updates):
             raise ValueError('Only one update per context topic.')
@@ -129,8 +129,6 @@ class SendAnswer(Contract):
 
 class SaveGoal(Contract):
     expected_selection_version: int = Field(strict=True, ge=0)
-    expected_draft_version: int | None = Field(default=None, strict=True, ge=1)
-    draft_id: DomainId | None = None
     target_type: Literal['specific_job', 'career_exploration']
     role: Text
     field: Text
@@ -139,22 +137,8 @@ class SaveGoal(Contract):
     location: Text | None = None
     seniority_level: Text | None = None
     job_url: SourceUrl | None = None
-    replace_current: bool = False
-    review_id: DomainId | None = None
-    expected_review_version: int | None = Field(default=None, strict=True, ge=1)
-    # Skills/provenance are server-owned.
-
-    @model_validator(mode='after')
-    def draft_version(self):
-        if (self.review_id is None) != (self.expected_review_version is None):
-            raise ValueError('A review reference needs its expected version.')
-        if self.review_id and self.draft_id:
-            raise ValueError('Choose a review or an exploration draft.')
-        if (self.draft_id is None) != (self.expected_draft_version is None):
-            raise ValueError('A draft reference needs its expected version.')
-        if self.target_type == 'career_exploration' and self.draft_id is None and self.review_id is None:
-            raise ValueError('Review an exploration draft before confirming.')
-        return self
+    review_id: DomainId
+    expected_review_version: int = Field(strict=True, ge=1)
 
 
 class AssessmentStatus(Contract):

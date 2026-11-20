@@ -1,5 +1,5 @@
 """Explicit acknowledgement of the current canonical goal for CV clarification."""
-from typing import Annotated, Literal
+from typing import Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.schemas.analysis import DomainId

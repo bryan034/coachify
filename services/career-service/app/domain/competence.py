@@ -2,10 +2,11 @@
 
 Levels rate understanding of the subject: 1-3 basic, 4-6 moderate, 7-8 good, 9-10 expert.
 The research model decides the level, given a weighted reference score as a guideline: a baseline for the
-role's seniority, adjusted by how selective the hiring is, the skill's importance, whether it defines the
-role, the experience asked for, and how widely and deeply public research discusses it. Until the model
-has rated a skill, that reference is the target. A level the employer states outright is a floor (or,
-for basic wording, a ceiling) on either. Every weight lives in the tables below.
+role's seniority, adjusted by the skill's importance, the experience asked for, and how widely and deeply
+public research discusses it. How selective the hiring is and whether a skill defines the role are left to
+the model's judgement. Until the model has rated a skill, that reference is the target. A level the
+employer states outright is a floor (or, for basic wording, a ceiling) on either. Every weight lives in
+the tables below.
 """
 import re
 from elo_shared.competence_scale import MIN_LEVEL, MAX_LEVEL
@@ -27,21 +28,6 @@ EMPLOYMENT_BASE = {'internship': (5, 'internship'), 'full_time': (5, 'full-time 
                    'contract': (5, 'contract role'), 'unknown': (5, 'role')}
 PRIORITY_WEIGHT = {'required': (2, 'essential to the role'), 'preferred': (2, 'essential to the role'),
                    'unspecified': (1, 'nice to have'), 'suggested': (1, 'nice to have'), 'conflicting': (0, None)}
-# A skill sharing a significant word with the role title defines the role.
-CORE_WEIGHT = (2, 'core to the role title')
-GENERIC_TITLE_WORDS = frozenset('''intern internship trainee graduate junior senior lead principal staff head manager associate
-    analyst specialist officer executive assistant consultant engineer engineering developer scientist summer
-    winter spring autumn off cycle programme program role position team and of the for with in to'''.split())
-# Highly selective hiring, matched against the role, field and company; applies once per goal, to every skill.
-SELECTIVE_HIRING = (
-    (r'\b(quant|quantitative)\b.{0,40}\b(trad\w*|research\w*|analyst|developer|strateg\w*)\b|\b(market.mak\w*|prop(rietary)? trading|algorithmic trading|high.frequency trading)\b',
-     'quantitative trading or research'),
-    (r'\b(investment banking|private equity|hedge funds?|sales (and|&) trading|global markets|equity research|leveraged finance|mergers (and|&) acquisitions|m&a)\b',
-     'investment banking, markets or buy-side'),
-    (r'\b(optiver|jane street|citadel|imc trading|susquehanna|hudson river trading|jump trading|drw|two sigma|d\.?\s?e\.? shaw|tower research|virtu|flow traders|da vinci|akuna|squarepoint|millennium|point72|goldman sachs|morgan stanley|j\.?\s?p\.? ?morgan|jpmorgan|evercore|lazard|rothschild|centerview|moelis|pjt partners|blackstone|kkr|carlyle|temasek|gic|mckinsey|boston consulting group|bcg|bain (&|and) company)\b',
-     'highly selective employer'),
-)
-SELECTIVE_WEIGHT = 2
 # (minimum months, weight); the first row the stated months reach applies.
 EXPERIENCE_WEIGHT = ((37, 3), (13, 2), (0, 1))
 BREADTH_SOURCES, BREADTH_WEIGHT = 3, (1, 'discussed across {n} public sources')
@@ -59,44 +45,11 @@ INTERVIEW_CATEGORY='interview_intelligence'
 def _key(name): return ' '.join(name.casefold().split())
 
 
-SKILL_FILLER_WORDS = frozenset('and of the for with in to a an skills skill knowledge'.split())
-
-
-def _words(text): return re.findall(r'[\w+#]+', _key(text or ''))
-
-
-def _stem(word):
-    """Light suffix folding so "solve", "solving" and "problems" match "solving" and "problem"."""
-    for suffix in ('ations','ation','ings','ing','ers','er','ies','es','ed','s','e'):
-        if word.endswith(suffix) and len(word)-len(suffix)>=3 and not (suffix=='s' and word.endswith('ss')):
-            word=word[:-len(suffix)];break
-    return word[:-1] if len(word)>3 and word[-1]==word[-2] else word
-
-
-def _similar(a, b):
-    """Words sharing a long enough stem, e.g. quant/quantitative or trader/trading."""
-    if a==b: return True
-    n=len(next((a[:i] for i in range(min(len(a),len(b)),0,-1) if a[:i]==b[:i]), ''))
-    return n>=4 and n*3>=2*min(len(a),len(b))
-
-
 def _mentions(name, text):
-    """Whole phrase (respecting symbols such as C++ or C#), or every significant word of the skill in any form or order."""
+    """The skill's whole name as a phrase, respecting symbols such as C++ or C#."""
     name=_key(name)
     if len(name)<=1: return False
-    if re.search(r'(?<![\w+#])'+re.escape(name)+r'(?![\w+#])', _key(text or '')): return True
-    wanted={_stem(w) for w in _words(name) if w not in SKILL_FILLER_WORDS and len(w)>1}
-    return bool(wanted) and wanted<={_stem(w) for w in _words(text)}
-
-
-def core_to_role(name, title):
-    title_words=[w for w in _words(title) if w not in GENERIC_TITLE_WORDS and len(w)>1]
-    return any(_similar(s,t) for s in _words(name) if s not in SKILL_FILLER_WORDS and len(s)>1 for t in title_words)
-
-
-def selective_hiring(goal):
-    text=' '.join(getattr(goal,k,None) or '' for k in ('role','field','company'))
-    return next((label for pattern,label in SELECTIVE_HIRING if re.search(pattern, text, re.I)), None)
+    return bool(re.search(r'(?<![\w+#])'+re.escape(name)+r'(?![\w+#])', _key(text or '')))
 
 
 def role_base(goal):
@@ -136,18 +89,15 @@ def finding_signals(name, categories):
 def reference(skill, goal=None, categories=None):
     """The weighted reference score and the contribution of each weight, before stated bounds.
 
-    `skill` needs name, priority and required_experience_months; `goal` role, seniority_level,
-    employment_type and optionally field and company; `categories` are fresh research findings by category, if any.
+    `skill` needs name, priority and required_experience_months; `goal` role, seniority_level
+    and employment_type; `categories` are fresh research findings by category, if any.
     """
     level,label=role_base(goal)
     reasons=[f'{label} baseline {level}']
     def add(weight, reason):
         nonlocal level
         if weight: level+=weight;reasons.append(f'{reason} {weight:+d}')
-    selective=selective_hiring(goal)
-    if selective: add(SELECTIVE_WEIGHT, f'selective hiring ({selective})')
     add(*PRIORITY_WEIGHT.get(skill.priority,(0,None)))
-    if core_to_role(skill.name, getattr(goal,'role',None)): add(*CORE_WEIGHT)
     months=getattr(skill,'required_experience_months',None)
     if months is not None: add(next(w for m,w in EXPERIENCE_WEIGHT if months>=m), f'{months} months’ experience asked')
     sources,interview=finding_signals(skill.name, categories)

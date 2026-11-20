@@ -16,7 +16,7 @@ def test_brave_only_uses_public_scope_and_never_calls_other_apis():
             assert 'Example Analyst Singapore interview' in req.url.params['q']
             return httpx.Response(200,json={'grounding':{'generic':[{'url':'https://www.reddit.com/r/test/comments/abc/interview/','title':'Interview','snippets':['SQL interview exercise']}]}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            values=await SourceAPIs(client,brave_key='fixture-key',brave_mode='search').collect(ResearchContext(company='Example',role='Analyst',field='Data',location='Singapore'))
+            values=await SourceAPIs(client,brave_key='fixture-key',brave_mode='search',backend='brave').collect(ResearchContext(company='Example',role='Analyst',field='Data',location='Singapore'))
             assert len(calls)==1 and len(values)==1
             assert values[0].source_id.startswith('brave-')
             assert values[0].platform=='reddit' and values[0].reliability=='anecdotal'
@@ -27,13 +27,13 @@ def test_other_acquisition_platforms_are_rejected_without_network():
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:pytest.fail('No network allowed'))) as client:
             with pytest.raises(GoalError,match='Unsupported research platform'):
-                await SourceAPIs(client,brave_key='fixture',brave_mode='answers').collect_platform(ResearchContext(role='Analyst',field='Data'),'reddit')
+                await SourceAPIs(client,brave_key='fixture',brave_mode='answers',backend='brave').collect_platform(ResearchContext(role='Analyst',field='Data'),'reddit')
     asyncio.run(run())
 
 def test_unconfigured_platforms_do_not_make_network_calls():
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:pytest.fail('No network allowed'))) as client:
-            with pytest.raises(GoalError):await SourceAPIs(client).collect(ResearchContext(role='Analyst',field='Data'))
+            with pytest.raises(GoalError):await SourceAPIs(client,backend='brave').collect(ResearchContext(role='Analyst',field='Data'))
     asyncio.run(run())
 
 
@@ -45,12 +45,12 @@ def test_all_legacy_modes_and_workflows_use_llm_context(mode,method):
             assert request.method=='GET' and request.url.path=='/res/v1/llm/context'
             return httpx.Response(200,json={'grounding':{'generic':[]}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            api=SourceAPIs(client,brave_key='fixture',brave_mode=mode)
+            api=SourceAPIs(client,brave_key='fixture',brave_mode=mode,backend='brave')
             context=ResearchContext(company='Example',role='Analyst',field='Data',location='Singapore')
             args={'collect':(), 'collect_platform':('brave',), 'collect_query':('Analyst Singapore interview',), 'collect_opportunity_query':('Analyst Singapore interview',)}[method]
             assert await getattr(api,method)(context,*args)==[]
             assert api.brave_mode=='llm_context'
-            assert api.cache_policy==SourceAPIs(None).cache_policy
+            assert api.cache_policy==SourceAPIs(None,backend='brave').cache_policy
             assert 'Example' in api.query(context,1) and 'Singapore' in api.query(context,1)
     asyncio.run(run())
 
@@ -67,7 +67,7 @@ def test_old_answer_streams_and_web_envelopes_are_not_published(payload):
         def handler(request):
             return httpx.Response(200,text=payload) if isinstance(payload,str) else httpx.Response(200,json=payload)
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            with pytest.raises(GoalError):await SourceAPIs(client,brave_key='fixture').brave('interview')
+            with pytest.raises(GoalError):await SourceAPIs(client,brave_key='fixture',backend='brave').brave('interview')
     asyncio.run(run())
 
 
@@ -76,7 +76,7 @@ def test_context_plan_rejection_does_not_expose_provider_body(status):
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(status,text='PRIVATE PROVIDER DETAILS'))) as client:
             with pytest.raises(GoalError,match='LLM Context API credentials') as error:
-                await SourceAPIs(client,brave_key='fixture').brave('interview')
+                await SourceAPIs(client,brave_key='fixture',backend='brave').brave('interview')
             assert 'PRIVATE' not in error.value.message
     asyncio.run(run())
 
@@ -86,7 +86,7 @@ def test_brave_http_failures_report_safe_actionable_categories(status,expected):
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(status,text='PRIVATE KEY OR PROVIDER CONTENT'))) as client:
             with pytest.raises(GoalError,match=expected) as error:
-                await SourceAPIs(client,brave_key='fixture',brave_mode='answers').brave('interview')
+                await SourceAPIs(client,brave_key='fixture',brave_mode='answers',backend='brave').brave('interview')
             assert f'HTTP {status}' in error.value.message
             assert 'PRIVATE' not in error.value.message
     asyncio.run(run())
@@ -98,7 +98,7 @@ def test_brave_transport_failures_do_not_blame_credentials(failure,expected):
         def handler(request):raise failure('PRIVATE transport details',request=request)
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             with pytest.raises(GoalError,match=expected) as error:
-                await SourceAPIs(client,brave_key='fixture',brave_mode='answers').brave('interview')
+                await SourceAPIs(client,brave_key='fixture',brave_mode='answers',backend='brave').brave('interview')
             assert 'PRIVATE' not in error.value.message
     asyncio.run(run())
 
@@ -113,7 +113,7 @@ def test_brave_400_preserves_known_subscription_error_code_without_private_detai
     async def run():
         payload={'error':{'code':code,'detail':'PRIVATE TOKEN AND USER QUERY','id':'PRIVATE ID','meta':{'secret':'PRIVATE'}}}
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(400,json=payload))) as client:
-            with pytest.raises(GoalError) as error:await SourceAPIs(client,brave_key='fixture',brave_mode='answers').brave('interview')
+            with pytest.raises(GoalError) as error:await SourceAPIs(client,brave_key='fixture',brave_mode='answers',backend='brave').brave('interview')
             assert code in error.value.message and expected in error.value.message
             assert 'PRIVATE' not in error.value.message
     asyncio.run(run())
@@ -126,7 +126,7 @@ def test_brave_400_preserves_known_subscription_error_code_without_private_detai
 def test_brave_validation_only_reports_known_field_names(payload):
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(400,json=payload))) as client:
-            with pytest.raises(GoalError) as error:await SourceAPIs(client,brave_key='fixture',brave_mode='answers').brave('interview')
+            with pytest.raises(GoalError) as error:await SourceAPIs(client,brave_key='fixture',brave_mode='answers',backend='brave').brave('interview')
             assert 'Rejected fields: country.' in error.value.message and 'PRIVATE' not in error.value.message
     asyncio.run(run())
 
@@ -135,7 +135,7 @@ def test_brave_validation_only_reports_known_field_names(payload):
 def test_brave_malformed_error_body_keeps_safe_http_failure(payload):
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(400,json=payload))) as client:
-            with pytest.raises(GoalError,match='HTTP 400') as error:await SourceAPIs(client,brave_key='fixture',brave_mode='answers').brave('interview')
+            with pytest.raises(GoalError,match='HTTP 400') as error:await SourceAPIs(client,brave_key='fixture',brave_mode='answers',backend='brave').brave('interview')
             assert 'PRIVATE' not in error.value.message
     asyncio.run(run())
 
@@ -147,7 +147,7 @@ def test_context_deduplicates_url_and_snippets():
             {'url':'https://example.test/a','snippets':['Three interview rounds include a technical assessment.']},
             {'url':'https://example.test/b','snippets':['A behavioural interview is reported.']}]}}
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(200,json=payload))) as client:
-            values=await SourceAPIs(client,brave_key='fixture').brave('interview')
+            values=await SourceAPIs(client,brave_key='fixture',backend='brave').brave('interview')
         assert len(values)==2
         assert values[0].evidence.count('Three interview rounds')==1
     asyncio.run(run())
@@ -169,7 +169,7 @@ def test_search_evidence_at_exact_budget_never_appends_a_negative_slice(descript
         async with httpx.AsyncClient(transport=httpx.MockTransport(
             lambda _:httpx.Response(200,json={'grounding':{'generic':[{'url':value['url'],'title':value['title'],'snippets':[description,*extras]}]}})
         )) as client:
-            sources=await SourceAPIs(client,brave_key='fixture',brave_mode='search').brave('interview')
+            sources=await SourceAPIs(client,brave_key='fixture',brave_mode='search',backend='brave').brave('interview')
         assert len(sources)==1 and sources[0].evidence==text
         from app.clients.research import normalize_batch
         assert normalize_batch(sources).sources[0].evidence==text
@@ -184,5 +184,5 @@ def test_search_sends_only_supported_country_enum_and_keeps_query_location(count
             assert 'Singapore' in request.url.params['q']
             return httpx.Response(200,json={'grounding':{'generic':[]}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            assert await SourceAPIs(client,brave_key='fixture',brave_mode='search').brave('DBS internship Singapore interview',country=country)==[]
+            assert await SourceAPIs(client,brave_key='fixture',brave_mode='search',backend='brave').brave('DBS internship Singapore interview',country=country)==[]
     asyncio.run(run())

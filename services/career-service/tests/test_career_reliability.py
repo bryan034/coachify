@@ -4,10 +4,12 @@ import json
 from types import SimpleNamespace
 import httpx
 import pytest
-from app.ai.adapter import AIAdapter, AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
-from app.ai.jd_scope import identify_job, CareerScopeError
+from app.ai.jd_scope import CareerScopeError
+from app.workflows.job_identity import identify_job
 from app.ai.recovery import recover_responses
 from app.ai.opportunity_contracts import structure_input
 from app.schemas.analysis import ResearchSource

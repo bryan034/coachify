@@ -1,4 +1,5 @@
 """Stage router; production uses one configured model adapter for both roles."""
+from app.ai.errors import AIError
 
 
 
@@ -9,9 +10,8 @@ class ModelRouter:
         self.context_enabled=context is not None and getattr(getattr(context,'settings',None),'enabled',True)
 
     async def generate(self,request,operation,**kwargs):
-        adapter=self.context if request.stage in ('context_route','context_answer','career_guidance','research_plan','research_assess','opportunity_plan','discovery_turn','discovery_plan','discovery_summary') else self.primary
+        adapter=self.context if request.stage in ('context_route','passage_scope','context_answer','career_guidance','research_plan','research_assess','opportunity_plan','discovery_turn','discovery_plan','discovery_summary') else self.primary
         if adapter is None:
-            from app.ai.adapter import AIError
             raise AIError('not_configured')
         return await adapter.generate(request,operation,**kwargs)
 

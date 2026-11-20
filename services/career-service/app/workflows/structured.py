@@ -3,8 +3,10 @@ import asyncio
 import inspect
 import logging
 from functools import wraps
-from app.ai.adapter import AIError
-from app.ai.recovery import recover_responses, validation_feedback, validation_progress, validation_budget
+from app.ai.errors import AIError
+from app.ai.recovery import recover_responses, validation_feedback, validation_progress
+
+MAX_REPAIRS = 6
 
 
 async def notify(feedback):
@@ -19,8 +21,6 @@ def structured_node(node):
     async def run(state):
         if not recover_responses.get(): return await node(state)
         context = validation_feedback.set(None)
-        budget = validation_budget.get()
-        remaining = None
         attempt = 0
         try:
             while True:
@@ -29,14 +29,10 @@ def structured_node(node):
                 except AIError as error:
                     if error.code not in ('invalid_output','incomplete_output'): raise
                     attempt += 1
-                    if attempt > 6:raise  # Bounded repair attempts.
+                    if attempt > MAX_REPAIRS:raise
                     feedback = {'reason': error.reason or ('incomplete_json' if error.code=='incomplete_output' else 'response_envelope'),
                                 'fields': list(error.fields), 'violations': list(error.violations)}
                     validation_feedback.set(feedback)
-                    # Correction calls each retain the adapter's own HTTP deadline, outside research's original budget.
-                    if budget is not None and remaining is None:
-                        remaining = max(0, budget.when()-asyncio.get_running_loop().time())
-                        budget.reschedule(None)
                     await notify(feedback)
                     logging.getLogger('uvicorn.error.ai_usage').info(
                         'structured_recovery node=%s correction=%s reason=%s',
@@ -44,7 +40,5 @@ def structured_node(node):
                     await asyncio.sleep(0)  # Allow shutdown/replacement between attempts.
         finally:
             validation_feedback.reset(context)
-            if remaining is not None:
-                budget.reschedule(asyncio.get_running_loop().time()+remaining)
             await notify(None)
     return run

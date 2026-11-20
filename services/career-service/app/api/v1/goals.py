@@ -2,41 +2,25 @@
 import hashlib
 import json
 import asyncio
-from uuid import UUID
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool
-from app.ai.adapter import AIError, Operation
+from app.ai.adapter import Operation
+from app.ai.errors import AIError
 from app.workflows.exploration import exploration_turn
 from app.ai.contracts import AIInput, Message
-from app.core.auth import bearer, current_account
+from app.api.v1.dependencies import identifier, owner, request_key
 from app.repositories.goals import GoalError, fingerprint, now
-from app.schemas.analysis import object_id
-from app.schemas.goals import Answer, AssessmentStatus, CvContext, GoalDraft, QUESTIONS, SaveGoal, SendAnswer, StartExploration, Turn
+from app.schemas.goals import Answer, AssessmentStatus, CvContext, GoalDraft, QUESTIONS, SendAnswer, StartExploration, Turn
+from app.domain.competence import calibrated_goal
 
 router=APIRouter(prefix='/api/v1/career', tags=['J08 exploration / J09 goal confirmation'])
-
-
-async def owner(request: Request, credentials=Depends(bearer)):
-    return await current_account(request, credentials)
 
 
 def store(request):
     if request.app.state.goal_store is None:
         raise GoalError('Career storage is not configured. Check the setup guide.',503)
     return request.app.state.goal_store
-
-
-def request_key(idempotency_key: str = Header(alias='Idempotency-Key')):
-    try:
-        if str(UUID(idempotency_key)) != idempotency_key: raise ValueError
-    except ValueError: raise HTTPException(422,'Use a unique UUID Idempotency-Key for this action.') from None
-    return idempotency_key
-
-
-def identifier(value):
-    try: return object_id(value)
-    except ValueError: raise HTTPException(404,'This record was not found.') from None
 
 
 def draft_view(draft):
@@ -109,10 +93,7 @@ async def start(body: StartExploration, request: Request, account=Depends(owner)
         cv_context=CvContext(mode='temporary',filename=body.temporary_filename)
     draft=await run_in_threadpool(store(request).start,account,key,body.model_dump(mode='json'),cv_context)
     if workspace:
-        from datetime import timedelta
-        await run_in_threadpool(workspace.rows.update_one,{'_id':account},{'$setOnInsert':{'version':0,'goal_id':None,'receipts':[]},
-            '$set':{'workspace':{'session_id':draft.id,'kind':'exploration','exploration_id':draft.id,'revision':draft.version,'phase':'exploring',
-                'run_id':draft.id,'expires_at':now()+timedelta(hours=24)}}},upsert=True)
+        await run_in_threadpool(workspace.begin_exploration,account,draft)
     return draft_view(draft)
 
 
@@ -204,42 +185,7 @@ async def answer(draft_id: str, body: SendAnswer, request: Request, account=Depe
 async def current(request: Request, account=Depends(owner)):
     current=await run_in_threadpool(store(request).current,account)
     if current['goal']:
-        from app.domain.competence import calibrated_goal
         goal=current['goal'];research_store=request.app.state.research_store
         record=await run_in_threadpool(research_store.read,account,goal.id,current=True,goal_version=goal.version) if research_store else None
         current['goal']=calibrated_goal(goal,record)
     return jsonable_encoder(current,by_alias=True)
-
-
-@router.get('/goals')
-async def goals(request: Request, account=Depends(owner)):
-    result=await run_in_threadpool(store(request).list,account)
-    reviews=await run_in_threadpool(lambda:list(store(request).goals.find({'user_id':account,'record_type':'requirement_review'}).sort('updated_at',-1).limit(20)))
-    return {'reviews':[{'review_id':str(r['_id']),'role':r['content']['role'],'version':r['version']} for r in reviews], 'goals':[g.model_dump(mode='json',by_alias=True) for g in result['goals']],
-            'explorations':[draft_view(d) for d in result['explorations']]}
-
-
-@router.post('/goals/confirm')
-async def confirm(body: SaveGoal, request: Request, account=Depends(owner), key=Depends(request_key)):
-    replay=await run_in_threadpool(store(request).replay_confirmation,account,key,body)
-    if replay is not None: return jsonable_encoder(replay,by_alias=True)
-    if body.review_id:
-        from app.api.v1.reviews import store as review_store
-        repository=review_store(request)
-        draft=await run_in_threadpool(repository.claim_confirmation,body.review_id,account,body.expected_review_version,key)
-        try:
-            goal=repository.goal(draft,account,key,body)
-            selected=await run_in_threadpool(store(request).confirm,account,key,body,goal)
-            if draft.discovery:
-                research_id=draft.discovery.research_id.split(':')[0]
-                await run_in_threadpool(store(request).db.research_contexts.update_one,{'_id':research_id,'owner':account,'review_id':draft.id},{'$set':{'status':'confirmed'}})
-            return jsonable_encoder(selected,by_alias=True)
-        finally:
-            await run_in_threadpool(repository.release_confirmation,body.review_id,account,key)
-    if body.draft_id:
-        draft=await run_in_threadpool(store(request).draft,body.draft_id,account)
-        if draft.cv.mode=='saved':
-            cv=await selected_cv(request,draft.cv.cv_id,account)
-            if cv.version!=draft.cv.version or cv.extraction_version!=draft.cv.extraction_version or cv.profile_version!=draft.cv.profile_version:
-                raise GoalError('Your CV changed after these suggestions. Start a fresh exploration before confirming.')
-    return jsonable_encoder(await run_in_threadpool(store(request).confirm,account,key,body),by_alias=True)

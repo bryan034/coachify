@@ -20,8 +20,6 @@ def test_reset_preserves_account_data_revokes_sessions_and_blocks_replay(setup):
     client, repo = setup
     account, headers, body, _ = register(client)
     client.patch(BASE, headers=headers, json={'expected_version': 0, 'occupational_status': 'employed'})
-    # Include a session from before credential binding was introduced.
-    repo.sessions.update_many({}, {'$unset': {'credential_hash': ''}})
     proof = request_reset(client, repo, account['email'].upper())
     assert client.post(BASE+'/auth/reset-password', json=proof).json() == {'ok': True}
     assert client.get(BASE, headers=headers).status_code == 401

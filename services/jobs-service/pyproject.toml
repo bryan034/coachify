@@ -16,3 +16,10 @@ app = ["sources.json"]
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
 pythonpath = ["tests"]
+
+[tool.vulture]
+paths = ["app"]
+exclude = ["app/schemas.py"]
+ignore_decorators = ["@router.*", "@app.*", "@field_validator", "@model_validator"]
+ignore_names = ["handle_starttag", "handle_endtag", "handle_data", "attrs", "model_config"]
+min_confidence = 60

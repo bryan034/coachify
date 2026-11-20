@@ -6,7 +6,8 @@ from urllib.parse import parse_qs
 import asyncio
 import httpx
 import pytest
-from app.ai.adapter import AIAdapter,AIError,Operation
+from app.ai.adapter import AIAdapter, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.research_planning import ResearchPlan,ResearchAssessment
@@ -23,7 +24,7 @@ def source(name,useful=True,url=None,evidence=None):
 
 
 class Search:
-    brave_mode='search'
+    brave_mode='search';provider='brave';backend='brave'
     cache_policy='synthetic-planned-research'
     def __init__(self,batches):self.batches=batches;self.calls=[]
     async def collect_query(self,context,query):
@@ -78,7 +79,7 @@ def test_search_planning_payloads_are_public_bounded_and_country_matches_address
             assert req.url.params['q']=='DBS technology internship Singapore interview process'
             return httpx.Response(200,json={'grounding':{'generic':[]},'sources':{}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(search)) as client:
-            assert await SourceAPIs(client,brave_key='fixture').collect_query(context,'DBS technology internship Singapore interview process')==[]
+            assert await SourceAPIs(client,brave_key='fixture',backend='brave').collect_query(context,'DBS technology internship Singapore interview process')==[]
         assert len(calls)==1
     asyncio.run(run())
 

@@ -3,7 +3,8 @@ import asyncio
 import json
 import httpx
 import pytest
-from app.ai.adapter import AIAdapter, AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.usage import input_tokens

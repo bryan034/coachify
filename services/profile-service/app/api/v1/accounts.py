@@ -1,100 +1,12 @@
-from typing import Annotated, Literal
-from datetime import datetime
+from typing import Annotated
 from ipaddress import ip_address
 from socket import gaierror, getaddrinfo
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from app.core.auth import bearer, verify_google
-from app.core.mail import normalize_email
+from app.schemas.accounts import Attempt, Begin, Complete, VerificationAccess, Verify, AccountView, PendingVerification, Choice, Nonce, Done, ResetRequest, ResetComplete, ResetReceipt
 
 router = APIRouter(prefix='/api/v1/profile/auth', tags=['P09–P16 account access'])
-Secret = Annotated[str, Field(min_length=32, max_length=128, pattern=r'^[A-Za-z0-9_-]+$')]
-
-class Attempt(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    flow_id: Secret
-    attempt_id: Secret
-
-class Begin(Attempt):
-    intent: Literal['login', 'register']
-    generation: int = Field(strict=True, ge=1, le=9007199254740991)
-
-class Complete(Attempt):
-    session_token: Secret
-    name: str | None = Field(None, max_length=80)
-    email: str | None = Field(None, max_length=254)
-    password: str | None = Field(None, min_length=8, max_length=128)
-    credential: str | None = Field(None, max_length=12000)
-
-    @field_validator('email')
-    @classmethod
-    def valid_email(cls, value):
-        return normalize_email(value) if value is not None else None
-
-class VerificationAccess(Attempt):
-    session_token: Secret
-
-class Verify(VerificationAccess):
-    challenge_id: Secret
-    code: str = Field(pattern=r'^[0-9]{6}$')
-
-class AccountView(BaseModel):
-    id: str
-    name: str
-    email: str
-    email_verified: bool
-    provider: Literal['google', 'local_test', 'email']
-    expires_at: datetime
-    # Every account has the same item scope; server-owned fields for CV service consumers.
-    cv_review_scope: Literal['item'] = 'item'
-    # Item scope keeps its v1 wire contract.
-    cv_review_policy_version: Literal[1] = 1
-
-    @model_validator(mode='before')
-    @classmethod
-    def current_review_policy(cls, value):
-        # Project the current policy for legacy accounts without mutating stored data.
-        if isinstance(value, dict):
-            return {**value, 'cv_review_scope': 'item', 'cv_review_policy_version': 1}
-        return value
-
-class PendingVerification(BaseModel):
-    verification_required: Literal[True]
-    challenge_id: str
-    masked_email: str
-    expires_at: datetime
-    resend_at: datetime
-
-class Choice(BaseModel):
-    id: str
-    name: str
-    email: str
-
-class Nonce(BaseModel):
-    nonce: str
-
-class Done(BaseModel):
-    ok: bool
-
-class ResetRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    email: str = Field(max_length=254)
-
-    @field_validator('email')
-    @classmethod
-    def valid_email(cls, value):
-        return normalize_email(value)
-
-class ResetComplete(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    challenge_id: Secret
-    code: str = Field(pattern=r'^[0-9]{6}$')
-    password: str = Field(min_length=8, max_length=128)
-
-class ResetReceipt(BaseModel):
-    challenge_id: str
-    message: str
 
 
 def repo(request: Request):

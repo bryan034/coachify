@@ -1,11 +1,9 @@
+"""Transient JD review contracts; candidates are not canonical analysis skills."""
 from elo_shared.dates import JobDate
 from elo_shared.skills import resolve, MAPPING_VERSION
-"""Transient JD review contracts; candidates are not canonical analysis skills."""
-from app.schemas.analysis import EmploymentType, DiscoveryEvidence, LearningItem, CompetenceTarget
-
+from app.schemas.analysis import EmploymentType, DiscoveryEvidence, LearningItem, CompetenceTarget, Contract, Text, Evidence, SourceUrl, Proficiency, Count, Generation, NonSkillRequirement, Document, AccountId, DomainId, SkillId, Version, Priority
 from typing import Annotated, Literal
 from pydantic import Field, StringConstraints, field_validator, model_validator
-from app.schemas.analysis import Contract, Text, Evidence, SourceUrl, Proficiency, Count, Generation, NonSkillRequirement, Document, AccountId, DomainId, SkillId, Version, Priority
 
 ChatText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
 
@@ -80,17 +78,6 @@ class JDSource(Contract):
     def nonempty(cls,value):
         if not value.strip():raise ValueError('Provide a job description.')
         return value
-
-class ReviewMessage(Contract):
-    role: Literal['user','assistant']
-    content: ChatText
-
-class JDMessage(Contract):
-    review_id: DomainId
-    expected_version: Version
-    message: Evidence
-    conversation: list[ReviewMessage] = Field(default_factory=list, max_length=12, repr=False)
-
 
 class RequirementReview(Document):
     discovery: DiscoveryEvidence | None = None

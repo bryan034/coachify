@@ -5,7 +5,8 @@ import json
 import httpx
 import pytest
 
-from app.ai.adapter import AIAdapter, AIError, Operation
+from app.ai.adapter import AIAdapter, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 
@@ -72,6 +73,6 @@ def test_embedded_rate_limit_preserves_bounded_provider_cooldown(header, expecte
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter = AIAdapter(AISettings(enabled=True, api_key='synthetic'), client)
             with pytest.raises(AIError) as caught:
-                await adapter._complete({'model': 'synthetic', 'messages': []}, owner='synthetic')
+                await adapter._complete({'model': 'synthetic', 'messages': []},stage='career_guidance',owner='synthetic')
         assert caught.value.code == 'rate_limited' and caught.value.retry_after == expected
     asyncio.run(run())

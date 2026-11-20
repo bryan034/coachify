@@ -158,6 +158,26 @@ jobs:
       - name: Vulture (unused code)
         run: python -m vulture
 
+  unused-code:
+    name: Unused code (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [profile, cv, career, assessment, jobs, dashboard, review]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install vulture==2.16
+      - name: Vulture (unused code)
+        run: python -m vulture
+
   profile-integration:
     name: Profile MongoDB integration
     runs-on: ubuntu-22.04
@@ -274,7 +294,7 @@ jobs:
   test-gate:
     name: Test gate
     if: ${{ always() }}
-    needs: [database-artifacts, lint, frontend-unit, frontend-e2e, backend, static-analysis, profile-integration, analysis-integration, local-ui-integration]
+    needs: [database-artifacts, lint, frontend-unit, frontend-e2e, backend, static-analysis, unused-code, profile-integration, analysis-integration, local-ui-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -286,6 +306,7 @@ jobs:
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
           STATIC_RESULT: ${{ needs.static-analysis.result }}
+          UNUSED_RESULT: ${{ needs.unused-code.result }}
           LOCAL_UI_RESULT: ${{ needs.local-ui-integration.result }}
           ANALYSIS_RESULT: ${{ needs.analysis-integration.result }}
           INTEGRATION_RESULT: ${{ needs.profile-integration.result }}
@@ -296,6 +317,7 @@ jobs:
           test "$E2E_RESULT" = success
           test "$BACKEND_RESULT" = success
           test "$STATIC_RESULT" = success
+          test "$UNUSED_RESULT" = success
           test "$INTEGRATION_RESULT" = success
           test "$LOCAL_UI_RESULT" = success
           test "$ANALYSIS_RESULT" = success

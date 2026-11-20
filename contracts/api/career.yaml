@@ -36,25 +36,8 @@
           "Career discovery"
         ],
         "summary": "Current",
-        "description": "Restore the owner's latest saved chat; empty chats include display-only copy.\n\nThe legacy fresh flag returns display-only copy without changing the saved chat.\nNo model or research calls are made by this read.",
+        "description": "Restore the owner's latest saved chat; empty chats include display-only copy.\n\nNo model or research calls are made by this read.",
         "operationId": "current_api_v1_career_discoveries_current_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "fresh",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Fresh"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -65,18 +48,13 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/career/discoveries": {
@@ -668,6 +646,202 @@
                 "schema": {
                   "$ref": "#/components/schemas/OpportunityView"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/interview-prep": {
+      "get": {
+        "tags": [
+          "Interview preparation suggestions"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_v1_career_goals__goal_id__interview_prep_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Interview preparation suggestions"
+        ],
+        "summary": "Generate",
+        "operationId": "generate_api_v1_career_goals__goal_id__interview_prep_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/role-summary": {
+      "get": {
+        "tags": [
+          "About the role summary"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_v1_career_goals__goal_id__role_summary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "About the role summary"
+        ],
+        "summary": "Generate",
+        "operationId": "generate_api_v1_career_goals__goal_id__role_summary_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummaryCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -1603,488 +1777,6 @@
         ]
       }
     },
-    "/api/v1/career/goals": {
-      "get": {
-        "tags": [
-          "J08 exploration / J09 goal confirmation"
-        ],
-        "summary": "Goals",
-        "operationId": "goals_api_v1_career_goals_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/career/goals/confirm": {
-      "post": {
-        "tags": [
-          "J08 exploration / J09 goal confirmation"
-        ],
-        "summary": "Confirm",
-        "operationId": "confirm_api_v1_career_goals_confirm_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SaveGoal"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/career/jd/extract": {
-      "post": {
-        "tags": [
-          "J02–J04 extraction and chat"
-        ],
-        "summary": "Extract",
-        "operationId": "extract_api_v1_career_jd_extract_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/JDSource"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JDExtractionResult"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/career/jd/messages": {
-      "post": {
-        "tags": [
-          "J02–J04 extraction and chat"
-        ],
-        "summary": "Message",
-        "operationId": "message_api_v1_career_jd_messages_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/JDMessage"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JDReply"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/career/goals/{goal_id}/interview-research": {
-      "get": {
-        "tags": [
-          "J12/J13 interview research"
-        ],
-        "summary": "Read",
-        "operationId": "read_api_v1_career_goals__goal_id__interview_research_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Goal Id"
-            }
-          },
-          {
-            "name": "research_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Research Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "J12/J13 interview research"
-        ],
-        "summary": "Acquire",
-        "operationId": "acquire_api_v1_career_goals__goal_id__interview_research_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Goal Id"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResearchRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/career/goals/{goal_id}/guidance": {
-      "post": {
-        "tags": [
-          "J10 exploration skills"
-        ],
-        "summary": "Guidance",
-        "operationId": "guidance_api_v1_career_goals__goal_id__guidance_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Goal Id"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateSkills"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/career/goals/{goal_id}": {
-      "get": {
-        "tags": [
-          "J02–J04 requirement review"
-        ],
-        "summary": "Read",
-        "operationId": "read_api_v1_career_goals__goal_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Goal Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JDExtractionResult"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/career/goals/{goal_id}/review": {
-      "patch": {
-        "tags": [
-          "J02–J04 requirement review"
-        ],
-        "summary": "Save",
-        "operationId": "save_api_v1_career_goals__goal_id__review_patch",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Goal Id"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SaveReview"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JDExtractionResult"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/career/imports/url": {
       "post": {
         "tags": [
@@ -2351,202 +2043,6 @@
             "HTTPBearer": []
           }
         ]
-      }
-    },
-    "/api/v1/career/goals/{goal_id}/interview-prep": {
-      "get": {
-        "tags": [
-          "Interview preparation suggestions"
-        ],
-        "summary": "Read",
-        "operationId": "read_api_v1_career_goals__goal_id__interview_prep_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Goal Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Interview preparation suggestions"
-        ],
-        "summary": "Generate",
-        "operationId": "generate_api_v1_career_goals__goal_id__interview_prep_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Goal Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SuggestCommand"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/career/goals/{goal_id}/role-summary": {
-      "get": {
-        "tags": [
-          "About the role summary"
-        ],
-        "summary": "Read",
-        "operationId": "read_api_v1_career_goals__goal_id__role_summary_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Goal Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "About the role summary"
-        ],
-        "summary": "Generate",
-        "operationId": "generate_api_v1_career_goals__goal_id__role_summary_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Goal Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SummaryCommand"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
       }
     }
   },
@@ -3051,6 +2547,81 @@
           "content"
         ],
         "title": "ChatMessage"
+      },
+      "CompetenceTarget": {
+        "properties": {
+          "level": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Level"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "job_description",
+              "research",
+              "inferred"
+            ],
+            "title": "Basis"
+          },
+          "explanation": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Explanation"
+          },
+          "employer_demand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employer Demand"
+          },
+          "reported_examples": {
+            "items": {
+              "$ref": "#/components/schemas/TargetExample"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "title": "Reported Examples"
+          },
+          "rating_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Reason"
+          },
+          "source_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Source Urls"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "level",
+          "basis",
+          "explanation"
+        ],
+        "title": "CompetenceTarget"
       },
       "ConfirmCvGoal": {
         "properties": {
@@ -4163,27 +3734,6 @@
         ],
         "title": "EvidenceView"
       },
-      "GenerateSkills": {
-        "properties": {
-          "expected_version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Version"
-          },
-          "expected_selection_version": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expected Selection Version"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_version",
-          "expected_selection_version"
-        ],
-        "title": "GenerateSkills"
-      },
       "Generation": {
         "properties": {
           "provider": {
@@ -4619,41 +4169,6 @@
         ],
         "title": "JDExtractionResult"
       },
-      "JDMessage": {
-        "properties": {
-          "review_id": {
-            "type": "string",
-            "title": "Review Id"
-          },
-          "expected_version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Version"
-          },
-          "message": {
-            "type": "string",
-            "maxLength": 600,
-            "minLength": 1,
-            "title": "Message"
-          },
-          "conversation": {
-            "items": {
-              "$ref": "#/components/schemas/ReviewMessage"
-            },
-            "type": "array",
-            "maxItems": 12,
-            "title": "Conversation"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "review_id",
-          "expected_version",
-          "message"
-        ],
-        "title": "JDMessage"
-      },
       "JDPreview": {
         "properties": {
           "kind": {
@@ -4700,38 +4215,6 @@
           "source_name"
         ],
         "title": "JDPreview"
-      },
-      "JDReply": {
-        "properties": {
-          "reply": {
-            "type": "string",
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Reply"
-          },
-          "proposed_skills": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ReviewSkill"
-                },
-                "type": "array",
-                "maxItems": 60
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proposed Skills"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "reply",
-          "proposed_skills"
-        ],
-        "title": "JDReply"
       },
       "JDSource": {
         "properties": {
@@ -6075,8 +5558,7 @@
             "type": "string",
             "enum": [
               "brave",
-              "reddit",
-              "deepseek"
+              "reddit"
             ],
             "title": "Platform"
           },
@@ -6249,32 +5731,6 @@
         ],
         "title": "ResearchProgress"
       },
-      "ResearchRequest": {
-        "properties": {
-          "expected_version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Version"
-          },
-          "expected_selection_version": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expected Selection Version"
-          },
-          "refresh": {
-            "type": "boolean",
-            "title": "Refresh",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_version",
-          "expected_selection_version"
-        ],
-        "title": "ResearchRequest"
-      },
       "ResearchSource": {
         "properties": {
           "retrieved_at": {
@@ -6402,31 +5858,6 @@
         ],
         "title": "ResearchSource"
       },
-      "ReviewMessage": {
-        "properties": {
-          "role": {
-            "type": "string",
-            "enum": [
-              "user",
-              "assistant"
-            ],
-            "title": "Role"
-          },
-          "content": {
-            "type": "string",
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Content"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "role",
-          "content"
-        ],
-        "title": "ReviewMessage"
-      },
       "ReviewReference": {
         "properties": {
           "id": {
@@ -6450,6 +5881,16 @@
       },
       "ReviewSkill": {
         "properties": {
+          "competence_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompetenceTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "learning_items": {
             "items": {
               "$ref": "#/components/schemas/LearningItem"
@@ -6657,16 +6098,6 @@
               "market_research"
             ],
             "title": "Origin"
-          },
-          "competence_target": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CompetenceTarget"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "additionalProperties": false,
@@ -6678,181 +6109,6 @@
           "origin"
         ],
         "title": "ReviewSkill"
-      },
-      "SaveGoal": {
-        "properties": {
-          "expected_selection_version": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expected Selection Version"
-          },
-          "expected_draft_version": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Draft Version"
-          },
-          "draft_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Draft Id"
-          },
-          "target_type": {
-            "type": "string",
-            "enum": [
-              "specific_job",
-              "career_exploration"
-            ],
-            "title": "Target Type"
-          },
-          "role": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Role"
-          },
-          "field": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Field"
-          },
-          "employment_type": {
-            "type": "string",
-            "enum": [
-              "internship",
-              "full_time",
-              "part_time",
-              "contract",
-              "unknown"
-            ],
-            "title": "Employment Type",
-            "default": "unknown"
-          },
-          "company": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Company"
-          },
-          "location": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Location"
-          },
-          "seniority_level": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seniority Level"
-          },
-          "job_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Job Url"
-          },
-          "replace_current": {
-            "type": "boolean",
-            "title": "Replace Current",
-            "default": false
-          },
-          "review_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Review Id"
-          },
-          "expected_review_version": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Review Version"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_selection_version",
-          "target_type",
-          "role",
-          "field"
-        ],
-        "title": "SaveGoal"
-      },
-      "SaveReview": {
-        "properties": {
-          "expected_version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Version"
-          },
-          "content": {
-            "$ref": "#/components/schemas/JDExtraction"
-          },
-          "acknowledge_context": {
-            "type": "boolean",
-            "title": "Acknowledge Context",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_version",
-          "content"
-        ],
-        "title": "SaveReview"
       },
       "Scope": {
         "properties": {
@@ -7085,6 +6341,26 @@
         ],
         "title": "StartExploration"
       },
+      "SuggestCommand": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "title": "SuggestCommand"
+      },
       "Suggestion": {
         "properties": {
           "area": {
@@ -7153,6 +6429,26 @@
         "type": "object",
         "title": "Summary"
       },
+      "SummaryCommand": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "title": "SummaryCommand"
+      },
       "SummaryReply": {
         "properties": {
           "reply": {
@@ -7196,8 +6492,46 @@
         ],
         "title": "SummaryRequest"
       },
+      "TargetExample": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "TargetExample",
+        "description": "Something candidates or public sources reported about the skill, with the source that reported it."
+      },
       "TargetSkill": {
         "properties": {
+          "competence_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompetenceTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "learning_items": {
             "items": {
               "$ref": "#/components/schemas/LearningItem"
@@ -7405,16 +6739,6 @@
             "type": "array",
             "maxItems": 10,
             "title": "Source Urls"
-          },
-          "competence_target": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CompetenceTarget"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "additionalProperties": false,
@@ -7947,149 +7271,6 @@
           "exploration_id"
         ],
         "title": "WorkspaceView"
-      },
-      "SuggestCommand": {
-        "properties": {
-          "expected_version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Version"
-          },
-          "refresh": {
-            "type": "boolean",
-            "title": "Refresh",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_version"
-        ],
-        "title": "SuggestCommand"
-      },
-      "SummaryCommand": {
-        "properties": {
-          "expected_version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Version"
-          },
-          "refresh": {
-            "type": "boolean",
-            "title": "Refresh",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_version"
-        ],
-        "title": "SummaryCommand"
-      },
-      "CompetenceTarget": {
-        "properties": {
-          "level": {
-            "type": "integer",
-            "maximum": 10.0,
-            "minimum": 1.0,
-            "title": "Level"
-          },
-          "basis": {
-            "type": "string",
-            "enum": [
-              "job_description",
-              "research",
-              "inferred"
-            ],
-            "title": "Basis"
-          },
-          "explanation": {
-            "type": "string",
-            "maxLength": 600,
-            "minLength": 1,
-            "title": "Explanation"
-          },
-          "employer_demand": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 600,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Employer Demand"
-          },
-          "reported_examples": {
-            "items": {
-              "$ref": "#/components/schemas/TargetExample"
-            },
-            "type": "array",
-            "maxItems": 2,
-            "title": "Reported Examples"
-          },
-          "rating_reason": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 600,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rating Reason"
-          },
-          "source_urls": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 10,
-            "title": "Source Urls"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "level",
-          "basis",
-          "explanation"
-        ],
-        "title": "CompetenceTarget"
-      },
-      "TargetExample": {
-        "properties": {
-          "text": {
-            "type": "string",
-            "maxLength": 600,
-            "minLength": 1,
-            "title": "Text"
-          },
-          "source_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Url"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "text"
-        ],
-        "title": "TargetExample",
-        "description": "Something candidates or public sources reported about the skill, with the source that reported it."
       }
     },
     "securitySchemes": {

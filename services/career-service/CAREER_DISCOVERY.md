@@ -39,11 +39,9 @@ saved. There is no history picker. **Reload saved progress** reads the displayed
 session ID, and initial load failures must be recovered before sending.
 
 Opening the page or creating an empty session makes no model or public-search calls.
-The fixed introduction is returned for empty current/start responses and the legacy
-`GET /discoveries/current?fresh=true` display-only read. That compatibility read does
-not create a conversation or change which one is current. The introduction is not
-stored in new transcripts or sent to the model; legacy stored introductions are
-filtered from responses and model history. Responses with messages omit it.
+The fixed introduction is returned for empty current/start responses. It is not
+stored in transcripts or sent to the model; the stored-shape upgrade removes
+introductions saved by earlier versions. Responses with messages omit it.
 
 Messages and structured memory persist privately in Career's `research_contexts`
 records with `kind=career_discovery`, independently of the 24-hour workflow checkpoint
@@ -105,8 +103,9 @@ User interests, rather than CV, grades, education or current skills, guide disco
 An explicit broad choice is stored in `role_family_or_work` as known value
 `keep it broad`. There is no separate `broad_exploration` dictionary. There is no
 `industry` question or dictionary: industry context is interpreted from `field`.
-Older dictionaries are ignored on read, preserving an earlier explicit broad choice
-when the role was unspecified or simply repeated the field. New `other_interests`
+The stored-shape upgrade folds earlier `broad_exploration`/`industry` answers into these
+fields, preserving an explicit broad choice when the role was unspecified or simply
+repeated the field. New `other_interests`
 answers still need to be collected for older chats. Location is optional, captured
 only if volunteered; it does not add a seventh question or block research.
 `skill_ambiguity` remains an internal model assessment, not a required user answer.
@@ -318,8 +317,10 @@ conversation or goal. A bounded 30-second `publication_until` lease excludes mes
 mutations during publication; callers retain their retry identity. Stable publication
 receipts allow replay if a worker stops after updating the goal and before completing
 its transcript entry, without selecting the goal twice. Failures preserve the previous
-current goal and retained evidence. Existing latest pre-upgrade conversations can be
-adopted on their next refinement when their goal context has not been replaced.
+current goal and retained evidence. The stored-shape upgrade makes each account's latest
+pre-upgrade conversation active when its goal context has not been replaced. While
+another worker holds the publication lease, the run is rescheduled a second later
+without changing its status.
 The existing `review` status now means synthesis and automatic publication completed;
 it does not request a user save. Automatic saving never acknowledges CV context.
 
@@ -366,13 +367,11 @@ and return no-store responses. POSTs require UUID `Idempotency-Key`.
 
 | Method and suffix | Purpose |
 |---|---|
-| `GET /discoveries/current` | Read latest owned session; `fresh=true` returns only fixed introduction/capabilities |
+| `GET /discoveries/current` | Read latest owned session; an empty session includes the fixed introduction |
 | `POST /discoveries` | Create a clean session with `consent=true`; same-key retries reuse it without AI calls |
 | `GET /discoveries/{session_id}` | Read/poll owned conversation, progress, evidence and review |
 | `POST /discoveries/{session_id}/messages` | Send `message`, `expected_version`; converse/refine and automatically research only after readiness passes |
 | `POST /discoveries/{session_id}/research` | Compatibility retry/refresh for current `scope`, with `confirmed=true`, `expected_version`, optional `refresh`; returns 202 |
-| `PATCH /goals/{review_id}/review` | Existing review edits, versioned and owner-scoped |
-| `POST /goals/confirm` | Existing shared target confirmation and selection |
 
 Detailed schemas are in `contracts/api/career.yaml`. After automatic publication the existing
 saved-goal page checks the CV service's owner-scoped assessment status. CV upload and

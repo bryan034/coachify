@@ -5,7 +5,8 @@ import json
 from types import SimpleNamespace
 import httpx
 import pytest
-from app.ai.adapter import AIAdapter,AIError,Operation
+from app.ai.adapter import AIAdapter, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.context_contracts import ContextPlan

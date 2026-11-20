@@ -130,7 +130,7 @@ def test_openrouter_timeout_is_capped_to_leave_the_fallback_time():
 
 
 def test_cache_policy_differs_by_backend():
-    brave=SourceAPIs(None,brave_key='k')
+    brave=SourceAPIs(None,brave_key='k',backend='brave')
     openrouter=SourceAPIs(None,backend='openrouter',openrouter_key='k')
     assert brave.cache_policy=='public-interview-brave-context-v9:llm_context'
     assert openrouter.cache_policy!=brave.cache_policy and 'openrouter' in openrouter.cache_policy

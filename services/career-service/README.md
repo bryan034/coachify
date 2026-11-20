@@ -43,9 +43,9 @@ completion settings can still lower these budgets; agents never read/change them
 - `POST /api/v1/career/workspace/jd` starts or reconnects to versioned JD intake. A validated identity overlaps full extraction with public-only retrieval. Successful extraction saves the goal; combined chat output waits for extraction and research to complete.
 - `POST /api/v1/career/workspace/summary` generates a concise AI overview from the saved goal and finished revision-linked research, including partial reports with explicit limitations. It supports the same owner-scoped background operations and snapshot retries.
 - `POST /api/v1/career/workspace/messages` asks scoped questions or refines the current goal. Ambiguous edits retain a private pending question; valid edits save with owner/version checks and retry receipts. While an edit is pending, clarification answers take precedence over direct public-question shortcuts; unrelated task execution remains refused. With `mode=refine`, questions are answered first (edit requests fall through to the guided edit flow) and general career questions, including exploring new career paths, are allowed via the `career_guidance` route: unverified general guidance with no citations, never saved to the goal. `mode=question` stays limited to the saved goal.
-- `/api/v1/career/goals` and `/goals/current` expose canonical structured history/current state; `/goals/current` includes the same `skill_groups` as the workspace. Goals edit in place with versions. A replacement becomes current only after validated saving.
+- `/api/v1/career/goals/current` exposes the canonical current state, including the same `skill_groups` as the workspace. Goals edit in place with versions. A replacement becomes current only after validated saving.
 
-Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research. Older compatibility review/guidance endpoints remain available as described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md).
+Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research.
 
 After extraction and research finish, chat automatically loads the saved report and presents a concise overview with section headings and bold topic labels (for example, **Field:** and **Required skills:**), with a “Find out more” link to the Interview preparation or About the role tab after the research topics it covers, ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Failed reports produce a local digest of category failures and any retained cited findings without another model call, with Resume research available. `finished` means processing stopped, not that research succeeded. Progress distinguishes completed, partial and failed runs. Saved goal cards are available immediately after extraction, while the composer remains open during research, summary generation and failures.
 
@@ -107,7 +107,7 @@ Saved-goal Q&A uses backend topic routing and allowlisted projected facts. Expli
 
 Every endpoint requires a verified account and completed canonical onboarding. Owner checks and no-store responses apply to private data. Services use authenticated APIs rather than foreign MongoDB collections. Environment files remain private and must be configured by the user; agents use synthetic settings. See [application setup](../../docs/setup.md), [OpenAPI](../../contracts/api/career.yaml) and [tests](tests/README.md).
 
-Canonical writes retain namespaced `create_key` metadata to coexist with the legacy unique index. History filters record shape explicitly. No index drop, destructive data migration or automatic conversion of older target snapshots occurs. Gap analysis and roadmap generation remain planned.
+History filters record shape explicitly; older target snapshots are kept as historical data. Records saved in shapes the service no longer reads are rewritten once by the [stored-shape upgrade](../../docs/setup.md#career-stored-shape-upgrade). Gap analysis and roadmap generation remain planned.
 URL previews allow five seconds per network operation and one timeout retry within
 a 25-second import budget (30-second worker, 35-second gateway). Timeouts, certificate
 failures and other connection errors have distinct messages. Imports are
@@ -163,11 +163,6 @@ extend `interview_research`. Worker leases, checkpoint/restart recovery and rece
 checks prevent duplicate paid retrieval and stale publication. The model structures all categories
 against the existing JSON fields and exact citations. See [feature specification, graph, API models, limits and setup](OPPORTUNITY_INTELLIGENCE.md).
 
-Legacy interview endpoints remain readable/compatible:
-
-- `GET /api/v1/career/goals/{id}/interview-research` — Linked exact interview/public research version.
-- `POST /api/v1/career/goals/{id}/interview-research` — Explicit legacy research/reuse.
-
 Legacy Search/Answers mode values are ignored. Opportunity Intelligence
 uses the existing `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY` when `OPPORTUNITY_ENABLED=true`
 (default), independently of the legacy chat switch and legacy Brave mode. It calls the Brave LLM Context adapter; no silent provider substitution occurs. Availability responses
@@ -191,33 +186,33 @@ No model provider fallback exists (search has the Brave fallback above). Model a
 as described in [setup](../../docs/setup.md#career-model-and-search-configuration).
 
 Ordinary Q&A sends only relevant projected fields and matching facts, without full
-research summaries or the edit schema. Location/round-count lookups, missing facts and
-clear unrelated requests need no answering call. Ambiguous scope uses a 256-output-token
-router; grounded answers use at most 768 output tokens, subject to the existing caps.
+research summaries or the edit schema. Missing facts and refused requests need no
+answering call. Every question uses a 256-output-token router; grounded answers use at most 768 output tokens, subject to the existing caps.
 Independent questions omit chat history; follow-ups include only two short recent
 messages. Unrelated tasks are refused. Q&A may perform up to three distinct searches for missing/current public information.
 The router summarises the specific public question into a bounded keyword phrase;
 Python adds the saved employer/role/location (Singapore when no location is saved) to
 the first search. Searches are not limited to one country (Brave `country=ALL`): the
-second search uses a recognised place from the saved location, summary, responsibilities
-or requirements, prioritising explicit base-office wording. Otherwise it searches for
+second search uses another place the router finds named in the saved goal's summary or
+conditions (`related_locations`), such as a base office. Otherwise it searches for
 the employer and role worldwide. The third query adds official careers keywords for
 the listed market. Empty results or an answering-model `not_found`
 permit the next search; a supported answer stops further searches.
-Saved information is checked first. Salary/location lookups answer without a model
-or search from JD details or verified findings, and search only when none exist.
-Retrieved passages are checked deterministically (`app/domain/source_scope.py`):
-a passage must match the listed market, employer, core role words and question topic
-to qualify as a verified job fact. Compensation passages need an amount, and dated
-passages must be within three years. For Singapore goals, evidence of an overseas
-market prevents verification. Only verified passages are saved (`scope=exact`), and the store re-checks them. Unverified passages,
-including other-country sources (`scope=related_location`), may inform an answer as
+Saved information is checked first: the router selects saved conditions that already
+state the detail, and search runs only when nothing relevant is saved. Every question is
+routed by the model; there are no keyword shortcuts. A `passage_scope` model call labels
+each retrieved passage's market (target, other or unknown) and whether it states the asked
+detail (for pay, an actual amount). `app/domain/source_scope.py` then requires the target
+market, the stated detail, the saved employer, core role words and the router's search
+subject, and dated passages must be within three years. Only verified passages are saved
+(`scope=exact`); the store re-checks employer, role and age. Unverified passages,
+including other-market sources (`scope=related_location`), may inform an answer as
 labelled context but are never stored; answers name the country a figure describes and
-keep its original currency. Foreign monetary figures must appear in the facts cited
-by the reply.
+keep its original currency. Every monetary figure in a reply must appear, with the same
+currency marker, in the facts it cites.
 Exact excerpts/sources append to the existing owner/version-linked
-`question_research` JSON and are reused on later turns; records saved before
-verification (`saved-question-evidence-v1`) are no longer served. Existing research remains readable. Unanswered details stay unknown;
+`question_research` JSON and are reused on later turns; the stored-shape upgrade removes
+links to records saved before verification (`saved-question-evidence-v1`). Existing research remains readable. Unanswered details stay unknown;
 this path never silently edits the goal. JD chat history remains temporary browser memory.
 
 Provider rejections include safe `provider_error` metadata: HTTP status, known
@@ -225,17 +220,12 @@ Google code and rejected field names. This distinguishes invalid keys, unavailab
 models, project access, schema and parameter failures without revealing provider prose.
 See [configuration and rejection diagnostics](ANALYSIS_CONTRACTS.md#safe-rejection-diagnostics).
 
-## Compatibility and setup
-
-Older `/jd/extract`, `/jd/messages`, `/goals`, `/goals/current`, `/goals/{id}`,
-`/goals/{id}/review`, `/goals/confirm` and `/goals/{id}/guidance` remain available
-for existing API consumers. The application uses `/workspace` for automatic saves;
-legacy confirmation is not part of the new user flow. There is no destructive migration.
+## Setup
 
 All endpoints require a verified account and completed onboarding. Private reads
 are owner-scoped and responses are no-store. See [workflow/storage and API settings](ANALYSIS_CONTRACTS.md),
 [preview safeguards](SPECIFICATION.md), [OpenAPI](../../contracts/api/career.yaml)
-and [application setup](../../docs/setup.md). Gap analysis and roadmaps remain planned.
+and [application setup](../../docs/setup.md). Skill-gap comparisons belong to [Assessment](../assessment-service/README.md) and study plans to [Roadmap](../roadmap-service/README.md).
 
 ## Career discovery — conversational targets
 

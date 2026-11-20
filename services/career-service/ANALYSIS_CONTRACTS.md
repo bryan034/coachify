@@ -139,8 +139,8 @@ most three distinct queries: subject, official-employer information, candidate e
 Missing projected facts, explicit `missing=true` or an answering-model `not_found` can
 start/continue retrieval. A successful answer stops searches. Each query admits up to six
 normalized sources; at most twelve deduplicated exact-passage candidates reach the answer.
-Simple salary/location lookups retain their deterministic topical-excerpt path. Other
-questions save only passages cited by a validated `answered` result, never irrelevant
+Passages are labelled by the `passage_scope` model before verification. Questions save
+only passages cited by a validated `answered` result, never irrelevant
 uncited pages, generated prose or invalid-answer fallbacks. The existing immutable
 `interview_research.question_findings` snapshots and owner/goal-version pointers in
 `research_contexts` append these findings to `question_research` JSON. Per-focus current
@@ -159,7 +159,6 @@ Five logical domain collections retain their existing ownership:
 | cvs | CV service, consumed through authenticated API snapshots |
 | career_goals | Career structured reviews and versioned current goals |
 | interview_research | Career immutable reusable public-context evidence |
-| skill_gap_analyses | Career version-pinned private results; analysis endpoints planned |
 
 Profile account IDs are authenticated UUID strings. Domain record IDs are BSON
 ObjectIds, represented as 24-character strings in JSON. Services never query another
@@ -190,7 +189,7 @@ Research results keep exact source references and versions; private per-goal lin
 constrain reads. Source URLs/excerpts and reposts are deduplicated. Unknown report
 independence stays unknown, with no invented counts. `coverage` preserves platform
 availability, including on cache reuse. Stage/type/difficulty require support in cited
-material; unmapped topics stay readable but cannot enter future gap analysis.
+material; unmapped topics stay readable but cannot enter Assessment comparisons.
 
 ## Structured requirements and comparison
 
@@ -395,8 +394,8 @@ The UI refreshes the saved summary and waits for research before accepting anoth
 A message UUID Idempotency-Key is preserved across frontend retries. Published edits
 atomically store bounded hash/key receipts in career_state.chat_receipts; replay returns
 the current workspace without applying the change again. Receipts contain no transcript
-or model reply. Stale session/version requests fail before mutation. The older PATCH
-/workspace/review and legacy skill-proposal APIs remain compatibility interfaces.
+or model reply. Stale session/version requests fail before mutation. PATCH
+/workspace/review remains a direct-edit interface with the same version checks.
 
 
 ## The model semantic chat
@@ -406,8 +405,8 @@ adapter for both roles. Extraction, synthesis, planning, answers and edits all u
 Google's OpenAI-compatible endpoint, `max_tokens`, JSON Schema and minimal thinking.
 No SDK dependency, new endpoint or data-model migration is required.
 
-When enabled, `context_chat.py` replaces deterministic keyword routing for saved-goal
-chat. Its LangGraph interprets a compact index, retrieves selected facts, then answers.
+When enabled, `context_chat.py` routes saved-goal chat with the context model; the
+fallback graph uses the `question_route` model. Its LangGraph interprets a compact index, retrieves selected facts, then answers.
 The index contains metadata plus labels/references for skills, conditions and interview
 items, never full evidence, raw JD/CV, account credentials or database IDs. It is capped
 at 1,800 estimated tokens; a partial index is labelled. At most six recent messages,
@@ -524,8 +523,7 @@ leaves an existing Opportunity worker in control of its status and retry deadlin
 `jd_scope` is a transient configured-model classification/identity stage with a
 4,096-token output ceiling, bounded by the global completion setting. It verifies job-description intent and requires exact input
 support for public identity fields before speculative retrieval. Unrelated documents
-return HTTP 422 `career_scope`, with no full-extraction/search/goal write. The legacy
-`/jd/extract` endpoint uses the same gate. Metadata-free genuine job excerpts can
+return HTTP 422 `career_scope`, with no full-extraction/search/goal write. Metadata-free genuine job excerpts can
 continue to full extraction without speculative searches; missing titles are not invented.
 
 JD input remains capped at 8,000 Unicode characters. Both JD stages estimate the
@@ -566,8 +564,8 @@ Research completion is checked across all categories, even if interviews finish 
 Context routing additionally permits `opportunity` with `rN` references to saved
 findings. Backend-owned projections and exact owner/goal links retrieve compensation,
 workplace and company evidence; refs, confidence, related scope and citations are preserved.
-A narrow deterministic task/override guard applies before both question and refinement
-paths, alongside the semantic scope router and goal-edit schema. Source documents,
+Unrelated tasks and instruction overrides are rejected by the routing models (`off_topic`)
+and, during a pending edit, by the goal-edit model. Source documents,
 model output and recent conversation remain untrusted data, not instructions.
 
 

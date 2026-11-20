@@ -5,11 +5,11 @@ Only validated structured records cross this boundary; revisions are immutable.
 from bson.codec_options import CodecOptions
 from pymongo import ASCENDING, DESCENDING
 from pymongo.errors import DuplicateKeyError
-from app.domain.analysis import ContractConflict, validate_analysis
-from app.schemas.analysis import CareerGoal, InterviewResearch, SkillGapAnalysis, mongo_document
+from bson import BSON, ObjectId
+from app.domain.analysis import ContractConflict
+from app.schemas.analysis import CareerGoal, InterviewResearch, mongo_document, object_id
 
-COLLECTIONS = {'career_goals': CareerGoal, 'interview_research': InterviewResearch,
-               'skill_gap_analyses': SkillGapAnalysis}
+COLLECTIONS = {'career_goals': CareerGoal, 'interview_research': InterviewResearch}
 
 
 class AnalysisRepository:
@@ -17,26 +17,9 @@ class AnalysisRepository:
         self.database = database.with_options(codec_options=CodecOptions(tz_aware=True))
 
     def ensure_indexes(self):
-        for name in ('career_goals', 'skill_gap_analyses'):
-            self.database[name].create_index([('user_id', ASCENDING), ('created_at', DESCENDING)])
+        self.database.career_goals.create_index([('user_id', ASCENDING), ('created_at', DESCENDING)])
         self.database.interview_research.create_index([('context_key', ASCENDING), ('updated_at', DESCENDING)])
         self.database.interview_research.create_index([('context_key', ASCENDING), ('version', ASCENDING)], unique=True)
-
-    def save_private(self, collection, data, owner, *, cv=None, goal=None, research=(), profile_version=None):
-        if collection not in ('career_goals', 'skill_gap_analyses'):
-            raise ValueError('Private writes cannot access shared collections.')
-        record = COLLECTIONS[collection].model_validate(data)
-        if record.user_id != owner:
-            raise ContractConflict('Record ownership mismatch.')
-        if collection == 'skill_gap_analyses':
-            stored_goal = self.get_private('career_goals', record.career_goal_id, owner)
-            if stored_goal is None or goal != stored_goal:
-                raise ContractConflict('Referenced career goal is missing or changed.')
-            stored_research = [self.get_research(identifier) for identifier in record.research_ids]
-            if any(r is None for r in stored_research) or list(research) != stored_research:
-                raise ContractConflict('Referenced research is missing or changed.')
-            validate_analysis(record, cv, stored_goal, stored_research, profile_version)
-        return self._insert(collection, record)
 
     def save_research(self, data, *, trusted_sources):
         """Only an internal retrieval worker may call this, after source verification."""
@@ -55,36 +38,18 @@ class AnalysisRepository:
             self.database[name].insert_one(payload)
         except DuplicateKeyError:
             existing = self.database[name].find_one({'_id': payload['_id']})
-            from bson import BSON
             if existing is None or BSON.encode(existing) != BSON.encode(payload):
                 raise ContractConflict('Revision ID already used with different content.') from None
         return record
 
     def get_private(self, collection, identifier, owner):
-        if collection not in ('career_goals', 'skill_gap_analyses'):
+        if collection != 'career_goals':
             raise ValueError('Unsupported private collection.')
-        from bson import ObjectId
-        from app.schemas.analysis import object_id
         data = self.database[collection].find_one({'_id': ObjectId(object_id(identifier)), 'user_id': owner})
         return COLLECTIONS[collection].model_validate({k:v for k,v in data.items() if k in COLLECTIONS[collection].model_fields or k=='_id'}) if data else None
 
     def get_research(self, identifier):
-        from bson import ObjectId
-        from app.schemas.analysis import object_id
         data = self.database.interview_research.find_one({'_id': ObjectId(object_id(identifier))})
-        if data:
-            data.pop('context_key', None)
-            return InterviewResearch.model_validate(data)
-        return None
-
-    def reusable_research(self, context, researched_after, mapping_version):
-        # Only verified successful/no-findings records qualify.
-        if researched_after.tzinfo is None:
-            raise ValueError('Freshness threshold must be timezone-aware.')
-        data = self.database.interview_research.find_one({'context_key': context.reuse_key(),
-            'research_status': {'$in': ['succeeded', 'no_findings']},
-            'last_researched_at': {'$gte': researched_after}, 'skill_mapping_version': mapping_version},
-            sort=[('version', -1)])
         if data:
             data.pop('context_key', None)
             return InterviewResearch.model_validate(data)

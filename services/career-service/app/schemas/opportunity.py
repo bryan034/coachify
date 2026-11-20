@@ -4,6 +4,10 @@ from datetime import datetime
 from typing import Annotated,Literal
 from pydantic import BaseModel,ConfigDict,Field,StringConstraints,model_validator
 
+MAX_BOLD_SPANS = 3
+
+SUMMARY_UNAVAILABLE = 'Overall summary unavailable; validated category findings remain available.'
+
 class Model(BaseModel):
     model_config=ConfigDict(extra='forbid')
 Text=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=600)]
@@ -18,7 +22,7 @@ def plain_text(text):
 def tidy_bold(text):
     """Keep at most three short bold key terms, never a fully bold line; otherwise show plain text."""
     spans=BOLD.findall(text);rest=BOLD.sub('',text)
-    if '*' in rest or re.search(r'[`#<>]|\]\(',rest) or len(spans)>3 or (spans and not re.search(r'\w',rest)):return plain_text(text)
+    if '*' in rest or re.search(r'[`#<>]|\]\(',rest) or len(spans)>MAX_BOLD_SPANS or (spans and not re.search(r'\w',rest)):return plain_text(text)
     return text
 RoundName=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
 # Interview rounds vary by job; only rounds the evidence supports are recorded.
@@ -28,13 +32,8 @@ EvidenceType=Literal['official','candidate_reported','third_party','inferred']
 Scope=Literal['exact','related_role','related_location','related_employment','general']
 Category=Literal['interview_intelligence','internship_insights','career_progression','conversion_outcomes','company_intelligence']
 CATEGORIES=('interview_intelligence','internship_insights','career_progression','conversion_outcomes','company_intelligence')
-LEGACY_FIELDS={
- 'interview_intelligence':('recruitment_stages','interview_questions','difficulty','application_timeline','preparation_topics'),
- 'internship_insights':('compensation','benefits','projects','work_culture','mentorship','work_life_balance','return_offer'),
- 'company_intelligence':('overview','products_services','tech_stack','recent_developments','career_growth')}
-
 FIELDS={
- 'interview_intelligence':(*LEGACY_FIELDS['interview_intelligence'],'candidate_experience','round_format'),
+ 'interview_intelligence':('recruitment_stages','interview_questions','difficulty','application_timeline','preparation_topics','candidate_experience','round_format'),
  'internship_insights':('compensation','benefits','projects','mentorship','work_life_balance'),
  'career_progression':('full_time_role','career_path','conversion_salary'),
  'conversion_outcomes':('conversion_rate','historical_cohort','offer_acceptance'),
@@ -103,7 +102,7 @@ class SkillLevelRating(Model):
     finding_ids:list[str]=Field(default_factory=list,max_length=4)
 
 class OpportunityReport(Model):
-    schema_version:Literal[1,2]=2
+    schema_version:Literal[2]=2
     fingerprint:str=Field(pattern=r'^[0-9a-f]{64}$')
     opportunity_id:str|None
     employment_type:Literal['internship','full_time','part_time','contract','unknown']='unknown'
@@ -114,17 +113,17 @@ class OpportunityReport(Model):
     researched_at:datetime
     expires_at:datetime
     warnings:list[Text]=Field(default_factory=list,max_length=10)
+    summary_unavailable:bool=False
     models:dict[str,str]=Field(default_factory=dict,max_length=2)
     skill_levels:list[SkillLevelRating]=Field(default_factory=list,max_length=60)
 
     @model_validator(mode='after')
     def references(self):
-        fields=LEGACY_FIELDS if self.schema_version==1 else FIELDS
-        if set(self.categories)!=set(fields):raise ValueError('All categories require explicit status.')
+        if set(self.categories)!=set(FIELDS):raise ValueError('All categories require explicit status.')
         ids=set()
         for category,result in self.categories.items():
             for finding in result.findings:
-                if finding.field not in fields[category] or finding.finding_id in ids:raise ValueError('Invalid or duplicate finding.')
+                if finding.field not in FIELDS[category] or finding.finding_id in ids:raise ValueError('Invalid or duplicate finding.')
                 if finding.round_number is not None and category!='interview_intelligence':raise ValueError('Only interview findings belong to a round.')
                 ids.add(finding.finding_id)
         if any(ref not in ids for refs in self.summary.model_dump().values() for ref in refs):raise ValueError('Summary must reference validated findings.')

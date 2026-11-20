@@ -5,7 +5,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 from pydantic import ValidationError
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.context_contracts import ContextPlan
 from app.ai.qa_contracts import FocusedAnswer
 from app.schemas.analysis import ResearchSource
@@ -13,6 +13,7 @@ from app.workflows.context_chat import semantic_chat
 from app.workflows.goal_question import question_queries
 from tests.test_goal_chat_presentation import environment
 from tests.test_workspace import flow,ingest,wait,headers,BASE,OWNER
+from tests.api_views import label_passages
 
 ALLOWANCE='Data Analyst interns at Example in Singapore receive a housing allowance during the programme.'
 
@@ -36,11 +37,14 @@ def setup(monkeypatch,batches,*,direct=False,answer=None,saved_research=None):
         searches.append(query)
         return batches[min(len(searches)-1,len(batches)-1)]
     async def generate(payload,*args,**kwargs):
-        calls.append(payload)
         if payload.stage=='context_route':
-            output=ContextPlan(topic='opportunity',missing=True,research_focus='workplace',
+            output=ContextPlan(topic='opportunity',research_focus='compensation',resolved_question=body.message) if direct else ContextPlan(
+                topic='opportunity',missing=True,research_focus='workplace',
                 public_search_terms='intern housing allowance',resolved_question='Does this internship provide a housing allowance?')
+        elif payload.stage=='passage_scope':
+            output=label_passages(payload)
         else:
+            calls.append(payload)
             output=answer(json.loads(payload.context),saved) if answer else FocusedAnswer(status='not_found',reply='Not found.',references=[])
         if kwargs.get('validate_output'):kwargs['validate_output'](output)
         return NS(data=output)
@@ -53,12 +57,15 @@ def setup(monkeypatch,batches,*,direct=False,answer=None,saved_research=None):
 def test_empty_queries_continue_until_third_search_finds_salary(monkeypatch):
     async def run():
         salary='Example Analyst internship salary in Singapore is SGD 1500 per month.'
-        request,body,queries,saved,calls=setup(monkeypatch,[[],[],[source('salary',salary)]],direct=True)
+        def answer(context,saved):
+            ref=next(f['ref'] for f in context['facts'] if f['data'].get('value')==salary)
+            return FocusedAnswer(reply=f'{salary} [{ref}]',references=[ref])
+        request,body,queries,saved,calls=setup(monkeypatch,[[],[],[source('salary',salary)]],direct=True,answer=answer)
         result=await semantic_chat(request,'owner',{'workspace':{}},body)
         assert len(queries)==3 and len(set(queries))==3
         assert salary in result.reply and 'https://example.test/salary' in result.reply
         assert len(saved)==1 and saved[0][1][0].quotes==[salary]
-        assert calls==[]
+        assert len(calls)==1
     asyncio.run(run())
 
 
@@ -137,7 +144,10 @@ def test_expanded_question_appends_json_preserves_other_focus_and_reuses_after_r
     repo=client.app.state.workspace_store
     memory=QuestionMemory(repo,client.app.state.research_store)
     salary=source('salary','Data Analyst internship salary in Singapore is SGD 1500 per month.')
-    memory.save(OWNER,repo.row(OWNER),'compensation',*scoped_question_findings('compensation',{'web0':[salary.model_dump()]},{'role':'Data Analyst'})[:2])
+    from app.domain.question_memory import question_passages
+    sources,passages=question_passages({'web0':[salary.model_dump()]})
+    scopes={ref:NS(market='target',states_detail=True) for ref in range(len(passages))}
+    memory.save(OWNER,repo.row(OWNER),'compensation',*scoped_question_findings('compensation',sources,passages,scopes,{'role':'Data Analyst'})[:2])
     queries=[]
     async def collect(context,query):
         queries.append(query)
@@ -146,6 +156,8 @@ def test_expanded_question_appends_json_preserves_other_focus_and_reuses_after_r
         if payload.stage=='context_route':
             output=ContextPlan(topic='opportunity',research_focus='workplace',public_search_terms='intern housing allowance',
                                resolved_question='Does this internship provide a housing allowance?')
+        elif payload.stage=='passage_scope':
+            output=label_passages(payload)
         else:
             facts=json.loads(payload.context)['facts']
             refs=[f['ref'] for f in facts if f['data'].get('value')==ALLOWANCE]

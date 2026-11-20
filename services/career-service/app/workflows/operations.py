@@ -13,8 +13,14 @@ from app.ai.waiting import quota_progress,quota_reason
 from app.ai.recovery import recover_responses,validation_progress
 from app.repositories.goals import GoalError
 from app.workflows.activity import activity_observer,LABELS
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.jd_scope import CareerScopeError
+from app.workflows.boundaries import UnexpectedFailure, contained
+
+MAX_FAILURE_MESSAGE = 1024
+ERROR_STATUSES = range(400, 600)
+
+GENERIC_FAILURE = 'This temporary operation failed. Retry your retained input.'
 
 
 class OperationConflict(GoalError):
@@ -45,14 +51,14 @@ class Failure:
                  'limit_scope','retry_after','input_count')}, retry_at)
         if isinstance(error, CareerScopeError): return cls('scope', {})
         if isinstance(error, GoalError):
-            if not isinstance(error.message,str) or len(error.message)>1024:
-                return cls('goal', {'message':'This temporary operation failed. Retry your retained input.','status':503})
-            values = {'message': error.message, 'status': error.status if type(error.status) is int and 400<=error.status<=599 else 503}
+            if not isinstance(error.message,str) or len(error.message)>MAX_FAILURE_MESSAGE:
+                return cls('goal', {'message':GENERIC_FAILURE,'status':503})
+            values = {'message': error.message, 'status': error.status if type(error.status) is int and error.status in ERROR_STATUSES else 503}
             if isinstance(error, OperationConflict):
                 code=error.code if isinstance(error.code,str) and re.fullmatch(r'[a-z_]{1,80}',error.code) else 'operation_failed'
                 return cls('operation', {**values, 'code': code})
             return cls('goal', values)
-        return cls('goal', {'message': 'This temporary operation failed. Retry your retained input.', 'status': 503})
+        return cls('goal', {'message': GENERIC_FAILURE, 'status': 503})
 
     def exception(self):
         if self.retry_at is not None:
@@ -167,13 +173,13 @@ class Operations:
         observer = validation_progress.set(repairing)
         try:
             async with asyncio.timeout(self.lifetime):
-                job.result = await execute()
+                job.result = await contained(execute(), (AIError, GoalError))
             job.status = 'succeeded'
         except asyncio.CancelledError:
             job.status = 'failed'
             job.error = Failure.capture(GoalError('This temporary operation was cancelled. Retry your retained input.', 409))
             raise
-        except Exception as error:
+        except (AIError, GoalError, TimeoutError, UnexpectedFailure) as error:
             job.status, job.error = 'failed', Failure.capture(error)
             if isinstance(error,AIError):
                 job.validation_feedback={'reason':error.reason,'fields':list(error.fields),'violations':list(error.violations)}

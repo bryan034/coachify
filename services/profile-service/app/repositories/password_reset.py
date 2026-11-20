@@ -19,8 +19,7 @@ class PasswordResetRepository:
         identity = provider + ':' + email
         self.verification.limit(settings.otp_secret, 'password-reset-send', identity, 5)
         challenge = token_urlsafe(32)
-        account = self.accounts.find_one({'identity': identity, 'email_verified': True,
-                                          'migration_pending': {'$ne': True}})
+        account = self.accounts.find_one({'identity': identity, 'email_verified': True})
         if account and account.get('password_hash'):
             code = f'{randbelow(1000000):06d}'
             record = {'_id': digest(challenge), 'account_id': account['id'], 'auth_mode': settings.mode,
@@ -50,7 +49,7 @@ class PasswordResetRepository:
         # The password hash is the credential generation: only one concurrent reset can win.
         changed = self.accounts.update_one(
             {'id': record['account_id'], 'password_hash': record['password_hash'],
-             'email_verified': True, 'migration_pending': {'$ne': True}},
+             'email_verified': True},
             {'$set': {'password_hash': hasher.hash(data.password), 'password_changed_at': now()}})
         if not changed.modified_count:
             raise HTTPException(400, 'This reset code has already been used or the account changed. Request a new code.')

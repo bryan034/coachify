@@ -1,11 +1,12 @@
 """One account workspace; goal selection and workspace pointers change atomically."""
 from datetime import timedelta
 from bson import ObjectId
-from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from app.repositories.goals import GoalError,now,stable_id
-from app.schemas.analysis import mongo_document
 from app.schemas.goals import SaveGoal
+from app.schemas.analysis import CareerGoal
+
+EXPLORATION_LIFETIME = timedelta(hours=24)
 
 class WorkspaceStore:
     def __init__(self,goals,reviews):self.goals,self.reviews,self.rows=goals,reviews,goals.state
@@ -30,8 +31,9 @@ class WorkspaceStore:
         return row
 
     def ensure(self,owner):
-        try:self.rows.update_one({'_id':owner},{'$setOnInsert':{'version':0,'goal_id':None,'receipts':[]}},upsert=True)
-        except DuplicateKeyError:pass
+        upsert=lambda:self.rows.update_one({'_id':owner},{'$setOnInsert':{'version':0,'goal_id':None,'receipts':[]}},upsert=True)
+        try:upsert()
+        except DuplicateKeyError:upsert()
 
     def claim_input(self,owner,key,digest):
         self.ensure(owner);row=self.row(owner)
@@ -56,13 +58,12 @@ class WorkspaceStore:
         if not input_key and selected=={'id':review.id,'version':review.version}:return row
         command=SaveGoal(target_type=review.target_type,role=review.content.role,field=review.content.field,company=review.content.company,
             location=review.content.location,seniority_level=review.content.seniority_level,job_url=review.content.job_url,employment_type=review.content.employment_type,
-            review_id=review.id,expected_review_version=review.version,expected_selection_version=row.get('version',0),replace_current=True)
-        from app.schemas.analysis import CareerGoal
+            review_id=review.id,expected_review_version=review.version,expected_selection_version=row.get('version',0))
         if review.base_goal_id==review.id:
             goal=CareerGoal.model_validate({k:v for k,v in self.reviews._row(review.id,owner).items() if k in CareerGoal.model_fields or k=='_id'})
             if goal.version!=review.version:raise GoalError('Newer career-goal changes arrived. Reload.')
         else:
-            goal=self.reviews.goal(review,owner,stable_id(owner,session+':'+str(review.version)+review.id,'auto-goal'),command,allow_pending_context=True)
+            goal=self.reviews.goal(review,owner,stable_id(owner,session+':'+str(review.version)+review.id,'auto-goal'),command)
             self.goals.persist_target(goal)
         stamp=now()
         workspace={**({} if input_key else workspace),'session_id':session,'kind':'jd' if review.target_type=='specific_job' else 'exploration',
@@ -118,3 +119,24 @@ class WorkspaceStore:
                 if row.get('workspace',{}).get('session_id')!=session:raise GoalError('This conversation was replaced.')
                 return True
         return False
+
+    def begin_exploration(self,owner,draft):
+        self.rows.update_one({'_id':owner},{'$setOnInsert':{'version':0,'goal_id':None,'receipts':[]},
+            '$set':{'workspace':{'session_id':draft.id,'kind':'exploration','exploration_id':draft.id,'revision':draft.version,'phase':'exploring',
+                'run_id':draft.id,'expires_at':now()+EXPLORATION_LIFETIME}}},upsert=True)
+
+    def adopt_goal(self,owner,goal_id,review):
+        self.rows.update_one({'_id':owner,'workspace':{'$exists':False}},{'$set':{'workspace':{
+            'session_id':str(goal_id),'kind':'jd' if review.target_type=='specific_job' else 'exploration','review_id':review.id,
+            'revision':review.version,'run_id':str(ObjectId()),'phase':'research_pending','expires_at':now()}}})
+
+    def research_version(self,research_id):
+        row=self.goals.db.interview_research.find_one({'_id':ObjectId(research_id)},{'version':1})
+        return row['version'] if row else None
+
+    def release_input(self,owner,key):
+        self.rows.update_one({'_id':owner,'incoming.key':key},{'$unset':{'incoming':''}})
+
+    def record_chat_receipt(self,owner,session_id,receipt):
+        self.rows.update_one({'_id':owner,'workspace.session_id':session_id},
+            {'$push':{'chat_receipts':{'$each':[receipt],'$slice':-100}}})

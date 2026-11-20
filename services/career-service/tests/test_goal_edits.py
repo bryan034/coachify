@@ -1,7 +1,8 @@
 """Chat edits are narrow, schema-checked changes; unrelated values remain intact."""
 import pytest
 from pydantic import ValidationError
-from app.ai.adapter import AIAdapter,AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.goal_edit_contracts import GoalChange,GoalEditDecision

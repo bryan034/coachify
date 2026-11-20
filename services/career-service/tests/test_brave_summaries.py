@@ -1,7 +1,8 @@
 """Brave summary context retains original-source attribution and fits model budgets."""
 import json
 import pytest
-from app.ai.adapter import AIAdapter,AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.usage import input_tokens

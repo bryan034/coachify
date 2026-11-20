@@ -3,7 +3,8 @@ import json
 import hashlib
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
-from app.ai.adapter import AIError, Operation
+from app.ai.adapter import Operation
+from app.ai.errors import AIError
 from app.ai.contracts import AIInput
 from app.ai.routing import chat_models
 from app.ai.goal_summary import SUMMARY_CLOSING
@@ -13,6 +14,10 @@ from app.workflows.structured import structured_node
 from app.workflows.current import workspace_revision
 from app.workflows.citations import summary_text, summary_text_with_emphasis, source_links
 from app.schemas.opportunity import plain_text
+
+LISTED_SKILLS = 10
+
+MAX_SUMMARY_CONTEXT_CHARS = 40000
 
 CATEGORY_LABELS={
     'interview_intelligence':'Interview expectations',
@@ -77,10 +82,10 @@ def saved_evidence_summary(goal,record):
     for priority,label in (('required','Required skills'),('preferred','Preferred skills')):
         skills=[skill for skill in getattr(goal,'skills',[]) or [] if skill.priority==priority]
         if skills:
-            selected=skills[:10]
+            selected=skills[:LISTED_SKILLS]
             points.append(cited('**'+label+':** '+summary_text(', '.join(skill.name for skill in selected)),
                 [url for skill in selected for url in getattr(skill,'source_urls',[])]))
-            if len(skills)>10:points.append('More skills are listed on the [Skills needed](/career-goal) page.')
+            if len(skills)>LISTED_SKILLS:points.append('More skills are listed on the [Skills needed](/career-goal) page.')
     if getattr(goal,'requirements_need_review',False):
         points.append('**Requirements:** Your goal changed; review its saved requirements.')
     sources={s.source_id:s.url for s in record.sources}
@@ -185,7 +190,7 @@ async def summarize(request, account, body):
 
     activity('preparing_summary')
     encoded = json.dumps(jsonable_encoder(context), separators=(',', ':'))
-    if len(encoded) > 40000:
+    if len(encoded) > MAX_SUMMARY_CONTEXT_CHARS:
         await snapshot()
         return saved_evidence_summary(goal,record)
     @structured_node

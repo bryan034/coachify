@@ -2,7 +2,7 @@
 from datetime import timedelta
 from types import SimpleNamespace as NS
 import pytest
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.opportunity_contracts import PROMPTS, SkillLevels
 from app.domain.competence import target_for, calibrated_goal
 from app.repositories.goals import now
@@ -27,9 +27,9 @@ def test_the_role_band_sets_the_baseline(role, seniority, employment, base):
     assert (target.level, target.basis) == (base, 'inferred') and 'estimated it from the role' in target.explanation
 
 
-def test_importance_title_and_experience_move_the_score():
+def test_importance_and_experience_move_the_score():
     role = goal('Machine Learning Engineer', 'Graduate')
-    assert target_for(skill('Machine learning'), None, role).level == 9
+    assert target_for(skill('Machine learning'), None, role).level == 7
     assert target_for(skill('SQL'), None, role).level == 7
     assert target_for(skill('SQL', priority='preferred'), None, role).level == 7
     assert target_for(skill('SQL', priority='unspecified'), None, role).level == 6
@@ -40,28 +40,20 @@ def test_importance_title_and_experience_move_the_score():
 
 def test_targets_spread_instead_of_clustering():
     role = goal('Senior Machine Learning Engineer', employment='full_time')
-    levels = [target_for(s, None, role).level for s in (skill('Machine learning'), skill('Docker', priority='preferred'),
-                                                        skill('Kubernetes', priority='unspecified'))]
+    levels = [target_for(s, None, role).level for s in (skill('Machine learning', required_experience_months=24),
+                                                        skill('Docker', priority='preferred'), skill('Kubernetes', priority='unspecified'))]
     assert levels == [10, 9, 8]
 
 
-def test_a_skill_sharing_a_significant_title_word_is_core_but_generic_title_words_are_not():
-    target = target_for(skill('Statistical modelling'), None, goal('Statistics Intern', employment='internship'))
-    assert target.level == 9 and 'core to the role title' in target.explanation
-    assert 'core to the role title' in target_for(skill('Quantitative methods'), None, goal('Quant Intern')).explanation
-    assert target_for(skill('Engineering design'), None, goal('Software Engineer Intern', employment='internship')).level == 7
-    assert target_for(skill('Financial modelling'), None, goal('Financial Analyst')).level == 9
-
-
 @pytest.mark.parametrize('role,company,field', [
-    ('Quantitative Trading Intern', 'Optiver', None), ('Quantitative Trading Intern', None, None),
-    ('Summer Analyst', 'Goldman Sachs', None), ('Summer Intern', None, 'Investment Banking'),
-    ('Business Analyst Intern', 'McKinsey & Company', None)])
-def test_selective_hiring_raises_every_skill(role, company, field):
-    selective = goal(role, employment='internship', company=company, field=field)
-    target = target_for(skill('Probability'), None, selective)
-    assert target.level == 9 and 'selective hiring' in target.explanation
-    assert target_for(skill('Excel', priority='unspecified'), None, selective).level == 8
+    ('Statistics Intern', None, None), ('Quantitative Trading Intern', 'Optiver', None),
+    ('Summer Analyst', 'Goldman Sachs', None), ('Summer Intern', None, 'Investment Banking')])
+def test_the_reference_leaves_role_defining_skills_and_selectivity_to_the_model(role, company, field):
+    role_goal = goal(role, employment='internship', company=company, field=field)
+    for name in ('Statistical modelling', 'Probability'):
+        target = target_for(skill(name), None, role_goal)
+        assert target.level == 7 and 'core to the role title' not in target.explanation and 'selective' not in target.explanation
+    assert target_for(skill('Probability'), report(9, name='Probability'), role_goal).level == 9
 
 
 def test_ordinary_internships_are_not_treated_as_selective():
@@ -70,12 +62,12 @@ def test_ordinary_internships_are_not_treated_as_selective():
         assert target_for(skill('Probability'), None, ordinary).level == 7
 
 
-def test_a_selective_internship_core_skill_reaches_a_high_target_without_an_internship_cap():
+def test_a_rated_internship_skill_reaches_a_high_target_without_an_internship_cap():
     optiver = goal('Quantitative Trading Intern', employment='internship', company='Optiver')
     target = target_for(skill('Quantitative problem solving'), None, optiver)
-    assert target.level == 10 and 'Research hasn’t rated' in target.explanation
-    rated = report(9, name='Quantitative problem solving')
-    assert target_for(skill('Quantitative problem solving'), rated, goal('Quant Intern', employment='internship')).level == 9
+    assert target.level == 7 and 'Research hasn’t rated' in target.explanation
+    rated = report(10, name='Quantitative problem solving')
+    assert target_for(skill('Quantitative problem solving'), rated, optiver).level == 10
 
 
 @pytest.mark.parametrize('text,proficiency,level,basis', [
@@ -117,13 +109,16 @@ def test_wide_and_interview_research_each_add_a_level_and_cite_sources():
     assert target_for(skill('Java'), probed, goal()).level == 7
 
 
-def test_research_signals_match_a_skill_in_any_word_form_or_order_but_not_lookalike_words():
-    reworded = report(findings=[('interview_intelligence', finding(1, 'Candidates solve quantitative problems live.', ['a']))])
-    assert target_for(skill('Quantitative problem solving'), reworded, goal()).level == 8
+def test_research_signals_match_the_skill_name_as_a_phrase_but_not_lookalike_words():
+    named = report(findings=[('interview_intelligence', finding(1, 'Interviews test quantitative problem solving live.', ['a']))])
+    assert target_for(skill('Quantitative problem solving'), named, goal()).level == 8
+    symbol = report(findings=[('interview_intelligence', finding(1, 'Expect C++ questions.', ['a']))])
+    assert target_for(skill('C++'), symbol, goal()).level == 8
+    assert target_for(skill('C'), symbol, goal()).level == 7
     lookalike = report(findings=[('interview_intelligence', finding(1, 'Excellent communication is assessed.', ['a']))])
     assert target_for(skill('Excel'), lookalike, goal()).level == 7
-    partial = report(findings=[('interview_intelligence', finding(1, 'Interviews include quantitative questions.', ['a']))])
-    assert target_for(skill('Quantitative problem solving'), partial, goal()).level == 7
+    reworded = report(findings=[('interview_intelligence', finding(1, 'Candidates solve quantitative problems live.', ['a']))])
+    assert target_for(skill('Quantitative problem solving'), reworded, goal()).level == 7
 
 
 def test_the_research_model_decides_the_level_and_the_weights_are_its_reference():
@@ -188,8 +183,8 @@ def test_rating_input_carries_the_weighted_reference_for_each_skill():
     assert rows[0]['reference_factors'] == ['internship baseline 5', 'essential to the role +2', 'probed in reported interviews +1']
     selective = weighted_skills([{'name': 'Python', 'priority': 'required'}],
                                 {'role': 'Trading Intern', 'seniority_level': None, 'employment_type': 'internship', 'company': 'Optiver'}, None)
-    assert selective[0]['reference_level'] == 9
-    assert selective[0]['reference_factors'][1] == 'selective hiring (highly selective employer) +2'
+    assert selective[0]['reference_level'] == 7
+    assert selective[0]['reference_factors'] == ['internship baseline 5', 'essential to the role +2']
 
 
 def test_current_goal_enrichment_keeps_saved_goal_and_source_provenance_intact():
@@ -210,7 +205,7 @@ def test_saving_recomputes_targets_only_for_changed_inputs():
     retitled = prepare(before.model_copy(update={'seniority_level': 'Senior'}), before, map_skills=False)
     assert [s.competence_target.level for s in retitled.skills] == [9, 9]
     employer = prepare(before.model_copy(update={'company': 'Jane Street'}), before, map_skills=False)
-    assert [s.competence_target.level for s in employer.skills] == [9, 9]
+    assert [s.competence_target.level for s in employer.skills] == [7, 7]
 
 
 

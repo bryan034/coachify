@@ -68,18 +68,6 @@ class ResearchSource {
     +Date retrieved_at?
 }
 
-class GapResult {
-    +String skill_id
-    +String name
-    +String gap_type
-    +String match_status
-    +String importance?
-    +String cv_proficiency?
-    +String required_proficiency?
-    +String explanation
-    +String recommendation?
-}
-
 class cvs {
     +Evidence[] other_information [uncategorised_source_excerpts]
     +CvSkill[] skills
@@ -130,11 +118,6 @@ class interview_research {
     +ResearchSource[] sources
 }
 
-class skill_gap_analyses {
-    +GapResult[] job_skill_gaps
-    +GapResult[] interview_prep_gaps
-}
-
 cvs *-- CvSkill : embeds
 career_goals *-- TargetSkill : embeds
 career_goals *-- NonSkillRequirement : embeds
@@ -143,7 +126,6 @@ ReviewContent *-- TargetSkill
 ReviewContent *-- NonSkillRequirement
 %% InterviewSkill is retained only for archived records and in-memory Q&A projections.
 interview_research *-- ResearchSource : embeds
-skill_gap_analyses *-- GapResult : embeds
 
 class Generation {
     +String provider
@@ -166,26 +148,29 @@ class CvExtractionMetadata {
 cvs *-- CvExtractionMetadata : validated extraction provenance
 
 class InputVersions {
-    +String cv_id [UUID_or_legacy_ObjectId]
-    +Number cv_version
-    +String extraction_version
+    +String evidence_hash?
+    +String as_of_date?
+    +String source_mode [cv_and_profile|profile_only]
+    +String cv_id?
+    +Number cv_version?
+    +Number extraction_version?
+    +Number effective_version?
+    +Number cv_selection_version
+    +Number declarations_version
     +Number profile_version
-    +ObjectId career_goal_id
-    +Number career_goal_version
-    +String generation_version
-    +ResearchVersion[] research
-}
-
-class ResearchVersion {
-    +ObjectId id
-    +Number version
+    +String goal_id
+    +Number goal_version
+    +Number goal_selection_version
+    +String research_id?
+    +Number research_version?
+    +String research_coverage
+    +String registry_version
 }
 
 career_goals *-- Generation : provenance
 interview_research *-- Generation : provenance
 skill_gap_analyses *-- Generation : provenance
 skill_gap_analyses *-- InputVersions : pins
-InputVersions *-- ResearchVersion : pins
 
 class Answer {
     +String status [answered|partial|skipped]
@@ -605,8 +590,6 @@ roadmaps *-- PlanningPreferences
 PlanningPreferences *-- DayBudget
 roadmaps *-- PlanTask
 roadmaps *-- DailyAllocation
-%% Older GapResult/InputVersions above remain analysis-v1 Career compatibility.
-%% New Assessment input vectors additionally pin effective/declaration/CV-selection/goal-selection/registry/research-coverage revisions.
 
 %% Question research uses existing Finding/ResearchSource objects: exact public excerpt as value/quote,
 %% validated source IDs and low-confidence/general scope. Complex questions persist only cited

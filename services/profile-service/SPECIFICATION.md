@@ -190,13 +190,13 @@ truth. The [README](README.md) lists available endpoints, and the
   the captured password hash with Argon2id plus `password_changed_at`. Concurrent
   reset proofs have one winner; older proofs become unusable. Credential-bound
   sessions and access attempts reject old passwords after reset, including retries.
-  Pre-upgrade sessions are accepted only until the first reset. Recovery never
+  Recovery never
   creates a private session or changes owner/profile/history. Codes/passwords stay
   in page memory and email, outside browser storage and logs.
 - Profile owns accounts, sessions and verification behind `/api/v1/profile`; no
   new application microservice is introduced. MongoDB collections are `accounts`,
   `auth_flows`, `auth_sessions` and `auth_limits`. Unique identity/owner indexes
-  prevent duplicate registration and conflicting legacy mappings; TTL indexes clean
+  prevent duplicate registration; TTL indexes clean
   expired flows, sessions and rate counters.
 - `APP_ENV` is explicitly `development` or `production`; the default is production.
   `AUTH_MODE=local_test` is development-only and uses email/password accounts in a
@@ -237,7 +237,7 @@ truth. The [README](README.md) lists available endpoints, and the
 - An older unverified email/local signup may still finish verification after
   proving its original password. A fresh registration can reclaim only an exact,
   empty reservation after its own OTP proof, using a fresh account ID and owner.
-  Existing profile/history, mutation receipts, sessions, capabilities, migration
+  Existing profile/history, mutation receipts, sessions, capabilities
   or verification metadata make a reservation ineligible. Unknown legacy fields
   fail closed. Verified and Google accounts cannot be reclaimed; Google still
   requires its exact subject. The conditional replacement rejects concurrent
@@ -313,21 +313,6 @@ truth. The [README](README.md) lists available endpoints, and the
   its request key. Successful completion is routed by the shared guard. Completion
   hints across tabs cause canonical readback; older versions/incomplete responses
   cannot replace a newer confirmed completion or redirect the next account.
-
-## Explicit legacy fixed-owner mapping — P15
-
-Run `scripts/map_legacy_owner.py --account-id <verified-local-id>
---legacy-owner local_test:<old-id>` in the Profile environment; without `--apply`
-this is a dry run. Back up the database and perform mapping during maintenance.
-The script requires development/local mode and an existing verified target account
-with no profile data. Re-run with `--apply` only for that intended owner. It changes
-only the account's owner binding, preserving all profile versions and mutation
-receipts under their original owner. It revokes old sessions and requires fresh
-sign-in. Re-running the same mapping is a no-op; another account cannot claim it.
-A failed mapping leaves maintenance locked for explicit retry/review. No automatic
-mass copying, Google/email linking or deletion occurs. Earlier name-only local
-accounts remain preserved; they do not become password/verified-email accounts by
-inference. This helper maps the original `local_test:<id>` records only.
 
 ## Current email registration policy
 

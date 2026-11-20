@@ -7,7 +7,8 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.ai.adapter import AIAdapter,AIError,Operation
+from app.ai.adapter import AIAdapter, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.opportunity_contracts import (
@@ -234,7 +235,8 @@ def test_bold_markers_do_not_change_identity_numbers_or_dedupe():
     ('About **SGD 8,000/month** (SGD 96,000 a year)','Base pay is SGD 96,000 per year',True),
     ('About SGD 8,000/month','Base pay is SGD 96,000 per year',False),
     ('Reported: roughly **70%** got return offers','about 70% of us got return offers',True),
-    ('**3** interview rounds','There were three rounds.',True),
+    ('**three** interview rounds','There were three rounds.',True),
+    ('**3** interview rounds','There were three rounds.',False),
     ('**8.5k** a month','8,500 SGD monthly',True),
     ('Interns receive SGD 9000 monthly.','Example interns report weekly mentorship.',False),
 ])

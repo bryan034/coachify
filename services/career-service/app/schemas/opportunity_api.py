@@ -1,7 +1,7 @@
 """Owner-scoped public API projection; worker tokens and private context never leave it."""
 from datetime import datetime
 from pydantic import Field,ConfigDict
-from app.schemas.opportunity import Model,Category,CategoryResult,OpportunityReport,Summary,Finding,MAX_RESEARCH_SOURCES
+from app.schemas.opportunity import Model,Category,CategoryResult,Summary,Finding,MAX_RESEARCH_SOURCES
 from app.schemas.analysis import DomainId,ResearchSource
 from typing import Literal
 

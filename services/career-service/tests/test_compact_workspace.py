@@ -3,7 +3,7 @@ import json
 from types import SimpleNamespace
 from bson import ObjectId
 import pytest
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.opportunity_contracts import StructuredFindings
 from app.schemas.analysis import ResearchSource
 from app.schemas.opportunity import CATEGORIES
@@ -213,18 +213,6 @@ def test_older_workspace_adopts_current_goal_before_editing(opportunity_flow):
     response=flow[0].patch(BASE+'/review',headers=headers(),json={'session_id':current['session_id'],'expected_version':3,'content':content})
     assert response.status_code==200,response.text
     assert response.json()['current']['goal']['_id']==goal['_id'] and response.json()['revision']==4
-
-
-def test_upgrade_removes_only_retired_reset_copies(opportunity_flow):
-    from app.repositories.reviews import ReviewStore
-    flow=opportunity_flow;identifier=ObjectId();owner='11111111-1111-4111-8111-111111111111'
-    original={'_id':identifier,'user_id':owner,'record_type':'requirement_review','content':{'role':'Effective role'},
-        'baseline':{'role':'Obsolete original'},'baseline_origins':{'role':'extracted'},
-        'metadata_origins':{'role':'user'},'receipts':[{'key':'synthetic','hash':'synthetic'}]}
-    flow[1].career_goals.insert_one(original)
-    ReviewStore(flow[1]);stored=flow[1].career_goals.find_one({'_id':identifier})
-    assert stored=={k:v for k,v in original.items() if k not in ('baseline','baseline_origins')}
-    ReviewStore(flow[1]);assert flow[1].career_goals.find_one({'_id':identifier})==stored
 
 
 def test_same_extract_with_different_summaries_keeps_one_stable_finding():

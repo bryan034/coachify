@@ -3,7 +3,8 @@ import asyncio
 import json
 import httpx
 import pytest
-from app.ai.adapter import AIAdapter,AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.usage import input_tokens
@@ -30,7 +31,7 @@ def test_discovery_requests_five_ranked_url_contexts_independently_of_opportunit
                  'snippets':[f'Employer {i} Portfolio Manager manages investment portfolios. Bloomberg is required.']}
                 for i in (7,14,19,22,29)]}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            provider=SourceAPIs(client,brave_key='synthetic')
+            provider=SourceAPIs(client,brave_key='synthetic',backend='brave')
             context=ResearchContext(field='Finance',role='Portfolio Management')
             found=await provider.collect_discovery_query(context,'Finance Portfolio Management employer vacancy')
             old=await provider.collect_opportunity_query(context,'Portfolio Management interview')
@@ -160,7 +161,7 @@ def test_employer_is_copied_from_brave_structured_data_not_publisher_or_the_mode
                                 'Analyst works with financial statements.']}]},
                 'sources':{url:{'site_name':'Example Job Board'}}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            provider=SourceAPIs(client,brave_key='synthetic')
+            provider=SourceAPIs(client,brave_key='synthetic',backend='brave')
             context=ResearchContext(field='Finance',role='Finance')
             found=await provider.collect_discovery_query(context,'Finance jobs')
             other=await provider.collect_opportunity_query(context,'Finance interview')

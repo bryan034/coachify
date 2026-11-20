@@ -1,9 +1,8 @@
 """Owner/version-scoped opportunity research commands and durable status reads."""
-from bson import ObjectId
 from fastapi import APIRouter,Depends,Request
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
-from app.api.v1.goals import owner,request_key,identifier
+from app.api.v1.dependencies import owner, request_key, identifier
 from app.repositories.goals import GoalError,now
 from app.schemas.opportunity import ResearchCommand
 from app.schemas.opportunity_api import OpportunityView,EvidenceView,ResearchProgress
@@ -48,12 +47,9 @@ async def presentation(request,account,goal):
 @router.get('/{goal_id}/opportunity-research/progress',response_model=ResearchProgress)
 async def progress(goal_id:str,request:Request,account=Depends(owner)):
     service=engine(request);goal_id=identifier(goal_id)
-    owned=await thread(service.store.db.career_goals.find_one,{'_id':ObjectId(goal_id),'user_id':account},{'_id':1,'version':1})
-    if not owned:raise GoalError('This career goal was not found.',404)
-    versions=[{'goal_version':owned['version']}]
-    if owned['version']==1:versions.append({'goal_version':{'$exists':False}})
-    job=await thread(service.store.rows.find_one,{'kind':'opportunity_job','owner':account,'goal_id':goal_id,'$or':versions},
-        {'status':1,'finished':1,'categories.status':1,'categories.error_code':1,'updated_at':1,'research_id':1,'next_attempt_at':1},sort=[('created_at',-1)])
+    version=await thread(request.app.state.goal_store.goal_version,account,goal_id)
+    if version is None:raise GoalError('This career goal was not found.',404)
+    job=await thread(service.store.latest_job,account,goal_id,version)
     if not job:return {'status':'pending','finished':True,'result_version':None,'categories':{}}
     if not job['finished']:service.launch(job['_id'])
     return jsonable_encoder({'status':job['status'],'finished':job['finished'],'categories':job['categories'],

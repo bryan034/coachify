@@ -3,7 +3,8 @@ import json
 import re
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
-from app.ai.adapter import AIError,Operation
+from app.ai.adapter import Operation
+from app.ai.errors import AIError
 from app.ai.contracts import AIInput
 from app.ai.routing import chat_models
 from app.repositories.goals import now

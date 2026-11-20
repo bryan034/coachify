@@ -26,3 +26,10 @@ select = ["PLC0415"]
 
 [tool.ruff.lint.per-file-ignores]
 "app/workers/parse.py" = ["PLC0415"]
+
+[tool.vulture]
+paths = ["app"]
+exclude = ["app/schemas/"]
+ignore_decorators = ["@router.*", "@app.*", "@field_validator", "@model_validator"]
+ignore_names = ["model_config", "put_writes", "delete_thread", "new_versions", "task_path", "partial_notices", "needs_repair", "repair_attempts"]
+min_confidence = 60

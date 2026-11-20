@@ -4,7 +4,7 @@ import json
 from types import SimpleNamespace as NS
 import httpx
 import pytest
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.goal_summary import GoalSummary
 from app.ai.recovery import validation_feedback
 from app.schemas.analysis import ResearchSource
@@ -105,7 +105,7 @@ def test_repeated_summary_failure_is_bounded_and_displays_only_saved_evidence():
 
 def test_failed_operation_response_includes_id_and_only_safe_validation_details():
     from app.main import create_app
-    from app.api.v1.goals import owner
+    from app.api.v1.dependencies import owner
     async def run():
         app=create_app();jobs=Operations();app.state.operations=jobs
         app.dependency_overrides[owner]=lambda:'owner'

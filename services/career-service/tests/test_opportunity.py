@@ -12,7 +12,8 @@ import pytest
 from fastapi.testclient import TestClient
 from pymongo import MongoClient
 from app.main import create_app
-from app.ai.adapter import AIAdapter,AIError,Operation
+from app.ai.adapter import AIAdapter, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.routing import ModelRouter,opportunity_models
@@ -60,7 +61,7 @@ class ContextModel:
         return SimpleNamespace(data=output)
 
 class Search:
-    brave_mode='llm_context'
+    brave_mode='llm_context';provider='brave';backend='brave'
     def __init__(self):self.calls=[];self.fail=None;self.empty=False;self.active=0;self.maximum=0
     async def collect_opportunity_query(self,context,query,max_sources=5):
         self.calls.append(query);self.active+=1;self.maximum=max(self.maximum,self.active)

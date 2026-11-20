@@ -5,7 +5,8 @@ import httpx
 import pytest
 from langgraph.graph import StateGraph,START,END
 from langsmith import tracing_context
-from app.ai.adapter import AIAdapter,AIError,Operation
+from app.ai.adapter import AIAdapter, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.recovery import recover_responses,validation_progress,validation_budget
@@ -57,7 +58,7 @@ def test_graph_repairs_repeated_schema_json_and_truncated_responses_then_display
     asyncio.run(run())
 
 
-def test_corrections_do_not_expire_the_original_graph_execution_budget():
+def test_corrections_share_the_original_graph_execution_budget():
     async def run():
         count=[]
         async def node(state):
@@ -67,12 +68,13 @@ def test_corrections_do_not_expire_the_original_graph_execution_budget():
             return {'result':'Valid'}
         enabled=recover_responses.set(True)
         try:
-            async with asyncio.timeout(.01) as budget:
-                timer=validation_budget.set(budget)
-                try:result=await structured_node(node)({})
-                finally:validation_budget.reset(timer)
+            with pytest.raises(TimeoutError):
+                async with asyncio.timeout(.01) as budget:
+                    timer=validation_budget.set(budget)
+                    try:await structured_node(node)({})
+                    finally:validation_budget.reset(timer)
         finally:recover_responses.reset(enabled)
-        assert result=={'result':'Valid'} and len(count)==2
+        assert len(count)==2
     asyncio.run(run())
 
 

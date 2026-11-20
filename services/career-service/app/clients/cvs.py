@@ -6,6 +6,10 @@ from pydantic import ValidationError
 from app.repositories.goals import GoalError
 from app.schemas.analysis import CvSnapshot, cv_reference
 from app.schemas.goals import CvSummary
+from http import HTTPStatus
+
+MAX_EVIDENCE_CHARS = 600
+MAX_CURSOR = 512
 
 STATUS = {'queued': 'pending', 'processing': 'processing', 'ready': 'succeeded', 'failed': 'failed'}
 MAPPING_VERSION = 'cv-source-identities-v1'
@@ -51,7 +55,7 @@ def saved_snapshot(row, owner):
             'context', 'evidence_type', 'explicit', 'item_ids', 'sources', 'conflicting_fields')},
             'proficiency': proficiency if proficiency in {'beginner', 'intermediate', 'advanced', 'expert'} else None,
             'reported_proficiency': proficiency, 'source_evidence': evidence,
-            'evidence': joined if joined and len(joined) <= 600 else None})
+            'evidence': joined if joined and len(joined) <= MAX_EVIDENCE_CHARS else None})
     return validate_snapshot({'id': summary.id, 'user_id': owner, 'version': summary.version,
         'file_name': summary.file_name, 'file_type': row['file_type'], 'skills': skills,
         'extraction_status': summary.extraction_status, 'extraction_version': summary.extraction_version,
@@ -66,7 +70,7 @@ class CvClient:
     async def read(self, path, token, *, budget=None):
         # Bound bytes before JSON decoding, including chunked responses.
         async with self.client.stream('GET', path, headers={'Authorization': token}, follow_redirects=False) as response:
-            if response.status_code != 200: return response.status_code, None
+            if response.status_code != HTTPStatus.OK: return response.status_code, None
             size = response.headers.get('content-length')
             remaining = MAX_CV_RESPONSE_BYTES if budget is None else budget[0]
             if size is not None and int(size) > remaining: raise intake_limit()
@@ -82,7 +86,7 @@ class CvClient:
             path='/api/v1/cv';budget=[MAX_CV_RESPONSE_BYTES];items=[];seen=set();cursors=set()
             for _ in range(MAX_CV_LIST_PAGES):
                 status, body = await self.read(path, token, budget=budget)
-                if status != 200: raise ValueError
+                if status != HTTPStatus.OK: raise ValueError
                 if 'cvs' not in body:
                     if items: raise ValueError('CV list contract changed during pagination.')
                     return [CvSummary.model_validate(row) for row in body['items']]
@@ -92,7 +96,7 @@ class CvClient:
                 items.extend(page);seen.update(row.id for row in page)
                 cursor=body.get('next_cursor')
                 if cursor is None:return items
-                if not page or not isinstance(cursor,str) or not cursor or len(cursor)>512 or cursor in cursors:
+                if not page or not isinstance(cursor,str) or not cursor or len(cursor)>MAX_CURSOR or cursor in cursors:
                     raise ValueError('Invalid CV list continuation.')
                 cursors.add(cursor);path='/api/v1/cv?cursor='+quote(cursor,safe='')
             raise intake_limit()
@@ -103,9 +107,9 @@ class CvClient:
         try:
             identifier = cv_reference(identifier)
             status, body = await self.read('/api/v1/cv/' + quote(identifier, safe=''), token)
-            if status == 404:
+            if status == HTTPStatus.NOT_FOUND:
                 raise GoalError('That CV is unavailable. Choose another or continue without it.', 409)
-            if status != 200: raise ValueError
+            if status != HTTPStatus.OK: raise ValueError
             cv = saved_snapshot(body, owner) if 'status' in body else validate_snapshot(body)
             if cv.id != identifier: raise ValueError('CV identity mismatch.')
             if cv.user_id != owner or cv.extraction_status != 'succeeded':

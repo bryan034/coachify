@@ -4,7 +4,8 @@ import json
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from app.ai.adapter import AIAdapter, AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.usage import input_tokens
@@ -30,7 +31,7 @@ def test_large_requests_repeat_without_local_token_admission_or_output_reduction
                 conversation=[{'role':'user','content':'Explain these career requirements.'}])
             payload=adapter._payload(request)
             assert input_tokens(payload)>8000
-            assert await asyncio.gather(*(adapter._complete(payload,owner='alice') for _ in range(4)))==['{}']*4
+            assert await asyncio.gather(*(adapter._complete(payload,stage='career_guidance',owner='alice') for _ in range(4)))==['{}']*4
         assert len(calls)==4 and all(call==payload for call in calls)
         assert payload['max_tokens']==768
     asyncio.run(run())
@@ -44,7 +45,7 @@ def test_model_provider_quota_is_still_enforced_without_immediate_retry():
             return httpx.Response(429,headers={'Retry-After':'3'})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter=AIAdapter(AISettings(enabled=True,api_key='fixture'),client)
-            with pytest.raises(AIError) as error:await adapter._complete({'model':'fixture','messages':[]},owner='alice')
+            with pytest.raises(AIError) as error:await adapter._complete({'model':'fixture','messages':[]},stage='career_guidance',owner='alice')
             assert error.value.limit_scope=='provider' and error.value.provider=='compatible'
             assert error.value.retry_after==3 and len(calls)==1
     asyncio.run(run())

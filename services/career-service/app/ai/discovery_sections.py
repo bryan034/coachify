@@ -8,7 +8,9 @@ from typing import get_args, get_origin
 
 from pydantic import TypeAdapter, ValidationError
 
-from app.schemas.discovery import ConversationMemory, DiscoveryUnderstanding, recent_texts
+from app.schemas.discovery import ConversationMemory, DiscoveryUnderstanding, recent_texts, SourceAssessment
+
+LIST_ITEM_PATH = 2
 
 MISSING=object()
 MAX_SECTION_RETRIES=2
@@ -94,7 +96,7 @@ class DiscoverySections:
         if self.stage=='discovery_turn' and name=='source_ids':
             allowed={ref for fact in self.context.get('facts',[]) for ref in fact.get('source_ids',[])}
             if any(ref not in allowed for ref in value):raise ValueError('source_reference')
-        if name in ('sources','listings') and len(path)==2:
+        if name in ('sources','listings') and len(path)==LIST_ITEM_PATH:
             if not 0<=value.ref<len(sources):raise ValueError('source_reference')
             if any(other_path!=path and other_path[0]==name and getattr(other,'ref',None)==value.ref
                    for other_path,other in self.values.items()):raise ValueError('duplicate_reference')
@@ -109,7 +111,7 @@ class DiscoverySections:
             if self.values.get(('question',)) and not value:raise ValueError('question_reference')
         if self.stage=='discovery_summary':
             if name=='responsibility_refs' and any(not 0<=ref<len(self.context.get('responsibilities',[])) for ref in value):raise ValueError('responsibility_reference')
-            if name=='skills' and len(path)==2:
+            if name=='skills' and len(path)==LIST_ITEM_PATH:
                 if any(not 0<=ref<len(self.context.get('skills',[])) for ref in value.skill_refs):raise ValueError('skill_reference')
                 if not value.skill_refs and value.name not in self.context.get('requested_skills',[]):raise ValueError('unsupported_skill')
                 normal=lambda text:' '.join(text.casefold().split())
@@ -123,7 +125,6 @@ class DiscoverySections:
     def initial(self,data):
         self._fields(self.model,data if isinstance(data,dict) else {})
         if self.stage=='discovery_assess' and ('sources',) in self.collections:
-            from app.schemas.discovery import SourceAssessment
             path=('sources',);size=self.collections[path];expected=len(self.context.get('sources',[]))
             if size<expected:
                 self.values.pop(path,None)

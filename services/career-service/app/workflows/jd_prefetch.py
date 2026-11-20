@@ -4,7 +4,7 @@ import asyncio
 from datetime import timedelta
 from app.clients.search_sources import SourceRateLimit
 from app.ai.waiting import quota_progress
-from app.repositories.goals import now
+from app.repositories.goals import now, GoalError
 from app.schemas.analysis import ResearchContext
 from app.workflows.activity import activity
 
@@ -14,6 +14,8 @@ from app.ai.recovery import recover_responses
 from app.workflows.opportunity.queries import ACTIVITIES,planned_queries
 from app.workflows.opportunity.topics import TOPICS,owner as topic_owner,policy
 import json
+import httpx
+from app.ai.errors import AIError
 
 IDENTITY=('role','field','company','location','seniority_level','employment_type')
 
@@ -41,7 +43,7 @@ async def prefetch(engine,identity,owner,revision):
                 Operation(owner,revision,'opportunity_plan'),current_revision=lambda:revision)
         result['queries']=planned_queries(plan.data,engine.settings.topic_searches,{k:getattr(identity,k) for k in IDENTITY})
         result['queries_planned']=True
-    except Exception:
+    except (AIError,GoalError,TimeoutError,ValueError):
         return result
     finally:
         recover_responses.reset(recovery);quota_progress.reset(waiting)
@@ -60,7 +62,7 @@ async def prefetch(engine,identity,owner,revision):
         except SourceRateLimit as error:
             category=topic_owner(topic)
             result['waits'][category]=max(result['waits'].get(category,now()),now()+timedelta(seconds=error.retry_after))
-        except Exception:
+        except (AIError,GoalError,TimeoutError,ValueError,httpx.HTTPError,OSError):
             return
     token=quota_progress.set(None)
     try:await asyncio.gather(*(retrieve(topic) for topic in TOPICS))

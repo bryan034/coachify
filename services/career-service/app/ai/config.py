@@ -5,6 +5,8 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from elo_shared.model_sdk import resolve_model_api_key
 
+MAX_TIMEOUT_SECONDS = 60
+
 
 OPENROUTER_BASE_URL='https://openrouter.ai/api/v1'
 REASONING_MODEL='openai/gpt-4o-mini'
@@ -29,7 +31,7 @@ class AISettings(BaseModel):
 
     @model_validator(mode='after')
     def valid_provider(self):
-        if self.timeout_seconds>60:
+        if self.timeout_seconds>MAX_TIMEOUT_SECONDS:
             raise ValueError('Cloud model request timeouts cannot exceed 60 seconds.')
         p = urlsplit(self.base_url)
         if p.scheme not in (('http','https') if self.allow_http else ('https',)) or not p.hostname or p.username or p.password or p.query or p.fragment:

@@ -2,7 +2,7 @@
 import asyncio
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from elo_shared.runtime import Problem, digest
+from elo_shared.runtime import digest
 from elo_shared.skills import identity, MAPPING_VERSION
 from app.competence import RUBRIC_VERSION
 

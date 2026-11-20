@@ -4,9 +4,11 @@ import json
 import re
 from http import HTTPStatus
 from urllib.parse import urlsplit
-from app.clients.job_url import destination,html_text
+from app.clients.public_url import destination,html_text
 from app.domain.documents import validate_text
 from app.schemas.preview import MAX_JD_TEXT
+
+MAX_LISTS = 100
 
 GREENHOUSE_HOSTS={'boards.greenhouse.io','job-boards.greenhouse.io'}
 LEVER_HOSTS={'jobs.lever.co':'api.lever.co','jobs.eu.lever.co':'api.eu.lever.co'}
@@ -37,7 +39,7 @@ def mapping(parsed):
 def read_preview(parsed,url,deadline,fetch):
     target=mapping(parsed)
     if target is None:return None
-    provider,board,job_id,api=target
+    provider,_,job_id,api=target
     status,headers,data=fetch(api,deadline)
     if status==HTTPStatus.NOT_FOUND:raise ValueError(f'This job is no longer available on {"MyCareersFuture" if provider=="MyCareersFuture" else "the employer’s public job board"}. Paste the description or upload a document.')
     if status!=HTTPStatus.OK:raise ValueError('The public job API is unavailable. Retry, paste the description or upload a document.')
@@ -72,7 +74,7 @@ def read_preview(parsed,url,deadline,fetch):
             if not isinstance(content,str) or not content.strip():raise ValueError
             sections=[content]
             lists=job.get('lists',[])
-            if not isinstance(lists,list) or len(lists)>100:raise ValueError
+            if not isinstance(lists,list) or len(lists)>MAX_LISTS:raise ValueError
             for item in lists:
                 if not isinstance(item,dict) or not isinstance(item.get('text'),str) or not isinstance(item.get('content'),str):raise ValueError
                 sections.extend([item['text'],item['content']])

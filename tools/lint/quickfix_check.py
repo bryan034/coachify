@@ -317,10 +317,10 @@ def check_source(path, source, collections=frozenset(), tree=None):
 def ruff_violations(service, modules):
     result = subprocess.run([sys.executable, '-m', 'ruff', 'check', '--no-fix', '--ignore-noqa', '--output-format', 'json', 'app'],
                             cwd=service, capture_output=True, text=True)
-    if result.returncode not in (0, 1):
+    if result.returncode not in (0, 1) or not result.stdout.strip():
         raise SystemExit(result.stderr or 'Ruff failed to run.')
     found, errors = [], []
-    for item in json.loads(result.stdout or '[]'):
+    for item in json.loads(result.stdout):
         path = Path(item['filename']).resolve().relative_to(service.resolve()).as_posix()
         line = item['location']['row']
         if not RULE_CODE.fullmatch(item.get('code') or ''):

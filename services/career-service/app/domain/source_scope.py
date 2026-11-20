@@ -1,64 +1,39 @@
-"""Deterministic scope checks for public question evidence.
+"""Scope checks for public question evidence.
 
-A passage is *verified* only when every check passes: it names the target market
-(Singapore unless the goal states another location); for Singapore goals it has
-no other-country signal. It names the saved employer, contains each core role word,
-addresses the question focus (a salary needs an actual amount) and the router's
-search subject; and it is not stale. Only verified passages may be saved as job
-facts. Everything else is an unverified candidate that may inform an answer,
-labelled with its market, but is never saved.
+A passage is *verified* only when every check passes: the passage-scope model labels it as
+describing the target market (Singapore unless the goal states another location) and as
+stating the asked detail (a salary needs an actual amount); it names the saved employer,
+contains each core role word and the router's search subject; and it is not stale. Only
+verified passages may be saved as job facts. Everything else is an unverified candidate
+that may inform an answer, labelled with its market, but is never saved.
 """
 import re
+import sys
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
 from urllib.parse import urlsplit
 
+MIN_EMPLOYER_NAME = 3
+STEM_CHARS = 5
+
 SINGAPORE = 'singapore'
 MAX_AGE_DAYS = 3 * 365
-
-LOCAL = re.compile(r'\bsingapore(?:an)?\b|\bSGD\b|\bS\$|\bSG\$', re.I)
-# Currencies other than SGD; bare "$" stays neutral.
-FOREIGN_CURRENCY = re.compile(
-    r'\b(?:AUD|USD|GBP|EUR|INR|MYR|HKD|NZD|CAD|IDR|CNY|RMB|JPY|KRW|THB|VND|AED|CHF)\b'
-    r'|(?:\bA|\bAU|\bUS|\bHK|\bNZ|\bC|\bCA|\bNT)\$|£|€|₹|¥|₩|₱|\bRM(?=\s?\d)|\bRs\.?(?=\s?\d)|\bRp\.?(?=\s?\d)', re.I)
-FOREIGN_PLACE = re.compile(r'\b(?:' + '|'.join([
-    'australia', 'australian', 'sydney', 'melbourne', 'brisbane', 'perth', 'adelaide', 'canberra',
-    'new zealand', 'auckland', 'wellington', 'united states', 'usa', 'america', 'new york',
-    'san francisco', 'seattle', 'california', 'texas', 'boston', 'chicago', 'canada', 'canadian', 'toronto',
-    'vancouver', 'united kingdom', 'britain', 'british', 'england', 'london', 'manchester', 'ireland',
-    'dublin', 'india', 'indian', 'bangalore', 'bengaluru', 'mumbai', 'delhi', 'hyderabad', 'pune',
-    'chennai', 'malaysia', 'malaysian', 'kuala lumpur', 'penang', 'johor', 'indonesia', 'jakarta',
-    'philippines', 'manila', 'vietnam', 'ho chi minh', 'hanoi', 'thailand', 'bangkok', 'hong kong',
-    'china', 'chinese mainland', 'shanghai', 'beijing', 'shenzhen', 'taiwan', 'taipei', 'japan', 'tokyo',
-    'korea', 'seoul', 'dubai', 'germany', 'berlin', 'france', 'paris', 'netherlands', 'amsterdam',
-]) + r')\b', re.I)
-NAMED_PLACE = re.compile(FOREIGN_PLACE.pattern + r'|\bSingapore\b', re.I)
-FOREIGN_TLDS = frozenset('au uk in my hk ca nz ph id cn jp kr tw th vn ae de fr nl ie us za'.split())
-# Two-letter country subdomains used by global job boards, e.g. au.indeed.com.
-FOREIGN_SUBDOMAINS = FOREIGN_TLDS | {'gb', 'en-au', 'en-gb', 'en-in'}
 
 COMPANY_SUFFIXES = {'pte', 'ltd', 'limited', 'inc', 'incorporated', 'corp', 'corporation', 'co',
                     'company', 'group', 'holdings', 'plc', 'llc', 'private', 'singapore', 'sg', 'the'}
 ROLE_FILLER = {'the', 'and', 'of', 'for', 'in', 'at', 'to', 'a', 'an', 'with', 'i', 'ii', 'iii', 'iv',
                'senior', 'junior', 'lead', 'principal', 'staff', 'associate', 'assistant', 'summer',
                'winter', 'spring', 'autumn', 'fall', 'programme', 'program', 'role', 'position', 'job'}
+# Currency markers by structure: any Unicode currency symbol (S$, US$, £, ₹...), or an ISO-style
+# three-letter code written directly beside the amount (SGD 1,500 or 1,500 AUD).
+CURRENCY_SYMBOLS = ''.join(chr(c) for c in range(sys.maxunicode + 1) if unicodedata.category(chr(c)) == 'Sc')
+AMOUNT = r'\d+(?:[,.]\d+)*(?:[kKmM]\b)?'
+MARKER = r'(?:\b[A-Z]{1,3})?[' + re.escape(CURRENCY_SYMBOLS) + r']|\b[A-Z]{3}(?=\s?\d)'
+MONEY = re.compile(r'(' + MARKER + r')\s?(' + AMOUNT + r')|(' + AMOUNT + r')\s?(\b[A-Z]{3}\b)')
 INTERN = re.compile(r'\b(?:intern|interns|internship|internships|trainee|traineeship|attachment)\b', re.I)
 TERM_FILLER = ROLE_FILLER | {'intern', 'interns', 'internship', 'company', 'employer', 'official',
                              'information', 'details', 'detail', 'singapore', 'job', 'work', 'working'}
-
-AMOUNT = re.compile(r'(?:SGD|S\$|SG\$|\$)\s?\d|\d[\d,.]*\s?(?:k\b|SGD\b)'
-                    r'|\d[\d,]*\s*(?:per|/|a|an)\s*(?:month|mth|hour|hr|week|year|annum)|\d[\d,]*\s*(?:monthly|hourly)\b', re.I)
-TOPIC = {
-    'compensation': r'\b(salary|salaries|stipend|allowance|compensation|pay|paid|remuneration|wages?|earns?|earning)\b',
-    'location': r'\b(office|located|location|based|address|remote|hybrid|on-?site|work from)\b',
-    'eligibility': r'\b(eligib\w*|qualifications?|degree|diploma|citizen\w*|permanent resident|work pass|requirements?)\b',
-    'dates': r'\b(deadline|start date|duration|closing|intake|weeks?|months?)\b',
-    'role_details': r'\b(responsibilit\w*|requirements?|skills?|duties|you will)\b',
-    'interviews': r'\b(interview\w*|assessments?|screening|coding test|online test|rounds?)\b',
-    'workplace': r'\b(culture|team|mentors?\w*|hours|overtime|balance|projects?|management|benefits?)\b',
-    'career_progression': r'\b(career|progression|graduate|full.time|return offer|promotion)\b',
-    'conversion': r'\b(conversion|convert\w*|return offers?|full.time offer|cohort)\b',
-}
 
 
 @dataclass
@@ -84,52 +59,6 @@ def target_place(goal):
     return re.split(r'[,(/|-]', location)[0].strip().casefold() or SINGAPORE
 
 
-def related_places(goal, texts=()):
-    """Other places the saved goal itself names, e.g. a base office in the JD.
-
-    These widen search and give the answer model context; they never verify a passage.
-    """
-    place = target_place(goal)
-    bases, mentioned = [], []
-    for text in [str((goal or {}).get('location') or ''), *texts]:
-        for match in NAMED_PLACE.finditer(text or ''):
-            name = ' '.join(match[0].split()).casefold()
-            if name == place:
-                continue
-            preceding = text[max(0, match.start()-48):match.start()]
-            if re.search(r'\b(?:based (?:in|out of)|works? (?:from|out of)|sits? (?:in|with)) (?:our |the )?$', preceding, re.I):
-                bases.append(name)
-            else:
-                mentioned.append(name)
-    return list(dict.fromkeys([*bases, *mentioned]))[:3]
-
-
-def foreign_host(name):
-    labels = name.split('.')
-    if len(labels) >= 2 and labels[-1] in FOREIGN_TLDS:
-        return True
-    return len(labels) >= 3 and labels[0] in FOREIGN_SUBDOMAINS
-
-
-def foreign_text(text, place=SINGAPORE):
-    """Any other-country currency or place name. Only defined for Singapore goals."""
-    return place == SINGAPORE and bool(FOREIGN_CURRENCY.search(text or '') or FOREIGN_PLACE.search(text or ''))
-
-
-def foreign_source(url, title, passage, goal):
-    place = target_place(goal)
-    if place != SINGAPORE:
-        return False
-    return foreign_host(host(url)) or foreign_text(title, place) or foreign_text(passage, place)
-
-
-def local(url, title, text, place):
-    name = host(url)
-    if place == SINGAPORE:
-        return name.endswith('.sg') or name.startswith('sg.') or bool(LOCAL.search(text) or LOCAL.search(title or ''))
-    return bool(re.search(r'\b' + re.escape(place) + r'\b', f'{title or ""} {text}', re.I))
-
-
 def company_words(company):
     words = [w for w in re.findall(r'[a-z0-9]+', (company or '').casefold().replace('&', ' and '))]
     while words and words[-1] in COMPANY_SUFFIXES:
@@ -147,7 +76,7 @@ def employer_match(company, url, title, text):
     compact = ''.join(words)
     name = host(url)
     # A matching subdomain or prefix does not establish employer ownership.
-    official = len(compact) >= 3 and name in {
+    official = len(compact) >= MIN_EMPLOYER_NAME and name in {
         compact + suffix for suffix in ('.com', '.sg', '.com.sg', '.careers', '.io')
     }
     return official or bool(re.search(phrase, f'{title or ""} {text}', re.I)), official
@@ -159,7 +88,7 @@ def role_words(role):
 
 
 def stem(word):
-    return word[:5] if len(word) > 5 else word
+    return word[:STEM_CHARS]
 
 
 def role_match(role, title, text):
@@ -176,19 +105,18 @@ def term_words(terms, goal):
     return [w for w in re.findall(r'[a-z]{4,}', (terms or '').casefold()) if w not in TERM_FILLER and w not in known]
 
 
-def verify(focus, url, title, passage, goal, *, terms=None, published=None, today=None, scope_only=False):
+def verify(url, title, passage, goal, *, scope=None, terms=None, published=None, today=None):
     """Return the verdict for one exact passage. Every check must pass to verify.
 
-    scope_only re-checks market, employer, role and age without question relevance,
-    which depends on the router's search subject and is decided at retrieval.
+    Without a model label (a saved passage re-checked against the current goal) only the
+    employer, role and age checks run; market, detail and search subject were checked at retrieval.
     """
     goal = goal or {}
     text = passage or ''
-    place = target_place(goal)
     reasons = []
-    if foreign_source(url, title, text, goal):
+    if scope is not None and scope.market == 'other':
         return Verdict(False, True, reasons=['foreign'])
-    if not local(url, title, text, place):
+    if scope is not None and scope.market != 'target':
         reasons.append('location')
     # A goal without a saved employer is a general role; there is no employer to match.
     matched, official = employer_match(goal.get('company'), url, title, text) if company_words(goal.get('company')) else (True, False)
@@ -196,15 +124,22 @@ def verify(focus, url, title, passage, goal, *, terms=None, published=None, toda
         reasons.append('employer')
     if not role_match(goal.get('role'), title, text):
         reasons.append('role')
-    words = term_words(terms, goal)
-    asked = bool(words) and any(re.search(r'\b' + re.escape(stem(w)), text, re.I) for w in words)
-    if words and not asked and not scope_only:
-        reasons.append('question')
-    # The router's specific subject satisfies the topic; otherwise the focus vocabulary must match. Salaries always need an amount.
-    pattern = TOPIC.get(focus)
-    if not scope_only and (not (asked or (pattern and re.search(pattern, text, re.I))) or (focus == 'compensation' and not AMOUNT.search(text))):
-        reasons.append('topic')
+    if scope is not None:
+        words = term_words(terms, goal)
+        if words and not any(re.search(r'\b' + re.escape(stem(w)), text, re.I) for w in words):
+            reasons.append('question')
+        if not scope.states_detail:
+            reasons.append('topic')
     if published and ((today or date.today()) - published).days > MAX_AGE_DAYS:
         reasons.append('stale')
     official = official or host(url).endswith('.gov.sg')
     return Verdict(not reasons, False, official, reasons)
+
+
+def money_figures(text):
+    """(currency marker, amount) pairs written in the text, with thousands separators removed."""
+    figures = set()
+    for match in MONEY.finditer(text or ''):
+        marker, amount = (match[1], match[2]) if match[1] else (match[4], match[3])
+        figures.add((marker.casefold(), re.sub(r'(?<=\d),(?=\d{3})', '', amount.casefold())))
+    return figures

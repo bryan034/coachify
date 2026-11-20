@@ -1,5 +1,5 @@
 from uuid import uuid5, NAMESPACE_URL
-from fastapi import Depends, Request
+from fastapi import Depends
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import application, authenticated, Problem, begin, launch, operation_view, stamp, digest
 from app.schemas import Generate, Result, Context, Current, DashboardSource, SkillRatingInput, SkillRatings, SkillReevaluateInput, SkillReevaluated, batch_schema
@@ -94,14 +94,14 @@ def create_app(store=None,upstream=None,model=None):
         row['result']=result;return row
 
     @app.get('/api/v1/assessments/context',response_model=Context)
-    async def context(request:Request,account=Depends(authenticated)):
+    async def context(account=Depends(authenticated)):
         """What an evaluation would read, and which setup step is still open. Never starts one."""
         snapshot=await capture(app.state.upstream,account)
         row=await thread(app.state.store.load,account['id'])
         return {k:snapshot.get(k) for k in ('ready','issues','goal','cv','input_hash','inputs','research_coverage','evidence','cv_reviewed','research_pending')} | {'model_available':app.state.model.configured,'evaluation':evaluation_status(row,snapshot)}
 
     @app.get('/api/v1/assessments/current',response_model=Current)
-    async def current(request:Request,account=Depends(authenticated)):
+    async def current(account=Depends(authenticated)):
         """Read the saved comparison and resume a pending one. A new comparison starts only from the explicit command."""
         unavailable=False
         try:snapshot=await capture(app.state.upstream,account)
@@ -115,7 +115,7 @@ def create_app(store=None,upstream=None,model=None):
             'stale':bool(result and evaluation['freshness']!='current'),'ready':snapshot['ready'],'issues':snapshot['issues']}
 
     @app.get('/api/v1/assessments/dashboard-source',response_model=DashboardSource)
-    async def dashboard_source(request:Request,account=Depends(authenticated)):
+    async def dashboard_source(account=Depends(authenticated)):
         """Read the saved result and freshness without resuming an operation."""
         owner=account['id']
         row=await thread(app.state.store.load,owner)
@@ -146,13 +146,13 @@ def create_app(store=None,upstream=None,model=None):
             'inputs':snapshot.get('inputs') if snapshot else None}
 
     @app.post('/api/v1/assessments',status_code=202)
-    async def generate(body:Generate,request:Request,account=Depends(authenticated)):
+    async def generate(body:Generate,account=Depends(authenticated)):
         row=await thread(begin,app.state.store,account['id'],body,'assessment')
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
         return {'version':row['version'],'operation':operation_view(row)}
 
     @app.get('/api/v1/assessments/operation')
-    async def operation(request:Request,account=Depends(authenticated)):
+    async def operation(account=Depends(authenticated)):
         row=await thread(app.state.store.progress,account['id'])
         if row.get('pending'):
             launch(app,account['id'],account['token'],worker)
@@ -166,12 +166,12 @@ def create_app(store=None,upstream=None,model=None):
         return {'version':row['version'],'ratings':sorted((row.get('skill_ratings') or {}).values(),key=lambda r:r['name'].casefold())}
 
     @app.get('/api/v1/assessments/skill-ratings',response_model=SkillRatings)
-    async def skill_ratings(request:Request,account=Depends(authenticated)):
+    async def skill_ratings(account=Depends(authenticated)):
         """The levels the person set for skills elo could not rate. They are shown as self-rated and never change a model score."""
         return ratings_view(await thread(app.state.store.load,account['id']))
 
     @app.post('/api/v1/assessments/skill-ratings',response_model=SkillRatings)
-    async def rate_skill(body:SkillRatingInput,request:Request,account=Depends(authenticated)):
+    async def rate_skill(body:SkillRatingInput,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id'])
         if row.get('pending'):raise Problem('Wait for the current evaluation to finish before rating a skill.',409,'operation_pending')
         if row['version']!=body.expected_version:raise Problem('Your workspace changed. Reload before saving.',409,'version_conflict')
@@ -185,7 +185,7 @@ def create_app(store=None,upstream=None,model=None):
         return ratings_view(await thread(app.state.store.cas,account['id'],row['version'],row))
 
     @app.post('/api/v1/assessments/skills/reevaluate',response_model=SkillReevaluated)
-    async def reevaluate(body:SkillReevaluateInput,request:Request,account=Depends(authenticated)):
+    async def reevaluate(body:SkillReevaluateInput,account=Depends(authenticated)):
         """Re-judge one skill after the person added evidence for it, and replace only that skill in the saved evaluation.
 
         Only this skill's evidence reaches the model. The saved evaluation moves to the new inputs only when the sole
@@ -218,7 +218,7 @@ def create_app(store=None,upstream=None,model=None):
         return {'version':saved['version'],'skill':judged}
 
     @app.get('/api/v1/assessments/{identifier}',response_model=Result)
-    async def history(identifier:str,request:Request,account=Depends(authenticated)):
+    async def history(identifier:str,account=Depends(authenticated)):
         return await thread(app.state.store.result,account['id'],identifier)
     return app
 app=create_app()

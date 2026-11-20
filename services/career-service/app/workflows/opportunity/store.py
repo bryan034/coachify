@@ -5,8 +5,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from app.repositories.goals import GoalError,fingerprint,now
 from app.repositories.research import ResearchStore
-from app.schemas.opportunity import CATEGORIES,CategoryResult
-from app.schemas.opportunity import MAX_CATEGORY_SOURCES
+from app.schemas.opportunity import CATEGORIES, CategoryResult, MAX_CATEGORY_SOURCES
 from .domain import public_opportunity,rating_skills
 
 class OpportunityStore:
@@ -53,7 +52,7 @@ class OpportunityStore:
             if command.get('refresh') or command.get('category') or result.status in ('failed','partial','pending','running') or not result.expires_at or result.expires_at<=now():
                 categories[category]={**categories[category],'status':'pending','error_code':None,'outcome':None}
         pending=[k for k,v in categories.items() if v['status']=='pending']
-        summary_pending=bool(cached and any(w.startswith('Overall summary unavailable;') for w in cached.intelligence.warnings))
+        summary_pending=bool(cached and cached.intelligence.summary_unavailable)
         retained={category:[s for s in sources if s['source_id'] in set(value.get('source_ids',[]))|{sid for finding in value['findings'] for sid in finding['source_ids']}][:MAX_CATEGORY_SOURCES] for category,value in categories.items()}
         row={'_id':identifier,'kind':'opportunity_job','owner':owner,'goal_id':goal.id,'goal_version':goal.version,'selection':selection,'session':session,'run':run,
              'digest':digest,'public':public,'context':context.model_dump(mode='json'),'status':'pending' if pending or summary_pending else cached.intelligence.status,
@@ -105,3 +104,13 @@ class OpportunityStore:
     def due(self):
         return list(self.rows.find({'kind':'opportunity_job','finished':False,'next_attempt_at':{'$lte':now()},
             '$or':[{'worker_until':{'$exists':False}},{'worker_until':{'$lte':now()}}]}, {'_id':1}).limit(20))
+
+    def latest_job(self,owner,goal_id,goal_version):
+        versions=[{'goal_version':goal_version}]
+        if goal_version==1:versions.append({'goal_version':{'$exists':False}})
+        return self.rows.find_one({'kind':'opportunity_job','owner':owner,'goal_id':goal_id,'$or':versions},
+            {'status':1,'finished':1,'categories.status':1,'categories.error_code':1,'updated_at':1,'research_id':1,'next_attempt_at':1},sort=[('created_at',-1)])
+
+    def run_job(self,owner,goal_id,run):
+        return self.rows.find_one({'kind':'opportunity_job','owner':owner,'goal_id':goal_id,'run':run},
+            {'categories.status':1,'categories.error_code':1,'updated_at':1,'research_id':1,'activities':1,'finished':1,'error_code':1,'next_attempt_at':1,'provider':1,'limit_scope':1})

@@ -73,13 +73,8 @@ export type SavedReview={current:{goal:SavedGoal}};
 export type JDReview=SavedReview&{turns:{message:string;reply:string}[];proposals:ReviewSkill[]|null};
 
 export type ResearchSource={source_id:string;platform:string;url:string;title:string|null;evidence?:string|null;retrieved_at?:string|null;published_date:string|null;reported_date:string|null;role_match:string;reliability:string;report_group:string|null};
-export type InterviewSummary={summary_id:string;provider:string;text:string;source_ids:string[];claims:{text:string;source_ids:string[]}[]};
 export type InterviewTopic={canonical_skill_id?:string|null;skill_registry_version?:string;evidence_origin?:'source_excerpt'|'brave_summary';summary_id?:string|null;skill_id:string|null;name:string;category:string;interview_stage:string|null;assessment_type:string|null;difficulty:string;question_patterns:string[];independent_report_count:number;source_ids:string[]};
-export type InterviewEvidence={source_ids:string[];text:string};
-export type InterviewProcess={round_count:number|null;round_count_evidence?:InterviewEvidence|null;stages:{name:string;assessment_type:string|null;evidence?:InterviewEvidence}[]};
 export type ResearchCoverage={platform:string;status:string;round?:number;useful_sources?:number|null;target_sources?:number|null;limit_reached?:boolean};
-export type RequiredSkillLevel={skill:string;level:number;rationale:string;finding_ids:string[]};
-export type ResearchView={status:string;research:{_id:string;version:number;intelligence?:{categories:Partial<Record<IntelligenceCategory,IntelligenceResult>>;skill_levels?:RequiredSkillLevel[]};process?:InterviewProcess;summaries?:InterviewSummary[];skills:InterviewTopic[];sources:ResearchSource[];last_researched_at:string;research_status:string}|null;context:{role:string;field:string;company:string|null;location:string|null;seniority_level:string|null};stale:boolean;reused:boolean;historical:boolean;general:boolean;note:string;history?:string[]};
 
 export type CareerWorkspace={activities?:string[];session_id:string|null;revision:number;kind:'jd'|'exploration'|null;phase:string;current:CurrentGoal;research_id:string|null;research_version:number|null;coverage:ResearchCoverage[];edit_question?:string|null;error_code?:string|null;error:string|null;limit_scope?:'user'|'provider'|null;provider?:string|null;retry_after:number|null;expires_at:string|null;exploration_id:string|null};
 

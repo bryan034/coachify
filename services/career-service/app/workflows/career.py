@@ -15,22 +15,26 @@ from langgraph.graph import StateGraph,START,END
 from langgraph.checkpoint.mongodb import MongoDBSaver
 from langsmith import tracing_context
 from starlette.concurrency import run_in_threadpool as thread
-from app.ai.adapter import AIError,Operation
+from app.ai.adapter import Operation
+from app.ai.errors import AIError
 from app.ai.waiting import quota_progress
 from app.ai.recovery import recover_responses,validation_progress,validation_budget
 from app.workflows.structured import structured_node
 from app.workflows import research_search
-from app.ai.jd_scope import identify_job
+from app.workflows.job_identity import identify_job
 from app.workflows.activity import activity,activity_observer
 from app.workflows.jd_prefetch import prefetch,matches
 from app.ai.contracts import AIInput
-from app.api.v1.jd import validate_extraction
-from app.api.v1.research import context_for
+from app.domain.extraction import validate_extraction
+from app.schemas.analysis import context_for, Generation, InterviewResearch, InterviewProcess
 from app.clients.research import normalize_sources,normalize_batch
 from app.domain.interview import topics_from
-from app.domain.review import MAPPING_VERSION
+from app.domain.review import MAPPING_VERSION, METADATA
 from app.repositories.goals import GoalError,now
-from app.schemas.analysis import Generation,InterviewResearch
+import json
+from app.schemas.research import ResearchBatch
+
+MIN_FIRST_ROUND_SOURCES = 2
 
 class Progress(TypedDict,total=False):
     owner:str
@@ -148,8 +152,6 @@ class CareerWorkflow:
     async def guidance(self,state):
         goal=await self.goal(state)
         if goal.target_type!='career_exploration' or goal.skills:return {}
-        from app.domain.review import METADATA
-        import json
         context={**{f:getattr(goal,f) for f in METADATA},'interests':goal.interests,'preferences':goal.preferences}
         def validate(output):
             if not output.skills or output.non_skill_requirements or any(s.origin!='generated_guidance' or s.priority!='suggested' or s.evidence or s.priority_evidence for s in output.skills):
@@ -216,7 +218,7 @@ class CareerWorkflow:
         if state.get('smart_search'):
             more=not state.get('search_exhausted') and state['round']<research_search.MAX_SEARCHES and len(state.get('useful_source_ids',[]))<research_search.TARGET_SOURCES
         else:
-            more=state['round']==1 and len(self.unique(state))<2 and not any(v.get('claims') for v in state.get('summaries',[]))
+            more=state['round']==1 and len(self.unique(state))<MIN_FIRST_ROUND_SOURCES and not any(v.get('claims') for v in state.get('summaries',[]))
         return ['brave'] if more else ['synthesize']
 
     async def assess(self,state):
@@ -228,14 +230,12 @@ class CareerWorkflow:
 
     async def synthesize(self,state):
         goal=await self.goal(state);sources=self.unique(state);stamp=now()
-        from app.schemas.research import ResearchBatch
         ids={v.source_id for v in sources};kept=[]
         for value in state.get('summaries',[]):
             references=[s for s in value['source_ids'] if s in ids]
             if references:kept.append({**value,'source_ids':references,'claims':[{**c,'source_ids':[s for s in c['source_ids'] if s in ids]} for c in value.get('claims',[]) if any(s in ids for s in c['source_ids'])]})
         batch=normalize_batch(ResearchBatch(sources=sources,summaries=kept))
         summaries=batch.summaries
-        from app.schemas.analysis import InterviewProcess
         process=InterviewProcess()
         if sources:
             result=await self.app.state.ai.generate(AIInput(stage='interview_synthesis',public_context=context_for(goal),sources=sources,summaries=summaries),

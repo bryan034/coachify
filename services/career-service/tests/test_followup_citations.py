@@ -2,7 +2,7 @@
 import asyncio
 from types import SimpleNamespace as NS
 import pytest
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.context_contracts import ContextPlan
 from app.ai.qa_contracts import FocusedAnswer
 from app.workflows.citations import fact_citations

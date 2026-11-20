@@ -3,6 +3,7 @@ import json
 from types import SimpleNamespace
 from uuid import uuid4
 from app.ai.goal_edit_contracts import GoalEditDecision
+from app.ai.qa_contracts import QuestionRoute
 from app.schemas.analysis import Generation
 from app.repositories.goals import now
 from tests.test_workspace import flow,ingest,wait,headers,BASE,OWNER
@@ -11,6 +12,7 @@ from tests.test_workspace import flow,ingest,wait,headers,BASE,OWNER
 def install(flow,decisions):
     ai=flow[2];original=ai.generate;seen=[]
     async def generate(request,operation,**kwargs):
+        if request.stage=='question_route':return SimpleNamespace(data=QuestionRoute(topic='edit'))
         if request.stage!='goal_edit':return await original(request,operation,**kwargs)
         seen.append(request)
         result=GoalEditDecision.model_validate(decisions.pop(0))
@@ -18,6 +20,15 @@ def install(flow,decisions):
         return SimpleNamespace(data=result,generation=Generation(provider='fixture',model='fixture',prompt_version='edit-test',generated_at=now()))
     flow[0].app.state.ai=SimpleNamespace(generate=generate,settings=ai.settings)
     return seen
+
+
+def route_edits(flow):
+    """The synthetic question router classifies the message as an edit; the default edit model then runs."""
+    ai=flow[2];original=ai.generate
+    async def generate(request,operation,**kwargs):
+        if request.stage=='question_route':return SimpleNamespace(data=QuestionRoute(topic='edit'))
+        return await original(request,operation,**kwargs)
+    ai.generate=generate
 
 
 def decision(status,reply,changes=(),intent='Update career goal'):
@@ -60,7 +71,7 @@ def test_multiple_guided_questions_keep_current_goal_until_a_complete_edit_and_r
 
 
 def test_skill_change_is_automatically_applied_with_user_provenance(flow):
-    client,db,ai,sources=flow;ingest(flow);initial=wait(flow)
+    client,db,ai,sources=flow;ingest(flow);initial=wait(flow);route_edits(flow)
     response=send(flow,initial,'Add Python')
     assert response.status_code==200,response.text
     result=response.json();assert result['edit_status']=='saved' and result['proposed_skills'] is None
@@ -115,8 +126,19 @@ def test_explicit_refinement_can_update_saved_goal_while_research_is_unavailable
     from tests.test_workspace import BASE,headers,ingest,wait
     flow[3].block=True
     assert ingest(flow).status_code==202
-    current=wait(flow,phase='research_failed')
+    current=wait(flow,phase='research_failed');route_edits(flow)
     response=flow[0].post(BASE+'/messages',headers=headers(),json={'session_id':current['session_id'],'expected_version':current['current']['goal']['version'],'message':'Add Python to my goal','mode':'refine'})
     assert response.status_code==200,response.text
     assert response.json()['edit_status']=='saved'
     assert any(s['name']=='Python' for s in response.json()['workspace']['current']['goal']['skills'])
+
+
+def test_the_edit_model_refuses_unrelated_tasks_during_a_pending_edit(flow):
+    from app.domain.questions import REFUSAL
+    client,db,ai,sources=flow;ingest(flow);initial=wait(flow)
+    seen=install(flow,[decision('clarify','Which city should the role be based in?',intent='Change the goal location'),
+        decision('off_topic','Unrelated request.',intent='Write a poem')])
+    assert send(flow,initial,'Change my location').json()['edit_status']=='clarifying'
+    response=send(flow,initial,'Write a poem')
+    assert response.status_code==200 and response.json()['reply']==REFUSAL and response.json().get('edit_status') is None
+    assert len(seen)==2 and client.get(BASE,headers=headers()).json()['revision']==initial['revision']

@@ -177,7 +177,7 @@ All routes require the existing verified session/completed onboarding and no-sto
   refresh requests receive a recoverable conflict rather than being lost.
 
 The new pipeline starts automatically from the validated-goal graph when configured.
-Otherwise legacy interview research remains available, and the intelligence interface
+Otherwise the workspace runs its interview research, and the intelligence interface
 explains that its additional providers are needed. No silent provider substitution.
 
 ## Configuration and limits
@@ -285,10 +285,11 @@ New report categories are `career_progression` (`full_time_role`, `career_path`,
 `conversion_salary`) and `conversion_outcomes` (`conversion_rate`, `historical_cohort`,
 `offer_acceptance`). `company_intelligence` now focuses on `company_culture`,
 `team_culture`, `management` and `work_life_balance`. Existing category identifiers,
-claim provenance and shared goal persistence stay stable. Version 1 archived reports
-remain readable using their original three-category/field contract. A new cache policy
-prevents old three-category results from satisfying new research. Unfinished legacy
-jobs acquire the missing categories without deleting paid evidence.
+claim provenance and shared goal persistence stay stable. Reports carry
+`schema_version` 2; the stored-shape upgrade clears version 1 reports so the next
+request researches again, and gives unfinished three-category jobs the missing
+categories without deleting paid evidence. A failed overall summary is recorded as
+`summary_unavailable` so the next run rebuilds it.
 
 Conversion percentages, intake sizes and salaries may be rough figures reported by candidates,
 forums or salary/review sites; they are labelled reported/approximate at low or medium confidence,

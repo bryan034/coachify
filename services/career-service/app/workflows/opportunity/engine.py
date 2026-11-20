@@ -1,4 +1,5 @@
 """Checkpointed fan-out/fan-in research with durable jobs and independently saved branches."""
+from contextlib import suppress
 from elo_shared.model_budget import budget_owner
 import asyncio
 import json
@@ -15,7 +16,8 @@ from langgraph.types import Send
 from langgraph.checkpoint.mongodb import MongoDBSaver
 from langsmith import tracing_context
 from starlette.concurrency import run_in_threadpool as thread
-from app.ai.adapter import AIError,Operation
+from app.ai.adapter import Operation
+from app.ai.errors import AIError
 from app.ai.contracts import AIInput
 from app.ai.recovery import recover_responses,validation_feedback
 from app.ai.waiting import quota_progress
@@ -24,14 +26,16 @@ from app.ai.opportunity_contracts import structure_input,triage_input
 from app.workflows.model_waits import resume_obsolete_model_waits
 from app.clients.search_sources import SourceRateLimit
 from app.repositories.goals import GoalError,now,fingerprint
-from app.schemas.analysis import ResearchContext,ResearchSource,InterviewResearch,Generation
-from app.schemas.opportunity import CATEGORIES,FIELDS,CategoryResult,Finding,OpportunityReport,Summary
+from app.schemas.analysis import ResearchContext,InterviewResearch,Generation
+from app.schemas.opportunity import CATEGORIES,FIELDS,SUMMARY_UNAVAILABLE,CategoryResult,Finding,OpportunityReport,Summary
 from .store import OpportunityStore
 from .sources import pool,retain_useful,category_sources,choose_reads
 from .queries import ACTIVITIES,planned_queries,topic_map
 from .topics import CANDIDATES_PER_SEARCH,TOPIC_CATEGORIES,TOPICS,category_topics,owner,policy,settled
 from app.domain.review import MAPPING_VERSION
-from .domain import whitespace,public_opportunity,validate_claims,summary_input,dedupe_findings,supported_claims,validated_skill_levels,weighted_skills
+from .domain import whitespace,summary_input,dedupe_findings,supported_claims,validated_skill_levels,weighted_skills
+from pymongo.errors import PyMongoError
+from app.workflows.boundaries import UnexpectedFailure, contained
 
 logger=logging.getLogger('uvicorn.error.opportunity')
 NOT_FOUND_WARNING='Information pertaining to this category was not found in the retrieved sources.'
@@ -72,8 +76,8 @@ def availability_issues(settings,ai,source):
     issues=[]
     if not getattr(getattr(ai,'settings',None),'enabled',False):issues.append('reasoning_disabled')
     if not getattr(ai,'context_enabled',False):issues.append('model_not_configured')
-    if not callable(getattr(source,'collect_opportunity_query',None)) or not getattr(source,'configured',True):issues.append('brave_not_configured' if getattr(source,'provider','brave')=='brave' else 'search_not_configured')
-    if getattr(source,'provider','brave')=='brave' and getattr(source,'brave_mode','')!='llm_context':issues.append('brave_llm_context_required')
+    if not callable(getattr(source,'collect_opportunity_query',None)) or not getattr(source,'configured',True):issues.append('brave_not_configured' if source.provider=='brave' else 'search_not_configured')
+    if source.provider=='brave' and getattr(source,'brave_mode','')!='llm_context':issues.append('brave_llm_context_required')
     return issues
 
 def merge(left,right):return {**left,**right}
@@ -97,7 +101,7 @@ class OpportunityEngine:
         source=app.state.research_client
         self.source=source.for_opportunity() if callable(getattr(source,'for_opportunity',None)) else source
         # 'provider' is the persisted channel id; 'backend' names the search service.
-        if getattr(self.source,'backend',getattr(self.source,'provider','brave'))!='brave':
+        if self.source.backend!='brave':
             self.store.research.policy+=':'+self.source.cache_policy
         self.availability_issues=availability_issues(settings,ai,self.source)
         self.available=not self.availability_issues
@@ -113,19 +117,6 @@ class OpportunityEngine:
     async def load(self,state):
         job=await self.job(state)
         if not job:raise GoalError('Research run is no longer available.',404)
-        missing=set(CATEGORIES)-set(job['categories'])
-        if missing:
-            updates={f'categories.{k}':CategoryResult().model_dump(mode='json') for k in missing}
-            for category,result in job['categories'].items():
-                kept=[f for f in result.get('findings',[]) if f['field'] in FIELDS[category]]
-                if len(kept)!=len(result.get('findings',[])):
-                    # Re-evaluate existing paid evidence under the new field contract.
-                    updates.update({f'categories.{category}':{**result,'findings':kept,'status':'pending','error_code':None},
-                                    f'evaluated.{category}':[],f'evaluation_complete.{category}':False})
-            await thread(self.store.update,job['_id'],job['worker_token'],**{
-                **updates,'requested':list(dict.fromkeys([*job.get('requested',[]),*missing])),
-                'queries_planned':False,'prefetched':True})
-            job=await self.job(state)
         return {'results':{k:v for k,v in job['categories'].items() if v['status'] not in ('pending','running')}}
 
     async def generate(self,job,stage,data,validate=None):
@@ -424,11 +415,13 @@ class OpportunityEngine:
         data={'opportunity':{k:public.get(k) for k in ('company','role','field','location','seniority_level','employment_type')},
               'skills':weighted_skills(skills,public,categories),'findings':findings}
         try:
-            output=await self.generate(job,'opportunity_skill_levels',data,lambda value:validated_skill_levels(value,skills,ids))
+            output=await contained(self.generate(job,'opportunity_skill_levels',data,lambda value:validated_skill_levels(value,skills,ids)),
+                (AIError,GoalError,TimeoutError,ValueError,PyMongoError))
             levels=validated_skill_levels(output,skills,ids)
-        except Exception as error:
+        except (AIError,GoalError,TimeoutError,ValueError,PyMongoError,UnexpectedFailure) as error:
             # Enrichment failures are logged and skipped; cancellation still propagates.
-            logger.warning('node=opportunity_skill_levels skipped error_code=%s',getattr(error,'code',type(error).__name__))
+            cause=error.__cause__ if isinstance(error,UnexpectedFailure) else error
+            logger.warning('node=opportunity_skill_levels skipped error_code=%s',getattr(cause,'code',type(cause).__name__))
             levels=[]
         await thread(self.store.update,job['_id'],job['worker_token'],skill_levels=levels)
         return {}
@@ -445,11 +438,11 @@ class OpportunityEngine:
         report=OpportunityReport(models=models,fingerprint=context.details_fingerprint,opportunity_id=context.details_fingerprint if context.company else None,
             employment_type=job['public']['employment_type'],job_url=job['public']['job_url'],categories=categories,summary=Summary.model_validate(state.get('summary',{})),status=status,
             skill_levels=valid_levels(job.get('skill_levels'),categories),
-            researched_at=stamp,expires_at=min(v.expires_at or stamp for v in categories.values()),warnings=['Summary uses only validated cited extracts.']+(['Overall summary unavailable; validated category findings remain available.'] if job.get('summary_error') else []))
+            researched_at=stamp,expires_at=min(v.expires_at or stamp for v in categories.values()),warnings=['Summary uses only validated cited extracts.']+([SUMMARY_UNAVAILABLE] if job.get('summary_error') else []),summary_unavailable=bool(job.get('summary_error')))
         record=InterviewResearch(_id=str(ObjectId()),version=cache['version'],skill_mapping_version=MAPPING_VERSION,created_at=stamp,updated_at=stamp,
             **context.model_dump(),intelligence=report,sources=sources,
             research_status='failed' if failed else 'succeeded' if any(v.findings for v in categories.values()) else 'no_findings',last_researched_at=stamp,
-            generation=Generation(provider=getattr(getattr(primary,'settings',None),'provider','unreported'),model=models.get('reasoning','unreported'),prompt_version='opportunity-structured-findings-v5',generated_at=stamp))
+            generation=Generation(provider=primary.settings.provider,model=models.get('reasoning','unreported'),prompt_version='opportunity-structured-findings-v5',generated_at=stamp))
         record=await thread(self.store.research.finish,context,cache['token'],record)
         if not pending:await thread(self.store.rows.update_one,{'_id':identifier,'worker_token':token},{'$addToSet':{'activities':'research_failed' if failed else 'research_partial' if status=='partial' else 'research_complete'}})
         failure=next((v.error_code for v in categories.values() if v.error_code),None)
@@ -473,7 +466,7 @@ class OpportunityEngine:
                     await thread(resume_obsolete_model_waits,self.store.rows,'opportunity_job')
                 if self.available:
                     for row in await thread(self.store.due):self.launch(row['_id'])
-            except Exception:logger.warning('Opportunity recovery temporarily unavailable.')
+            except PyMongoError:logger.warning('Opportunity recovery temporarily unavailable.')
             await asyncio.sleep(3)
 
     async def start(self,owner,goal,selection,session,run,key,command,seed=None):
@@ -489,7 +482,7 @@ class OpportunityEngine:
         context=ResearchContext.model_validate(job['context']);cache=None
         try:
             cached=await thread(self.store.cached,context)
-            if cached and cached.intelligence.status=='completed' and not any(w.startswith('Overall summary unavailable;') for w in cached.intelligence.warnings) and cached.intelligence.researched_at>=job['created_at'] and all(v.status in ('completed','not_applicable') and not v.error_code and v.expires_at and v.expires_at>now() for v in cached.intelligence.categories.values()):
+            if cached and cached.intelligence.status=='completed' and not cached.intelligence.summary_unavailable and cached.intelligence.researched_at>=job['created_at'] and all(v.status in ('completed','not_applicable') and not v.error_code and v.expires_at and v.expires_at>now() for v in cached.intelligence.categories.values()):
                 await thread(self.store.update,identifier,token,research_id=cached.id,categories={k:v.model_dump(mode='json') for k,v in cached.intelligence.categories.items()},summary=cached.intelligence.summary.model_dump(),status=cached.intelligence.status,finished=True)
                 await self.attach({**job,'research_id':cached.id});return
             cache=await thread(self.store.research.begin,context,True)
@@ -501,7 +494,7 @@ class OpportunityEngine:
             config={'configurable':{'thread_id':identifier+':'+token},'recursion_limit':20,'callbacks':[]}
             with tracing_context(enabled=False):
                 async with asyncio.timeout(self.settings.run_seconds):
-                    result=await self.graph.ainvoke({'job_id':identifier,'results':{}},config,durability='sync')
+                    await self.graph.ainvoke({'job_id':identifier,'results':{}},config,durability='sync')
         except asyncio.CancelledError:raise
         except (AIError,GoalError,TimeoutError,ValueError) as error:
             code=error.code if isinstance(error,AIError) else 'research_timeout' if isinstance(error,TimeoutError) else 'research_validation_failed' if isinstance(error,ValueError) else 'research_state_changed'
@@ -519,11 +512,10 @@ class OpportunityEngine:
                 automatic_retries=job.get('automatic_retries',0)+(1 if retry_transient else 0),
                 next_attempt_at=now()+timedelta(seconds=max(1,min(3600,error.retry_after or 61)) if quota else 1),**updates)
             phase='waiting_quota' if quota else 'research_pending' if retry_transient else 'research_failed'
-            try:
+            with suppress(GoalError):
                 await thread(self.app.state.workspace_store.phase,job['owner'],job['session'],job['run'],phase,
                     error='Research is waiting for the AI allowance and will resume automatically.' if quota else 'Research is retrying automatically.' if retry_transient else 'Research could not finish. Your goal and available findings remain saved.',
                     error_code=code,retry_after=max(1,min(3600,error.retry_after or 61)) if quota else None)
-            except GoalError:pass
         finally:
             if cache and cache.get('token'):await thread(self.store.research.fail,context,cache['token'],'partial')
             await thread(self.store.release,identifier,token)

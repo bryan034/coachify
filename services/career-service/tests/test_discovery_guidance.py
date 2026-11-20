@@ -10,11 +10,12 @@ import httpx
 from pydantic import ValidationError
 from langgraph.checkpoint.memory import InMemorySaver
 
-from app.ai.adapter import AIAdapter, AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput, Message
 from app.ai.usage import input_tokens
-from app.domain.discovery_conversation import INTRODUCTION, PREVIOUS_INTRODUCTION, conversation_messages
+from app.domain.discovery_conversation import INTRODUCTION
 from app.schemas.discovery import Decision, DiscoveryAnswer, DiscoveryMessage, DiscoveryUnderstanding, Scope
 from app.workflows.discovery import DiscoveryEngine
 
@@ -135,10 +136,8 @@ def test_guidance_question_cannot_silently_change_existing_direction(conversatio
     engine.research_values.assert_not_called()
 
 
-def test_previous_intro_stays_display_only_after_guidance_copy_changes():
+def test_introduction_is_career_guidance_copy():
     assert 'career guidance' in INTRODUCTION
-    assert conversation_messages([{'role':'assistant','content':PREVIOUS_INTRODUCTION},
-        {'role':'user','content':'Hi'}])==[{'role':'user','content':'Hi'}]
 
 
 def model_settings(**updates):
@@ -176,7 +175,7 @@ def test_discovery_current_input_and_memory_cannot_be_trimmed_to_fit():
 
 def test_long_discovery_history_does_not_widen_other_chat_inputs():
     with pytest.raises(ValidationError):
-        AIInput(stage='jd_chat',context='{}',conversation=[{'role':'user','content':'x'*4001}])
+        AIInput(stage='workspace_chat',context='{}',conversation=[{'role':'user','content':'x'*4001}])
 
 
 def test_chat_constrains_decision_fields_and_explains_output_shape():

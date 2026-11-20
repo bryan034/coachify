@@ -12,7 +12,7 @@ Services access foreign records through authenticated APIs. CV IDs remain UUID s
 
 `career_state` holds the current canonical goal pointer/workspace. The version-specific `cv_confirmation` stamp records goal ID/version, selection version, projection hash and confirmation time; bounded receipts support exact retries. Automatic Career saves do not implicitly confirm CV context. A changed goal or selection invalidates the stamp on reads, while earlier CV answers stay source-bound.
 
-Older UUID reviewed-target records and their selection metadata remain historical data, outside the active canonical flow. Canonical history queries filter record shape instead of validating legacy records as new goals. Namespaced canonical `create_key` metadata preserves coexistence with the legacy unique `(user_id, create_key)` index. No index drop, data deletion or automatic historical-target conversion is required.
+Older UUID reviewed-target records and their selection metadata remain historical data, outside the active canonical flow. Canonical history queries filter record shape instead of validating legacy records as new goals. Career's one-off stored-shape upgrade drops the retired unique `(user_id, create_key)` index; see [setup](../../docs/setup.md#career-stored-shape-upgrade). No index drop, data deletion or automatic historical-target conversion is required.
 
 ## Local persistence and setup
 

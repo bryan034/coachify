@@ -2,7 +2,7 @@
 import asyncio
 import traceback
 import pytest
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.jd_scope import CareerScopeError
 from app.repositories.goals import GoalError
 from app.workflows.operations import Failure, Operations, OperationConflict

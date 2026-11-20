@@ -1,15 +1,17 @@
-from app.repositories.goals import GoalError
 """Interpret saved context and retrieve public evidence when needed."""
+from app.repositories.goals import GoalError
+import re
+from app.domain.context import PREFIXES, context_index, selected_facts, merge_projection
 from elo_shared.model_budget import budget_owner
 import json
 from langgraph.graph import StateGraph,START,END
 from langsmith import tracing_context
 from starlette.concurrency import run_in_threadpool as thread
 from fastapi.encoders import jsonable_encoder
-from app.ai.adapter import AIError,Operation
+from app.ai.adapter import Operation
+from app.ai.errors import AIError
 from app.ai.contracts import AIInput,Message
 from app.ai.context_contracts import ContextPlan
-from app.domain.context import context_index,selected_facts,merge_projection
 from app.domain.questions import REFUSAL,MISSING
 from app.repositories.questions import QuestionStore,GOAL_FIELDS
 from app.schemas.jd import JDReply
@@ -19,9 +21,9 @@ from app.ai.routing import chat_models
 from app.workflows.activity import activity
 from app.workflows.goal_question import research_question,question_queries
 from app.workflows.citations import citation_error,fact_citations
-from app.domain.question_memory import (direct_public_plan,focused_saved_facts,scoped_question_findings,excerpt_facts,
-    saved_fact_reply,factual_reply,trusted_fact,market_scoped,cited_foreign_currency)
-from app.domain.source_scope import related_places
+from app.domain.question_memory import (focused_saved_facts,scoped_question_findings,excerpt_facts,
+    saved_fact_reply,factual_reply,cited_money,question_passages,scope_input)
+from app.ai.passage_scope import validated_scopes
 
 PUBLIC_FOCUS={'role':'role_details','skills':'role_details','requirements':'eligibility',
     'interview_process':'interviews','interview_skills':'interviews','preparation':'interviews',
@@ -29,7 +31,6 @@ PUBLIC_FOCUS={'role':'role_details','skills':'role_details','requirements':'elig
 
 
 async def semantic_chat(request,account,row,body):
-    import re
     if re.search(r'```|(?m:^\s*(?:def |class |function |import |const |let |public static ))',body.message):
         raise GoalError('Pasted code is not supported here. Ask your career question in plain language.',422)
     repo=request.app.state.workspace_store
@@ -59,12 +60,6 @@ async def semantic_chat(request,account,row,body):
         activity('understanding_question')
         goal,research=await thread(store.fetch,account,row,'overview')
         index=context_index(goal,research,row['workspace'].get('edit_draft'))
-        # Places the saved JD names widen public search and tell the answer model which markets relate.
-        descriptions=[item.get('description') for item in goal.get('non_skill_requirements',[])]
-        places=related_places(goal,[goal.get('summary'),*goal.get('responsibilities',[]),*descriptions])
-        if places:index['goal']={**index['goal'],'related_locations':places}
-        direct=direct_public_plan(body.message)
-        if direct:return {'plan':direct,'title':index['goal'],'direct':True}
         if refining:index['scope']='career'
         allowed={item['ref'] for item in index['items']}
         def validate(plan):
@@ -74,27 +69,25 @@ async def semantic_chat(request,account,row,body):
         plan=ContextPlan.model_validate((await generate('context_route',{'index':index},history,validate=validate)).model_dump())
         validate(plan)
         if plan.topic=='career_guidance' and not refining:plan=plan.model_copy(update={'topic':'off_topic'})
-        return {'plan':plan,'title':index['goal'],'skills':[str(s.get('name'))[:80] for s in goal.get('skills',[])[:20] if s.get('name')]}
+        # Places the saved goal names widen public search and tell the answer model which markets relate.
+        title={**index['goal'],**({'related_locations':plan.related_locations} if plan.related_locations else {})}
+        return {'plan':plan,'title':title,'skills':[str(s.get('name'))[:80] for s in goal.get('skills',[])[:20] if s.get('name')]}
 
     async def retrieve(state):
         plan=state['plan']
         if plan.topic in ('edit','off_topic','career_guidance') or plan.clarification:return state
-        from app.domain.context import PREFIXES
         topics=list(dict.fromkeys([plan.topic,*plan.related_topics,*[PREFIXES[ref[0]][0] for ref in plan.item_refs]]))
         if 'overview' in topics:topics=['overview']
         goal={};research={}
         for topic in topics:
             g,r=await thread(store.fetch,account,row,topic,plan.include_evidence)
             goal.update(g);research=merge_projection(research,r)
-        facts,links,partial=focused_saved_facts(plan.research_focus,goal,research) if plan.research_focus else selected_facts(plan,goal,research)
-        # Saved findings about another market remain context but are never trusted job facts.
-        facts=[market_scoped(fact,state['title'],links[fact['ref']]) for fact in facts]
+        facts,links,partial=focused_saved_facts(plan.research_focus,goal,research,plan.item_refs) if plan.research_focus else selected_facts(plan,goal,research)
         focus=plan.research_focus or PUBLIC_FOCUS.get(plan.topic)
-        # Database first: search only when no trusted fact (direct lookups) or nothing relevant (other questions) is saved.
-        untrusted=state.get('direct') and not any(trusted_fact(fact) for fact in facts)
+        # Database first: search only when nothing relevant is saved.
         queries=question_queries(state['title'],focus,plan.public_search_terms) if focus else []
         return {**state,'facts':facts,'links':links,'partial':partial,'focus':focus,'queries':queries,'saved_facts':facts,'saved_links':links,
-                'needs_search':bool(focus) and (not facts or plan.missing or bool(untrusted))}
+                'needs_search':bool(focus) and (not facts or plan.missing)}
 
     async def search_public(state):
         facts,links=await public_facts(state['title'],state['focus'],state['queries'][search_count])
@@ -106,11 +99,25 @@ async def semantic_chat(request,account,row,body):
             activity('saving_question_findings')
             await thread(store.save_question,account,current,state['focus'],findings,sources)
 
+    async def label_passages(focus,title,passages,terms):
+        if not passages:return {}
+        def labels(output):
+            try:return validated_scopes(output,len(passages))
+            except ValueError:raise AIError('invalid_output',True,reason='provenance',fields=('passages',)) from None
+        await thread(repo.check,account,body.session_id,body.expected_version)
+        result=await chat_models(request.app.state).generate(AIInput(stage='passage_scope',
+            context=json.dumps(jsonable_encoder(scope_input(focus,title,passages,terms)),separators=(',',':'))),
+            Operation(account,revision,'passage_scope'),current_revision=workspace_revision(repo,account,body.session_id,body.expected_version),
+            validate_output=labels)
+        return labels(result.data)
+
     async def prepare_findings(state):
+        terms=state['plan'].public_search_terms
+        sources,passages=question_passages(state['retrieved_links'])
+        scopes=await label_passages(state['focus'],state['title'],passages,terms)
         verified,verified_sources,unverified,unverified_sources=scoped_question_findings(
-            state['focus'],state['retrieved_links'],state['title'],terms=state['plan'].public_search_terms,
-            require_focus=bool(state.get('direct')))
-        # Only passages that pass every deterministic scope check become saved job facts.
+            state['focus'],sources,passages,scopes,state['title'],terms=terms)
+        # Only passages that pass every scope check become saved job facts.
         known={f.finding_id for f in state.get('candidates',[])}
         fresh=[f for f in verified if f.finding_id not in known]
         if fresh:await persist(state,fresh,[s for s in verified_sources if s.source_id in {i for f in fresh for i in f.source_ids}])
@@ -142,11 +149,6 @@ async def semantic_chat(request,account,row,body):
             if result.status!='answered':return {'result':JDReply(reply=REFUSAL,proposed_skills=None)}
             await thread(repo.check,account,body.session_id,body.expected_version)
             return {'result':JDReply(reply=result.reply,proposed_skills=None),'needs_search':False}
-        if state.get('direct'):
-            reply=factual_reply(state.get('facts',[]),state.get('links',{}))
-            if reply:
-                await thread(repo.check,account,body.session_id,body.expected_version)
-                return {'result':JDReply(reply=reply,proposed_skills=None),'needs_search':False}
         def missing():
             return 'I could not verify that detail in the public sources retrieved for this goal. What would you like to clarify or research next?' if search_count else MISSING
         if not state.get('facts'):
@@ -158,8 +160,8 @@ async def semantic_chat(request,account,row,body):
         def validate(output):
             if output.status=='answered':
                 fact_citations(output.reply,output.references,state['links'])
-                if not cited_foreign_currency(output.reply,output.references,state['facts']):
-                    raise citation_error('unsupported_foreign_currency')
+                if not cited_money(output.reply,output.references,state['facts']):
+                    raise citation_error('unsupported_money_figure')
         @structured_node
         async def answer_facts(_):
             result=await generate(stage,{'goal':state['title'],'facts':state['facts'],'partial':state['partial']},

@@ -9,7 +9,7 @@ from app.core.config import Settings
 from app.domain.extraction_retry import failure_for_model, should_auto_retry, waiting_message
 from app.domain.model_usage import GLOBAL_DAILY, ModelAdmissionError, OWNER_BUSY, OWNER_DAILY
 from app.domain.service import now
-from app.repositories.extraction_state import MemoryExtractionStateStore
+from tests.memory_repositories import MemoryExtractionStateStore
 from app.workers.ingestion import IngestionWorker
 from app.workflows.checkpoints import LatestStateSaver
 from app.workflows.extraction import ExtractionHarness

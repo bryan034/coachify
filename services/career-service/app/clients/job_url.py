@@ -1,6 +1,6 @@
 """Public-page fetcher for user-requested pages: pin validated IPs; preserve TLS host verification; no proxies/cookies/scripts."""
 import http.client
-import ipaddress
+from http import HTTPStatus
 import json
 import re
 import socket
@@ -11,29 +11,16 @@ from urllib.parse import urlsplit, urljoin
 from bs4 import BeautifulSoup
 from app.domain.documents import validate_text
 from app.schemas.preview import MAX_JD_TEXT,URL_NETWORK_TIMEOUT,URL_IMPORT_TIMEOUT
+from app.clients.public_url import AccessBlocked, destination, html_text
+from app.clients.public_job_api import read_preview
+
+MAX_REDIRECTS = 3
+MIN_READABLE_CHARS = 200
 
 MAX_DOWNLOAD = 2 * 1024 * 1024
 AGENT = 'Mozilla/5.0 (compatible; eloPreview/1.0)'
 REQUEST_HEADERS = {'User-Agent': AGENT, 'Accept': 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-SG,en;q=0.9', 'Accept-Encoding': 'gzip, deflate'}
-BLOCKED_PREFIX = 'The information could not be extracted from this website.'
-BLOCKED = BLOCKED_PREFIX + ' Copy and paste the job description instead.'
-# Job aggregators whose terms forbid automated reading of their listings.
-BLOCKED_HOSTS = {'linkedin.com': 'LinkedIn', 'indeed.com': 'Indeed', 'glassdoor.com': 'Glassdoor', 'glassdoor.sg': 'Glassdoor',
-    'jobstreet.com': 'JobStreet', 'jobstreet.com.sg': 'JobStreet'}
-
-
-class AccessBlocked(ValueError):
-    """The site refused automated reading; the user should paste the description."""
-    def __init__(self, site=None):
-        super().__init__(BLOCKED if site is None else
-            f'{BLOCKED_PREFIX} {site} does not allow its job listings to be read automatically. '
-            f'Open the job on {site}, copy the description and paste it here.')
-
-
-def blocked_host(host):
-    host = (host or '').lower().rstrip('.')
-    return next((site for name, site in BLOCKED_HOSTS.items() if host == name or host.endswith('.' + name)), None)
 
 
 class RenderRequired(ValueError):
@@ -51,31 +38,6 @@ def network_timeout(deadline):
     remaining=deadline-time.monotonic()
     if remaining<=0:raise PageTimeout('The website import timed out. Retry, paste the description or upload a document.')
     return min(URL_NETWORK_TIMEOUT,remaining)
-
-
-def destination(url):
-    try:
-        if any(ord(c) <= 32 or ord(c) == 127 for c in url) or '\\' in url:
-            raise ValueError
-        parsed = urlsplit(url)
-        if parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.username is not None or parsed.password is not None:
-            raise ValueError
-        if parsed.port not in (None, 80 if parsed.scheme == 'http' else 443):
-            raise ValueError
-        host = parsed.hostname.encode('idna').decode('ascii')
-        port = parsed.port or (443 if parsed.scheme == 'https' else 80)
-    except (ValueError, UnicodeError) as exc:
-        raise ValueError('Use a public HTTP or HTTPS page URL without credentials or custom ports.') from exc
-    site = blocked_host(host)
-    if site:
-        raise AccessBlocked(site)
-    try:
-        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-        if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
-            raise ValueError('Private, local and internal addresses cannot be imported. Paste the description instead.')
-    except socket.gaierror as exc:
-        raise ValueError('The website could not be found. Check the URL or paste the description.') from exc
-    return parsed, host, port, addresses[0][4][0]
 
 
 def request_page(url, deadline):
@@ -151,26 +113,13 @@ def fetch_with_timeout_retry(url,deadline,fetch):
 
 
 def fetch_following(url, deadline, fetch=request_page):
-    for _ in range(4):
+    for _ in range(MAX_REDIRECTS + 1):
         status, headers, data = fetch(url, deadline)
         if status not in {301, 302, 303, 307, 308}: return url, status, headers, data
         location = headers.get('location')
         if not location: raise ValueError('The website returned an invalid redirect. Paste the description instead.')
         url = urljoin(url, location)
     raise ValueError('The website redirects too many times. Paste the description instead.')
-
-
-def html_text(markup):
-    soup = BeautifulSoup(markup, 'html.parser')
-    for node in soup.select('script,style,nav,footer,header,aside,form,noscript,svg'):
-        node.decompose()
-    for node in soup.find_all('br'): node.replace_with('\n')
-    for node in soup.find_all('li'): node.insert(0, '• ')
-    container = soup.select_one('[itemprop="description"]') or soup.find('main') or soup.find('article') or soup.body or soup
-    # Keep paragraphs/line structure while avoiding a newline around every inline span.
-    for node in container.find_all(['p','div','section','li','h1','h2','h3','h4','tr']): node.append('\n')
-    text = container.get_text('')
-    return re.sub(r'\n[ \t]*\n(?:[ \t]*\n)+', '\n\n', text).strip()
 
 
 def posting_context(job):
@@ -248,7 +197,7 @@ def import_url(url, fetch=request_page):
     # Wrap the actual request once so redirects share the single timeout retry.
     fetch=lambda target,limit:fetch_with_timeout_retry(target,limit,raw_fetch)
     parsed, _, _, _ = destination(url)
-    public_job=public_job_api_preview(parsed,url,deadline,fetch)
+    public_job=read_preview(parsed,url,deadline,fetch)
     if public_job is not None:return public_job
     final, status, headers, data = fetch_following(url, deadline,
         lambda u,d: fetch(u,d) if u == url else checked_redirect(u,d,fetch))
@@ -261,22 +210,16 @@ def import_url(url, fetch=request_page):
             'notices':['Check that this preview contains one complete job description. Website navigation or missing sections may need editing.', 'This is a temporary preview; no role or skills have been interpreted.']}
 
 
-def public_job_api_preview(parsed,url,deadline,fetch):
-    from app.clients.public_job_api import read_preview
-    return read_preview(parsed,url,deadline,fetch)
-
-
-
 def checked_redirect(url, deadline, fetch):
     destination(url)
     return fetch(url,deadline)
 
 
 def check_page_status(status):
-    if status==200:return
+    if status==HTTPStatus.OK:return
     if status in (401,403,429):raise AccessBlocked()
     if status in (404,410):message='This job page is no longer available or the link is incorrect.'
-    elif status>=500:message='This website is temporarily unavailable.'
+    elif status>=HTTPStatus.INTERNAL_SERVER_ERROR:message='This website is temporarily unavailable.'
     else:message='This website did not return an accessible job page.'
     raise ValueError(message+' Paste the description or upload a document.')
 
@@ -296,4 +239,4 @@ def needs_rendering(data):
         if 'JobPosting' in (script.string or ''):return False
     text=html_text(str(soup))
     if re.search(r'(enable|requires?|turn on)\s+javascript',text,re.I):return True
-    return bool(soup.find('script')) and len(text)<200
+    return bool(soup.find('script')) and len(text)<MIN_READABLE_CHARS

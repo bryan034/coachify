@@ -4,7 +4,7 @@ import json
 from types import SimpleNamespace
 import httpx
 import pytest
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.opportunity_contracts import StructuredFindings,Triage
 from app.clients.search_sources import SourceAPIs
 from app.schemas.analysis import ResearchContext,ResearchSource
@@ -144,7 +144,7 @@ def test_opportunity_keeps_longer_brave_excerpts_without_full_page_fetching():
             assert request.url.path=='/res/v1/llm/context'
             return httpx.Response(200,json={'grounding':{'generic':[{'url':'https://example.test/account','snippets':[text]}]}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            sources=await SourceAPIs(client,brave_key='synthetic').collect_opportunity_query(ResearchContext(role='Intern',field='Data'),'internship account')
+            sources=await SourceAPIs(client,brave_key='synthetic',backend='brave').collect_opportunity_query(ResearchContext(role='Intern',field='Data'),'internship account')
         assert len(sources)==1 and 2400<len(sources[0].evidence)<=8000
         assert 'End of account.' in sources[0].evidence
     asyncio.run(run())

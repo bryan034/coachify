@@ -86,7 +86,7 @@ Stale items to ignore: `*.egg-info` dirs (including `coachify_*` names from befo
 
 ## Run and verify
 
-Tooling: Node.js 24, Python 3.12 (pinned in `.python-version` and CI; the system `python3` may be newer, so create venvs with 3.12), Docker Compose. No formatter is configured; follow `.editorconfig` (LF, 2-space indent, 4 for Python) and match surrounding code. Career-service `app/` is linted by Ruff plus the elo quick-fix rules against a shrink-only baseline ([lint](tools/lint/README.md)); never add inline suppressions or grow the baseline. Roadmap runs Ruff and vulture from `services/roadmap-service` after installing `.[lint]` (`python -m ruff check app` and `python -m vulture`).
+Tooling: Node.js 24, Python 3.12 (pinned in `.python-version` and CI; the system `python3` may be newer, so create venvs with 3.12), Docker Compose. No formatter is configured; follow `.editorconfig` (LF, 2-space indent, 4 for Python) and match surrounding code. Career-service `app/` is linted by Ruff plus the elo quick-fix rules against a shrink-only baseline ([lint](tools/lint/README.md)); never add inline suppressions or grow the baseline. Roadmap runs Ruff and vulture from `services/roadmap-service` after installing `.[lint]` (`python -m ruff check app` and `python -m vulture`). Every other service runs vulture from its folder (`python -m pip install vulture==2.16 && python -m vulture`, configured in its `pyproject.toml`); remove unused code rather than adding names to `ignore_names`, which is only for framework-read names.
 
 ```sh
 # Stack (from repo root; the user supplies the private .env)
@@ -110,7 +110,7 @@ python tools/lint/quickfix_check.py services/career-service           # add --pr
 ```
 
 - Profile, CV and Career integration tests need a disposable MongoDB (`MONGODB_TEST_URI`); ordinary unit tests do not. Career needs its tiktoken tokenizer cache (see CI). Full-stack browser journeys and fixtures: [testing](docs/testing.md), `compose.test.yaml`, `infrastructure/testing/`.
-- CI (`.github/workflows/ci.yml`) runs Career and Roadmap static analysis, frontend typecheck/unit, Playwright, a backend matrix over all eight services, shared-package tests (via the assessment job), and Mongo integration jobs. Run the equivalent for what you touched. Changes to `elo-shared` affect every service: run more than one service's tests.
+- CI (`.github/workflows/ci.yml`) runs Career and Roadmap static analysis, vulture for every service, frontend typecheck/unit, Playwright, a backend matrix over all eight services, shared-package tests (via the assessment job), and Mongo integration jobs. Run the equivalent for what you touched. Changes to `elo-shared` affect every service: run more than one service's tests.
 - For logic changes, add meaningful coverage and keep fixing/rerunning relevant tests until they pass. Never remove, skip or weaken valid tests to get a pass; report blockers honestly. Report exact current results, not historical totals.
 - Review the final diff for unintended changes and secrets. Report changes, checks actually run and remaining limitations.
 

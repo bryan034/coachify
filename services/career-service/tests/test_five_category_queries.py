@@ -5,12 +5,12 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.jd_scope import JobIdentity
 from app.ai.opportunity_contracts import QueryPlan,StructuredFindings,PROMPTS
 from app.repositories.goals import now
 from app.schemas.analysis import ResearchSource
-from app.schemas.opportunity import CATEGORIES,LEGACY_FIELDS,CategoryResult,OpportunityReport
+from app.schemas.opportunity import CATEGORIES,CategoryResult,OpportunityReport
 from app.workflows.jd_prefetch import prefetch
 from app.workflows.opportunity.domain import validate_claims
 from app.workflows.opportunity.topics import TOPICS,policy,topic_query
@@ -76,11 +76,11 @@ def test_query_plan_requires_every_topic_and_bounded_nonempty_wording():
     with pytest.raises(ValidationError):QueryPlan(**{k:v for k,v in values.items() if k!='conversion_rate'})
 
 
-def test_v1_reports_stay_readable_but_v2_requires_five_explicit_statuses():
+def test_reports_require_five_explicit_statuses():
     base=dict(fingerprint='a'*64,opportunity_id=None,status='completed',researched_at=now(),expires_at=now())
-    categories={k:CategoryResult(status='completed') for k in LEGACY_FIELDS}
-    assert OpportunityReport(schema_version=1,categories=categories,**base).schema_version==1
+    categories={k:CategoryResult(status='completed') for k in ('interview_intelligence','internship_insights','company_intelligence')}
     with pytest.raises(ValidationError):OpportunityReport(categories=categories,**base)
+    with pytest.raises(ValidationError):OpportunityReport(schema_version=1,categories={k:CategoryResult(status='completed') for k in CATEGORIES},**base)
     assert len(OpportunityReport(categories={k:CategoryResult(status='completed') for k in CATEGORIES},**base).categories)==5
 
 
@@ -97,18 +97,6 @@ def test_conversion_numbers_must_match_but_missing_year_is_not_a_failure(text,va
     else:
         with pytest.raises(AIError):validate_claims(output,'conversion_outcomes',[source])
 
-
-
-def test_unfinished_legacy_jobs_gain_missing_categories_without_losing_evidence(opportunity_flow):
-    client,db,*_=opportunity_flow;engine=client.app.state.opportunities
-    categories={k:CategoryResult(status='completed').model_dump(mode='json') for k in LEGACY_FIELDS}
-    db.research_contexts.insert_one({'_id':'legacy-upgrade','worker_token':'synthetic','categories':categories,'requested':[],
-        'history':{'interview_intelligence':['already paid query']},'evidence':{'interview_intelligence':[]}})
-    client.portal.call(engine.load,{'job_id':'legacy-upgrade'})
-    job=db.research_contexts.find_one({'_id':'legacy-upgrade'})
-    assert set(job['categories'])==set(CATEGORIES)
-    assert job['history']=={'interview_intelligence':['already paid query']}
-    assert set(job['requested'])=={'career_progression','conversion_outcomes'}
 
 
 def test_summary_budget_preserves_evidence_from_all_five_categories():

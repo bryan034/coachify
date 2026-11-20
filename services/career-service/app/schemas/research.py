@@ -1,12 +1,7 @@
 """Public synthesis input and private request contracts."""
 from typing import Literal
 from pydantic import Field
-from app.schemas.analysis import Contract, Text, Evidence, Version, ResearchSource, BraveAnswer, InterviewProcess
-
-class ResearchRequest(Contract):
-    expected_version: Version
-    expected_selection_version: int = Field(strict=True,ge=0)
-    refresh: bool = False
+from app.schemas.analysis import Contract, Text, Evidence, ResearchSource, BraveAnswer, InterviewProcess
 
 class ResearchBatch(Contract):
     sources: list[ResearchSource] = Field(default_factory=list,max_length=6)

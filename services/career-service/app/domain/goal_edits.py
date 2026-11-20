@@ -1,7 +1,7 @@
 """Apply narrow chat changes to an owned snapshot, preserving all other values."""
 from uuid import uuid4
 from pydantic import ValidationError
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.recovery import issues_for
 from app.domain.review import prepare
 from app.repositories.goals import GoalError

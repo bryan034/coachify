@@ -4,7 +4,7 @@ import ssl
 from types import SimpleNamespace
 from unittest.mock import patch
 import pytest
-from app.clients import job_url
+from app.clients import job_url, public_url
 from app.domain.preview import run_preview
 from app.schemas.preview import URL_NETWORK_TIMEOUT,URL_IMPORT_TIMEOUT,URL_WORKER_TIMEOUT,DOCUMENT_WORKER_TIMEOUT
 
@@ -91,13 +91,13 @@ def test_known_job_aggregators_are_blocked_before_any_network_request(url,site):
         job_url.import_url(url,lambda *args:pytest.fail('no request expected'))
     dns.assert_not_called()
     message=str(blocked.value)
-    assert message.startswith(job_url.BLOCKED_PREFIX)
+    assert message.startswith(public_url.BLOCKED_PREFIX)
     assert f'{site} does not allow its job listings to be read automatically' in message
     assert f'Open the job on {site}, copy the description and paste it here.' in message
 
 
 def test_lookalike_hosts_are_not_treated_as_aggregators():
-    assert not job_url.blocked_host('notlinkedin.com') and not job_url.blocked_host('indeed.com.example.test')
+    assert not public_url.blocked_host('notlinkedin.com') and not public_url.blocked_host('indeed.com.example.test')
 
 
 def test_access_restrictions_and_certificate_failures_are_not_retried():

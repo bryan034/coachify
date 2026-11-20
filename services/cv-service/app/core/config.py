@@ -7,7 +7,6 @@ from dataclasses import dataclass
 class Settings:
     max_file_bytes: int = 10 * 1024 * 1024
     max_text_chars: int = 100_000
-    max_items: int = 160
     original_retention_hours: int = 24
     lease_seconds: int = 180
     max_attempts: int = 3
