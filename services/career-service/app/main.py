@@ -31,6 +31,7 @@ from app.ai.opportunity_config import OpportunitySettings
 from app.api.v1.opportunity import router as opportunity_router
 from app.api.v1.interview_prep import router as interview_prep_router
 from app.api.v1.role_summary import router as role_summary_router
+from app.api.v1.research_brief import router as research_brief_router
 from app.workflows.operations import Operations,OperationConflict
 from app.api.v1.workspace import router as workspace_router
 from app.repositories.reviews import ReviewStore
@@ -71,6 +72,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     async def lifespan(app):
         app.state.operations = Operations()
         app.state.role_summary_tasks = {}
+        app.state.brief_tasks = {}
         mongo = None
         db = database
         if db is None and os.getenv('MONGODB_URI'):
@@ -137,6 +139,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     app.include_router(opportunity_router)
     app.include_router(interview_prep_router)
     app.include_router(role_summary_router)
+    app.include_router(research_brief_router)
     app.include_router(workspace_router)
     app.include_router(cv_confirmation_router)
     app.include_router(goals_router)

@@ -89,16 +89,23 @@ export type OpportunityAvailabilityIssue='research_disabled'|'reasoning_disabled
 export type SavedQuestionResearch={research_id:string;research_version:number;focus:string;findings:IntelligenceFinding[];sources:ResearchSource[];updated_at:string};
 export type OpportunityView={available:boolean;availability_issues?:OpportunityAvailabilityIssue[];job_id:string|null;career_target_id:string;status:'pending'|'running'|'partial'|'completed'|'failed';finished?:boolean;historical?:boolean;question_research?:SavedQuestionResearch[];categories:Partial<Record<IntelligenceCategory,IntelligenceResult>>;sources?:ResearchSource[];summary?:IntelligenceSummary;research_id?:string|null;research_version?:number|null;updated_at?:string|null;error_code:string|null;retry_after?:number|null};
 
-export type PrepGapField='interview_questions'|'preparation_topics'|'recruitment_stages'|'application_timeline'|'difficulty';
-/** AI predictions for interview slots research left empty; never sourced facts. */
-export type InterviewSuggestions={goal_id:string;goal_version:number;research_id:string|null;generated_at:string;
- gaps:{round_number:number|null;round_name:string|null;field:PrepGapField}[];items:{round_number:number|null;field:PrepGapField;value:string}[]};
-export type InterviewSuggestionsView={status:'ready'|'missing'|'researching';suggestions:InterviewSuggestions|null};
-/** About the role digest: short bullets per card, each citing the card items it summarises. */
-export type RoleSummary={goal_id:string;goal_version:number;research_id:string|null;generated_at:string;cards:{card_id:string;headline?:string|null;bullets:{text:string;refs:string[]}[]}[];
- /** Topics no source covered, written by the model: always shown with the AI-made marker. */
- generated:{card_id:string;headline?:string|null;bullets:string[]}[]};
-export type RoleSummaryView={status:'ready'|'missing'|'researching';summary:RoleSummary|null};
+/** Version 2 research briefs (`/goals/{id}/v2/role-research`, `/v2/interview-research`): short structured data; citations are source indexes 1..N. */
+export type Citations=number[];
+export type BriefReport={text:string;citations:Citations};
+export type BriefSource={index:number;title:string;domain:string;url:string};
+type BriefBase={researchedAt:string;sourceCount:number;summary:string;notFound:string[];sources:BriefSource[]};
+export type Tone='positive'|'mixed'|'negative';
+export type RoleBrief=BriefBase&{
+ facts:{label:string;value:string;note:string|null;citations:Citations}[];
+ duties:string[];
+ topics:{id:string;title:string;tone:Tone;takeaway:string;estimated:boolean;conflicting:boolean;reports:BriefReport[]}[];
+ pay:{label:string;value:string;caveat:string|null;citations:Citations}[]};
+export type InterviewBrief=BriefBase&{
+ process:{step:number;title:string;when:string|null;detail:string|null;citations:Citations}[];
+ difficulty:{level:'easy'|'average'|'difficult';estimated:boolean;reason:string}|null;
+ questions:{question:string;prep:string;estimated:boolean}[];
+ candidateReports:{askedAbout:{label:string;citations:Citations}[];situational:BriefReport|null;tone:BriefReport|null;reports:BriefReport[]}};
+export type BriefView<T>={status:'ready'|'missing'|'researching';brief:T|null};
 
 export type WorkspaceProgress=Pick<CareerWorkspace,'session_id'|'phase'|'revision'|'activities'|'error'|'error_code'|'retry_after'|'limit_scope'|'provider'|'research_id'|'edit_question'>&{goal_id:string|null;selection_version:number;result_version:string|null;categories?:Partial<Record<IntelligenceCategory,{status:IntelligenceResult['status'];error_code:string|null}>>};
 export async function refreshWorkspace(previous:CareerWorkspace,token:string,signal:AbortSignal):Promise<CareerWorkspace>{

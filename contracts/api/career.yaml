@@ -858,6 +858,210 @@
         }
       }
     },
+    "/api/v1/career/goals/{goal_id}/v2/role-research": {
+      "get": {
+        "tags": [
+          "Research briefs (v2)"
+        ],
+        "summary": "Read Role",
+        "operationId": "read_role_api_v1_career_goals__goal_id__v2_role_research_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleBriefView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Research briefs (v2)"
+        ],
+        "summary": "Generate Role",
+        "operationId": "generate_role_api_v1_career_goals__goal_id__v2_role_research_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleBriefView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/v2/interview-research": {
+      "get": {
+        "tags": [
+          "Research briefs (v2)"
+        ],
+        "summary": "Read Interview",
+        "operationId": "read_interview_api_v1_career_goals__goal_id__v2_interview_research_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewBriefView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Research briefs (v2)"
+        ],
+        "summary": "Generate Interview",
+        "operationId": "generate_interview_api_v1_career_goals__goal_id__v2_interview_research_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewBriefView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/career/workspace/progress": {
       "get": {
         "tags": [
@@ -2091,6 +2295,451 @@
           "skills_evaluated"
         ],
         "title": "AssessmentStatus"
+      },
+      "BriefAskedAbout": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "citations": {
+            "items": {
+              "type": "integer",
+              "minimum": 1.0
+            },
+            "type": "array",
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Citations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "citations"
+        ],
+        "title": "BriefAskedAbout"
+      },
+      "BriefCandidateReports": {
+        "properties": {
+          "askedAbout": {
+            "items": {
+              "$ref": "#/components/schemas/BriefAskedAbout"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Askedabout"
+          },
+          "situational": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BriefCited"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BriefCited"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/BriefReport"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Reports"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BriefCandidateReports"
+      },
+      "BriefCited": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "citations": {
+            "items": {
+              "type": "integer",
+              "minimum": 1.0
+            },
+            "type": "array",
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Citations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "citations"
+        ],
+        "title": "BriefCited"
+      },
+      "BriefCommand": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "title": "BriefCommand"
+      },
+      "BriefDifficulty": {
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "easy",
+              "average",
+              "difficult"
+            ],
+            "title": "Level"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "level",
+          "estimated",
+          "reason"
+        ],
+        "title": "BriefDifficulty"
+      },
+      "BriefFact": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 240,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "citations": {
+            "items": {
+              "type": "integer",
+              "minimum": 1.0
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Citations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "BriefFact"
+      },
+      "BriefPay": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "caveat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 240,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caveat"
+          },
+          "citations": {
+            "items": {
+              "type": "integer",
+              "minimum": 1.0
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Citations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "BriefPay"
+      },
+      "BriefQuestion": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "prep": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Prep"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "question",
+          "prep",
+          "estimated"
+        ],
+        "title": "BriefQuestion"
+      },
+      "BriefReport": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "citations": {
+            "items": {
+              "type": "integer",
+              "minimum": 1.0
+            },
+            "type": "array",
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Citations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "citations"
+        ],
+        "title": "BriefReport"
+      },
+      "BriefSource": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Index"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "domain": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Domain"
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "format": "uri",
+            "title": "Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "index",
+          "title",
+          "domain",
+          "url"
+        ],
+        "title": "BriefSource"
+      },
+      "BriefStep": {
+        "properties": {
+          "step": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Step"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 240,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "When"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 240,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "citations": {
+            "items": {
+              "type": "integer",
+              "minimum": 1.0
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Citations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "step",
+          "title"
+        ],
+        "title": "BriefStep"
+      },
+      "BriefTopic": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 40,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "positive",
+              "mixed",
+              "negative"
+            ],
+            "title": "Tone"
+          },
+          "takeaway": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Takeaway"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated"
+          },
+          "conflicting": {
+            "type": "boolean",
+            "title": "Conflicting",
+            "default": false
+          },
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/BriefReport"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Reports"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "tone",
+          "takeaway",
+          "estimated"
+        ],
+        "title": "BriefTopic"
       },
       "CareerGoal": {
         "properties": {
@@ -4007,6 +4656,110 @@
           "detail"
         ],
         "title": "ImportErrorView"
+      },
+      "InterviewBrief": {
+        "properties": {
+          "researchedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Researchedat"
+          },
+          "sourceCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Sourcecount"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "notFound": {
+            "items": {
+              "type": "string",
+              "maxLength": 240,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Notfound"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/BriefSource"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Sources"
+          },
+          "process": {
+            "items": {
+              "$ref": "#/components/schemas/BriefStep"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Process"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BriefDifficulty"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/BriefQuestion"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Questions"
+          },
+          "candidateReports": {
+            "$ref": "#/components/schemas/BriefCandidateReports"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "researchedAt",
+          "sourceCount",
+          "summary"
+        ],
+        "title": "InterviewBrief"
+      },
+      "InterviewBriefView": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "missing",
+              "researching"
+            ],
+            "title": "Status"
+          },
+          "brief": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InterviewBrief"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "InterviewBriefView"
       },
       "JDExtraction": {
         "properties": {
@@ -6109,6 +6862,115 @@
           "origin"
         ],
         "title": "ReviewSkill"
+      },
+      "RoleBrief": {
+        "properties": {
+          "researchedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Researchedat"
+          },
+          "sourceCount": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Sourcecount"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "notFound": {
+            "items": {
+              "type": "string",
+              "maxLength": 240,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Notfound"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/BriefSource"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Sources"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/BriefFact"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Facts"
+          },
+          "duties": {
+            "items": {
+              "type": "string",
+              "maxLength": 240,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Duties"
+          },
+          "topics": {
+            "items": {
+              "$ref": "#/components/schemas/BriefTopic"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Topics"
+          },
+          "pay": {
+            "items": {
+              "$ref": "#/components/schemas/BriefPay"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Pay"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "researchedAt",
+          "sourceCount",
+          "summary"
+        ],
+        "title": "RoleBrief"
+      },
+      "RoleBriefView": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "missing",
+              "researching"
+            ],
+            "title": "Status"
+          },
+          "brief": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoleBrief"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "RoleBriefView"
       },
       "Scope": {
         "properties": {

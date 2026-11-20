@@ -99,6 +99,14 @@ class role_summaries {
     +RoleSummary summary [short cited bullets per About the role card; no raw CV/JD text]
 }
 
+class research_briefs {
+    +String _id [owner:goal_id:tab, one record per goal and tab]
+    +Number format
+    +Number goal_version
+    +String research_id?
+    +RoleBrief|InterviewBrief brief [v2 short structured tab data; sources numbered 1..N; no raw CV/JD text]
+}
+
 class interview_research {
     +OpportunityReport intelligence?
     +Number version
@@ -146,6 +154,7 @@ cvs "1" --> "0..*" skill_gap_analyses : used in
 career_goals "1" --> "0..*" skill_gap_analyses : evaluated in
 career_goals "1" --> "0..1" interview_prep_suggestions : prepared for
 career_goals "1" --> "0..1" role_summaries : summarised by
+career_goals "1" --> "0..2" research_briefs : briefed by
 interview_research "0..*" --> "0..*" skill_gap_analyses : referenced by
 
 note for users "Logical authority: existing Profile accounts; no collection rename or auth migration."
@@ -154,6 +163,8 @@ note for career_goals "One current goal/chat per account; validated saves automa
 note for interview_prep_suggestions "Private, owner-scoped AI fills for interview questions/preparation the saved research left empty; replaced per goal version and research revision. Labelled as AI-generated; never shared and never stored in interview_research."
 
 note for role_summaries "Private, owner-scoped AI digest of the About the role cards plus AI-made cards for topics no source covered, replaced per goal version and research revision. Digest bullets cite card items; generated cards are labelled AI-made. Never shared and never stored in interview_research."
+
+note for research_briefs "Private, owner-scoped version 2 briefs for the About the role and Interview preparation tabs, replaced per goal version, research revision and format. Word limits are enforced server-side; uncited items are marked estimated. Never shared and never stored in interview_research."
 
 note for interview_research "Immutable public-context revisions; shared seven-day reuse. Private career_state links constrain user reads. Operational research_contexts holds leases/cache pointers. Brave API adapters acquire evidence. Operational LangGraph checkpoints expire after 24h inactivity; current goals persist. Unavailable acquisition preserves saved goals/research."
 

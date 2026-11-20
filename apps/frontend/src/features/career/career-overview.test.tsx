@@ -192,9 +192,8 @@ it('links the three goal pages as tabs and keeps eligibility on About the role',
  render(<CareerSessionProvider><CareerGoalOverview view="role" workspace={workspace} onReload={vi.fn()}/></CareerSessionProvider>);
  expect(within(screen.getByRole('navigation',{name:'Career goal pages'})).getByRole('link',{name:'About the role'})).toHaveAttribute('aria-current','page');
  expect(screen.queryByRole('heading',{name:'Skills needed'})).not.toBeInTheDocument();
- fireEvent.click(screen.getByText('Eligibility and commitment'));
- expect(screen.getByText('A relevant degree')).toBeVisible();
- expect(screen.getByRole('heading',{name:'About the role'})).toBeVisible();
+ expect(within(screen.getByRole('region',{name:'Who can apply'})).getByText('A relevant degree')).toBeVisible();
+ expect(screen.getByRole('heading',{name:'About the role'})).toBeInTheDocument();
 });
 it('displays extracted categories while research is still running',async()=>{
  overview({...workspace,phase:'researching',research_id:null});expect(screen.getByText('SQL')).toBeVisible();
