@@ -304,3 +304,11 @@ def test_contract_artifacts_match_the_application():
         assert saved['components']['schemas'][name]==current['components']['schemas'][name]
     for name,model in (('role-research-v2',RoleBrief),('interview-research-v2',InterviewBrief)):
         assert json.loads((root/f'models/{name}.schema.json').read_text())==model.model_json_schema(by_alias=True,mode='serialization')
+
+
+def test_interview_summary_is_held_to_fifteen_words():
+    req,calls=request(interview_output(summary=' '.join(['word']*20)+'.'))
+    brief=run(briefs.generate(req,'owner',goal(),record(),'interview'))
+    assert len(calls)==2
+    assert {'field':'summary','issue':'over_15_words'} in calls[1][1]['violations']
+    assert brief.summary==' '.join(['word']*15)+'.'

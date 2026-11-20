@@ -99,7 +99,7 @@ class CandidateReports(Model):
 
 
 class InterviewBriefOutput(Model):
-    summary:words(WORD_LIMITS['summary'])
+    summary:words(WORD_LIMITS['interview.summary'])
     process:list[Step]=Field(max_length=6)
     difficulty:Difficulty
     questions:list[Question]=Field(max_length=8)
@@ -159,9 +159,9 @@ Word limits: '''+limits_text(['summary','fact.label','fact.value','fact.note','d
 
 INTERVIEW_BRIEF_PROMPT='''Write the "Interview preparation" tab for one career goal as short structured JSON.
 '''+COMMON+'''
-summary: ONE plain sentence on what the interview process is like.
+summary: ONE plain sentence under 15 words telling the reader what to expect at the interview stage (for example the number of rounds and their format).
 process: the recruitment steps in order (title, when, detail).
 difficulty: level easy|average|difficult with the main reason; estimated true unless a source states it.
 questions: up to 8 questions to practise, each paired with how to prepare for it; estimated false only for questions sources report.
 candidate_reports: asked_about topic chips, one situational example question, the tone of interviews, and the raw reports.
-Word limits: '''+limits_text(['summary','process.title','process.when','process.detail','difficulty.reason','question','prep','asked_about','situational','tone','report','not_found','source.title','source.domain'])+'.'
+Word limits: '''+limits_text(['interview.summary','process.title','process.when','process.detail','difficulty.reason','question','prep','asked_about','situational','tone','report','not_found','source.title','source.domain'])+'.'

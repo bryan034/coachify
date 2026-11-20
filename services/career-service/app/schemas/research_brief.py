@@ -18,7 +18,7 @@ Tab=Literal['role','interview']
 FORMAT=1
 
 WORD_LIMITS={
-    'summary':25,'fact.label':3,'fact.value':5,'fact.note':6,'duty':10,
+    'summary':25,'interview.summary':15,'fact.label':3,'fact.value':5,'fact.note':6,'duty':10,
     'topic.title':4,'topic.takeaway':12,'report':20,'pay.label':3,'pay.value':4,'pay.caveat':10,
     'process.title':3,'process.when':5,'process.detail':12,'difficulty.reason':10,
     'question':15,'prep':20,'asked_about':3,'situational':15,'tone':12,'not_found':3,

@@ -102,7 +102,7 @@ def slots(output,tab):
         return (path,limit,lambda:getattr(obj,name),lambda v:setattr(obj,name,v))
     def item(values,index,path,limit):
         return (path,limit,lambda:values[index],lambda v:values.__setitem__(index,v))
-    found=[attr(output,'summary','summary','summary')]
+    found=[attr(output,'summary','summary','summary' if tab=='role' else 'interview.summary')]
     found+=[item(output.not_found,i,f'not_found.{i}','not_found') for i in range(len(output.not_found))]
     for i,label in enumerate(output.sources):
         found+=[attr(label,'title',f'sources.{i}.title','source.title'),attr(label,'domain',f'sources.{i}.domain','source.domain')]

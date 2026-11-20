@@ -12,7 +12,7 @@
 .brief .brief-refresh:hover:not(:disabled){background:var(--snow)}
 .brief .brief-refresh:disabled{opacity:.6;cursor:not-allowed}
 .brief .brief-refresh svg{flex:none;width:16px;height:16px}
-.brief-lead{margin:0;max-width:900px;font-size:clamp(28px,2.2vw + 18px,46px);font-weight:600;line-height:1.08;letter-spacing:-.035em;overflow-wrap:anywhere}
+.brief-lead{margin:0;max-width:900px;font-size:clamp(20px,1vw + 14px,28px);font-weight:600;line-height:1.25;letter-spacing:-.02em;overflow-wrap:anywhere}
 
 .brief .brief-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:1px;margin:0;padding:0;list-style:none;background:var(--haze);border:1px solid var(--haze);border-radius:20px;overflow:hidden}
 .brief-cell{display:flex;flex-direction:column;gap:8px;min-width:0;padding:28px;background:var(--white)}
