@@ -1,8 +1,18 @@
 import { openCvReviewTools } from '../fixtures/cv-ui';
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { createLocalAccount } from './account-helpers';
+
+/** Attaches a CV once the workspace and any saving form have settled, then uploads it. */
+async function uploadCv(page: Page, files: Parameters<ReturnType<Page['getByLabel']>['setInputFiles']>[0]) {
+ await expect(page.locator('.cv-workspace')).toHaveAttribute('aria-busy', 'false');
+ await expect(page.locator('form[aria-busy="true"]')).toHaveCount(0);
+ await page.getByLabel('CV document', { exact: true }).setInputFiles(files);
+ const upload = page.getByRole('button', { name: 'Upload CV', exact: true });
+ await expect(upload).toBeEnabled();
+ await upload.click();
+}
 
 test('saved CVs retain corrections, keep the active CV and compose manual inputs through real services', async ({ page, browser }) => {
  test.setTimeout(210_000);
@@ -18,8 +28,7 @@ test('saved CVs retain corrections, keep the active CV and compose manual inputs
  await expect(page.getByText('I presented a synthetic class project.', { exact: true })).toBeVisible();
 
  const source = path.join(process.cwd(), 'tests/fixtures/synthetic-cv.docx');
- await page.getByLabel('CV document', { exact: true }).setInputFiles(source);
- await page.getByRole('button', { name: 'Upload CV', exact: true }).click();
+ await uploadCv(page, source);
  let cvId = '';
  await expect.poll(async () => {
   const value = await (await account.get('/api/v1/cv')).json();
@@ -77,8 +86,7 @@ test('saved CVs retain corrections, keep the active CV and compose manual inputs
  expect((await (await account.get('/api/v1/cv')).json()).cvs).toHaveLength(1);
  await openCvReviewTools(page);
 
- await page.getByLabel('CV document', { exact: true }).setInputFiles({ name: 'synthetic-cv.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: readFileSync(path.join(process.cwd(), 'tests/fixtures/synthetic-cv-failure.docx')) });
- await page.getByRole('button', { name: 'Upload CV', exact: true }).click();
+ await uploadCv(page, { name: 'synthetic-cv.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: readFileSync(path.join(process.cwd(), 'tests/fixtures/synthetic-cv-failure.docx')) });
  await expect.poll(async () => {
   const value = await (await account.get('/api/v1/cv')).json();
   return value.cvs.find((item: { id: string }) => item.id !== cvId)?.status;
