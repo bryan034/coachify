@@ -14,7 +14,7 @@ from tests.test_goal_chat_presentation import environment
 def settings(**values):
     return AISettings(**{'enabled': True, 'model': 'synthetic', 'api_key': 'synthetic',
         'base_url': 'https://example.test/v1', 'response_mode': 'json_schema_strict',
-        'context_tokens': 16384, **values})
+        'context_tokens': 16384, 'max_output_tokens': 8192, **values})
 
 
 @pytest.mark.parametrize('mode', ['json_schema', 'json_schema_strict'])

@@ -35,9 +35,11 @@ flowchart TD
   H --> I[Owner / current-goal checked publication]
 ```
 
-Each branch retrieves Brave LLM Context, saves the successful bounded retrieval,
-structures findings through the configured model, and can make a bounded targeted
-follow-up. Branches return separate category values at fan-in. No-company targets still research all five areas using general role queries; findings
+Research is planned and searched per topic (each About-the-role and interview field);
+see [Per-topic research](#per-topic-research--20-november-2026). Every requested topic's
+first search runs before the category branches; each branch structures its topics' pages
+through the configured model and searches again only for topics not yet backed. Branches
+return separate category values at fan-in. No-company targets still research all five areas using general role queries; findings
 are marked general context with low confidence, never employer-specific claims.
 Employment type is extracted into saved JD metadata only when established; otherwise
 it remains `unknown`. Related employment/location/role reports remain qualified.
@@ -49,17 +51,13 @@ is the master switch; `OPPORTUNITY_ENABLED` (true by default) enables public res
 Every stage uses the same configured Career model; see [setup](../../docs/setup.md#career-model-and-search-configuration).
 The Brave client always uses LLM Context with the existing key.
 Every research workflow uses this endpoint; legacy modes are ignored.
-Opportunity requests consider 30 results and return at most five URLs per query, with up to
-12 passages per page and Brave's lenient relevance cut-off, so useful text that does not repeat
-the query words is kept. Each category runs a plain employer + role + topic query first (no
-location or year, as a person would search), then the model's targeted queries; weak coverage
-can trigger focused follow-ups within the three-search default. A round whose structured output
-still fails validation after its corrections is recorded and research moves on to the next query;
-the category fails only when no round produced a validated finding. Each category still cites at
-most three retained pages.
-Candidate evidence remains checkpointed; final categories retain at most three useful
-sources selected by validated field coverage, role match, confidence and source type.
-Follow-up URLs lead the next evaluation, including after quota/restart recovery.
+Opportunity requests consider 30 results with up to 12 passages per page and Brave's lenient
+relevance cut-off, so useful text that does not repeat the query words is kept. The URL count per
+search follows the topic's policy. A round whose structured output still fails validation after its
+corrections is recorded and research moves on to the next round; the category fails only when no
+round produced a validated finding. Candidate evidence remains checkpointed; each topic keeps its
+own best sources (see below), and new pages lead the next evaluation, including after
+quota/restart recovery.
 Repeated URLs preserve saved excerpt text before appending new text within the excerpt limit.
 Relevant sources with absent facts are distinguished from irrelevant search results.
 Other research workflows retain their existing six-URL request limit.
@@ -190,13 +188,13 @@ and recreate the service yourself; no credentials go into the frontend.
 | Setting | Default | Meaning |
 |---|---:|---|
 | `OPPORTUNITY_ENABLED` | true | Enable when primary, the model and LLM Context are available |
-| `OPPORTUNITY_MAX_SEARCHES` | 3 | Maximum distinct successful queries/category (the plain query counts as one) |
-| `OPPORTUNITY_MAX_FOLLOWUPS` | 2 | Maximum targeted follow-ups/category |
+| `OPPORTUNITY_TOPIC_SEARCHES` | 2 | Maximum searches per topic (1–4); the second runs only when the topic is not yet backed |
+| `OPPORTUNITY_RUN_SEARCHES` | 40 | Maximum searches per research run (1–200), including early JD searches |
 | `OPPORTUNITY_CONCURRENCY` | 3 | Concurrent Brave requests across branches |
 | `OPPORTUNITY_TIMEOUT_SECONDS` | 30 | Total deadline for each Brave attempt |
 | `OPPORTUNITY_RETRIES` | 1 | Bounded transient retries with exponential backoff / 429 delay |
 | `OPPORTUNITY_SCHEMA_REPAIRS` | 1 | Additional model attempts for schema/citation failure |
-| `OPPORTUNITY_EVIDENCE_TOKENS` | 12288 | Bounded exact passages per reasoning call (256–32768) |
+| `OPPORTUNITY_EVIDENCE_TOKENS` | blank | Exact passages per reasoning call (at least 256 when set); blank sends every retrieved passage whole |
 | `OPPORTUNITY_FRESHNESS_HOURS` | 168 | Complete category freshness |
 | `OPPORTUNITY_INCOMPLETE_HOURS` | 1 | Missing/error coverage freshness |
 | `OPPORTUNITY_RUN_SECONDS` | 300 | Execution deadline per durable worker attempt |
@@ -302,10 +300,9 @@ No-company goals also research all five categories with general role queries; al
 findings are labelled general context/low confidence, never company-specific figures. Full-time JDs still research all five
 areas when an employer is known, with internship evidence labelled related employment.
 
-Default limits remain two successful searches per category (one initial plus at most
-one follow-up), three concurrent acquisitions, 30-second source requests and bounded
-retries. Five categories therefore allow five initial and up to ten distinct successful
-queries per run; retries may add HTTP attempts. Provider quotas apply.
+Search limits are now per topic; see [Per-topic research](#per-topic-research--20-november-2026).
+Three concurrent acquisitions, 30-second source requests and bounded retries still apply,
+and provider quotas apply.
 
 
 ## Evidence and missing information — 28 October 2026
@@ -365,8 +362,8 @@ remain separate; final report identity/reference validation remains enforced.
 
 Category `status` still reports execution success/failure. Additive `outcome` explains
 `findings_found`, `no_relevant_sources`, `information_not_found`, `validation_failed`
-or `provider_failed`; old reports default to null. `source_ids` identifies the at most
-three retained sources, including relevant sources with no accepted facts. The model
+or `provider_failed`; old reports default to null. `source_ids` identifies the retained
+sources (each topic's kept sources, or up to three relevant pages when nothing was found). The model
 returns bounded `relevant_refs` separately from findings; references must match the
 supplied source indexes. Validated findings independently establish useful citations.
 
@@ -379,15 +376,15 @@ cursors survive quota waits/restarts without repeating successful paid retrieval
 The new cache policy prevents old short-excerpt reports from satisfying new research;
 immutable historical reports and owner/version checks remain intact.
 
-The active reasoning stages are `opportunity_plan` and `opportunity_structure`. Completed
+The active reasoning stages are `opportunity_plan`, `opportunity_triage` and `opportunity_structure`. Completed
 chat text comes from the stored finding values; there is no later model rewrite or
 judging stage. Historical reports remain readable under their original wording.
 
 ### Planner output recovery
 
-Planning and category structuring each allow up to 4,096 output tokens (also bounded
-by `AI_MAX_OUTPUT_TOKENS`), independently of the 60-second default model deadline.
-The planner returns five named arrays of short query strings, with no wrapper.
+Planning and category structuring each allow up to 4,096 output tokens (lowered by
+`AI_MAX_OUTPUT_TOKENS` when set), independently of the 60-second default model deadline.
+The planner returns one named array of one or two short query strings per topic, with no wrapper.
 Local research supplies the schema in the prompt and native decoding format.
 Python retains schema/provenance validation; no malformed or truncated response
 becomes a successful report. Repairs distinguish incomplete JSON from schema
@@ -437,3 +434,44 @@ category's own saved sources only (`category_sources`), so a page also cited by 
 category cannot have this category's quoted text merged away. The word-for-word quote and number
 checks themselves are unchanged. Reports already saved with a `validation_failed` category keep
 their surviving findings until research is refreshed.
+
+## Per-topic research — 20 November 2026
+
+Each researched field (Salary, Benefits, Mentorship, interview Stages, Questions and so on) is a
+topic with its own search, read, stop and keep rules. A topic shared by two categories
+(`work_life_balance`) is searched once by its first category and read by both.
+
+| Topic kind | Topics | Pages read per search | Pages read per topic | Stops when | Sources kept |
+|---|---|---:|---:|---|---:|
+| Factual | `compensation`, `benefits`, `conversion_salary`, `conversion_rate`, `historical_cohort`, `offer_acceptance`, `full_time_role`, `application_timeline`, `recruitment_stages` | 2 | 5 | two different sites back its findings with no conflict | 2 |
+| Reviews and sentiment | every other topic | 4 | 8 | four different sites back its findings | 4 |
+
+1. **Plan.** The planner writes one or two queries per topic; plain employer + role + topic queries
+   (the second aimed at salary/review sites and forums) fill any gap.
+2. **Search.** Each search returns up to six results. Every requested topic's first search runs
+   concurrently before the category branches (or during JD extraction).
+3. **Triage.** For each category round, one `opportunity_triage` model call sees only each new
+   result's URL, title, published date and a 300-character description, and names the still-needed
+   topics each page likely answers. Pages it leaves out are never read. If triage output is unusable,
+   each topic reads its own top-ranked results instead.
+4. **Read.** Each topic reads its own search's triaged pages up to the per-search limit, then pages
+   other topics' searches found for it, within its total. Only read pages go to
+   `opportunity_structure`.
+5. **Extract.** The structuring call lists the category's own fields first and every other topic
+   after them, so a section of a page that answers an unplanned topic becomes a cited finding for
+   that topic. Findings for another category's topics are handed to that category with only their
+   cited passages and merged in the quality step under the same per-topic limits.
+6. **Stop.** A backed topic, counting findings handed over from other categories, leaves the search
+   list. Otherwise a topic searches again while it has searches (`OPPORTUNITY_TOPIC_SEARCHES`,
+   default 2) and reads left. A run never exceeds `OPPORTUNITY_RUN_SEARCHES` (default 40); each
+   search also counts toward the per-account daily allowance.
+7. **Keep.** Each topic keeps its best sources up to its limit, preferring different sites, exact
+   scope, higher confidence and the preferred evidence type. A finding keeps only its citations from
+   kept sources. Kept sources store only the passages their findings cite; a category with no
+   findings keeps up to three relevant pages with one short excerpt each.
+
+Search providers return page text with each result, so a rejected page's text is downloaded but
+never sent to the structuring model or saved in a report. Career does not fetch research pages
+itself. A category may cite up to 40 pages and record up to 50 searches; a report holds up to 100
+pages. The cache policy is `opportunity-intelligence-topic-findings-v7`, so earlier reports are not
+reused for new research.

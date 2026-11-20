@@ -6,13 +6,13 @@ from pymongo.errors import DuplicateKeyError
 from app.repositories.goals import GoalError,fingerprint,now
 from app.repositories.research import ResearchStore
 from app.schemas.opportunity import CATEGORIES,CategoryResult
-from app.workflows.opportunity.sources import RETAINED_SOURCE_LIMIT
+from app.schemas.opportunity import MAX_CATEGORY_SOURCES
 from .domain import public_opportunity,rating_skills
 
 class OpportunityStore:
     def __init__(self,db,settings):
         db=db.with_options(codec_options=CodecOptions(tz_aware=True));self.db=db;self.rows=db.research_contexts;self.settings=settings
-        self.research=ResearchStore(db);self.research.policy='opportunity-intelligence-structured-findings-v6'
+        self.research=ResearchStore(db);self.research.policy='opportunity-intelligence-topic-findings-v7'
         self.rows.create_index([('kind',1),('finished',1),('next_attempt_at',1)])
         self.rows.create_index([('owner',1),('goal_id',1),('created_at',-1)])
         self.rows.create_index([('owner',1),('goal_id',1),('run',1)],unique=True,partialFilterExpression={'kind':'opportunity_job','finished':False})
@@ -54,10 +54,10 @@ class OpportunityStore:
                 categories[category]={**categories[category],'status':'pending','error_code':None,'outcome':None}
         pending=[k for k,v in categories.items() if v['status']=='pending']
         summary_pending=bool(cached and any(w.startswith('Overall summary unavailable;') for w in cached.intelligence.warnings))
-        retained={category:[s for s in sources if s['source_id'] in set(value.get('source_ids',[]))|{sid for finding in value['findings'] for sid in finding['source_ids']}][:RETAINED_SOURCE_LIMIT] for category,value in categories.items()}
+        retained={category:[s for s in sources if s['source_id'] in set(value.get('source_ids',[]))|{sid for finding in value['findings'] for sid in finding['source_ids']}][:MAX_CATEGORY_SOURCES] for category,value in categories.items()}
         row={'_id':identifier,'kind':'opportunity_job','owner':owner,'goal_id':goal.id,'goal_version':goal.version,'selection':selection,'session':session,'run':run,
              'digest':digest,'public':public,'context':context.model_dump(mode='json'),'status':'pending' if pending or summary_pending else cached.intelligence.status,
-             'finished':not (pending or summary_pending),'prefetched':bool(seed),'queries_planned':bool((seed or {}).get('queries_planned')),'categories':categories,'sources':sources,'queries':(seed or {}).get('queries',{}),'evidence':(seed or {}).get('evidence',{}),'history':(seed or {}).get('history',{}),
+             'finished':not (pending or summary_pending),'prefetched':bool(seed),'queries_planned':bool((seed or {}).get('queries_planned')),'categories':categories,'sources':sources,'queries':(seed or {}).get('queries',{}),'evidence':(seed or {}).get('evidence',{}),'history':(seed or {}).get('history',{}),'searches_used':(seed or {}).get('searches_used',0),
              'retained_sources':retained,'requested':pending,'skills':rating_skills(goal),'skill_levels':[v.model_dump(mode='json') for v in cached.intelligence.skill_levels] if cached and not pending else [],'research_id':cached.id if cached else None,'created_at':now(),'updated_at':now(),'next_attempt_at':now(), 'summary':cached.intelligence.summary.model_dump() if cached else {}}
         waits=(seed or {}).get('waits',{})
         if waits and pending:
@@ -93,6 +93,11 @@ class OpportunityStore:
         if retry:update['$max']={'next_attempt_at':retry}
         result=self.rows.update_one({'_id':identifier,'worker_token':token},update)
         if not result.matched_count:raise GoalError('A newer worker replaced this research run.')
+
+    def reserve_search(self,identifier,token,limit):
+        """Count one search against the run's allowance; False once the allowance is spent."""
+        return bool(self.rows.update_one({'_id':identifier,'worker_token':token,'$or':[{'searches_used':{'$lt':limit}},{'searches_used':{'$exists':False}}]},
+            {'$inc':{'searches_used':1}}).modified_count)
 
     def release(self,identifier,token):
         self.rows.update_one({'_id':identifier,'worker_token':token},{'$unset':{'worker_until':'','worker_token':''}})

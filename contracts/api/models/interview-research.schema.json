@@ -124,7 +124,7 @@
           "items": {
             "type": "string"
           },
-          "maxItems": 3,
+          "maxItems": 40,
           "title": "Source Ids",
           "type": "array"
         },
@@ -186,7 +186,7 @@
         },
         "searches": {
           "default": 0,
-          "maximum": 12,
+          "maximum": 50,
           "minimum": 0,
           "title": "Searches",
           "type": "integer"

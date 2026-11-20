@@ -1,7 +1,6 @@
 """Regression: configured research must not depend on legacy chat/search switches."""
 import json
 import asyncio
-from app.schemas.opportunity import CATEGORIES
 import os
 from types import SimpleNamespace
 from uuid import uuid4
@@ -19,6 +18,7 @@ from app.ai.routing import ModelRouter,opportunity_models
 from app.clients.search_sources import SourceAPIs
 from app.main import create_app
 from app.workflows.opportunity.engine import availability_issues
+from app.workflows.opportunity.topics import TOPICS
 
 
 def test_research_uses_configured_model_even_when_chat_is_disabled():
@@ -27,7 +27,7 @@ def test_research_uses_configured_model_even_when_chat_is_disabled():
         def response(request):
             calls.append(request)
             assert request.headers['authorization']=='Bearer synthetic-key'
-            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps({category:['Example Analyst Singapore '+category] for category in CATEGORIES})}}]})
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps({topic:['Example Analyst Singapore '+topic] for topic in TOPICS})}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as client:
             primary=AIAdapter(AISettings(enabled=True,api_key='synthetic-key'),client)
             context_model=AISettings(enabled=False,api_key='synthetic-key')

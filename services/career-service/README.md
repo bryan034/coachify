@@ -28,11 +28,13 @@ concurrently with a 60-second default / 60-second maximum deadline.
 
 Pasted text stays in browser memory until explicitly submitted for extraction. `POST /api/v1/career/imports/url` and `/imports/document` return bounded temporary previews; `/explorations/cv/document` supplies optional temporary CV context. Inputs and originals are not retained as raw JD/CV text. URL/document safeguards are detailed in [SPECIFICATION.md](SPECIFICATION.md).
 
-JD inputs retain an 8,000-character cap. JD extraction allows up to 8,192 output
-tokens and identification up to 4,096. `AI_MAX_OUTPUT_TOKENS` bounds both and now
-defaults to 8,192. JD context admission accounts for the full instructions, source,
-schema and repair feedback in estimated tokens, plus output space and a safety
-margin. Over-limit requests fail without truncating the JD. Existing private
+JD inputs retain an 8,000-character cap. Every model stage keeps its own completion
+safety cap (JD extraction 8,192 tokens, identification 4,096); `AI_MAX_OUTPUT_TOKENS`
+can only lower them. `AI_CONTEXT_TOKENS` and `OPPORTUNITY_EVIDENCE_TOKENS` are blank
+by default, meaning no local input limit. When
+`AI_CONTEXT_TOKENS` is set, JD context admission accounts for the full instructions,
+source, schema and repair feedback in estimated tokens, plus output space and a
+safety margin; over-limit requests fail without truncating the JD. Existing private
 completion settings can still lower these budgets; agents never read/change them.
 
 ## Canonical goal and chat — J02–J05 / J09
@@ -108,13 +110,16 @@ Every endpoint requires a verified account and completed canonical onboarding. O
 Canonical writes retain namespaced `create_key` metadata to coexist with the legacy unique index. History filters record shape explicitly. No index drop, destructive data migration or automatic conversion of older target snapshots occurs. Gap analysis and roadmap generation remain planned.
 URL previews allow five seconds per network operation and one timeout retry within
 a 25-second import budget (30-second worker, 35-second gateway). Timeouts, certificate
-failures and other connection errors have distinct messages. Robots checks, validated
-public-IP pinning and hostname verification remain enforced; inaccessible sites offer
-paste/document actions. Roblox and standard Greenhouse/Lever job links use public,
-key-free APIs with validated identity and original-link/API provenance. Other sites
-keep HTML/robots extraction; accessible JavaScript shells may use one bounded,
-sandboxed Chromium render. Blocked/authentication/challenge pages keep paste/upload
-fallback. No preview invokes an LLM. Browser dependencies and container sandbox
+failures and other connection errors have distinct messages. Imports are
+user-requested single-page reads, so robots.txt is not consulted; validated
+public-IP pinning and hostname verification remain enforced, and gzip/deflate
+responses are decoded within the size cap. Inaccessible sites offer paste/document
+actions; LinkedIn, Indeed, Glassdoor and JobStreet are never fetched and the message
+names the site and asks the user to copy and paste. Roblox, standard Greenhouse/Lever
+and MyCareersFuture job links use public, key-free APIs with validated identity and
+original-link/API provenance. Other sites use HTML extraction; accessible JavaScript
+shells may use one bounded, sandboxed Chromium render. Blocked/authentication/challenge
+pages keep paste/upload fallback. No preview invokes an LLM. Browser dependencies and container sandbox
 settings require a Career rebuild/recreate; see [deployment notes](../../infrastructure/docker/README.md#career-url-preview-browser)
 and [preview safeguards](SPECIFICATION.md).
 

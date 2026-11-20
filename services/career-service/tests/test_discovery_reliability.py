@@ -123,7 +123,7 @@ def test_all_candidates_are_pooled_and_failed_extractions_free_slots():
 def test_discovery_uses_larger_output_and_real_token_input_estimates():
     async def run():
         async with httpx.AsyncClient() as client:
-            adapter=AIAdapter(AISettings(enabled=True,api_key='synthetic'),client)
+            adapter=AIAdapter(AISettings(enabled=True,api_key='synthetic',max_output_tokens=8192,context_tokens=65536),client)
             context=json.dumps({'sources':[{'excerpt':'資料'*10000}]},ensure_ascii=False)
             payload=adapter._payload(AIInput(stage='discovery_extract',context=context))
             assert payload['max_tokens']==8192
@@ -144,7 +144,7 @@ def test_discovery_uses_larger_output_and_real_token_input_estimates():
 def test_discovery_does_not_silently_shorten_evidence_to_fit_small_context():
     async def run():
         async with httpx.AsyncClient() as client:
-            adapter=AIAdapter(AISettings(enabled=True,api_key='synthetic',context_tokens=16000),client)
+            adapter=AIAdapter(AISettings(enabled=True,api_key='synthetic',context_tokens=16000,max_output_tokens=8192),client)
             context=json.dumps({'sources':[{'excerpt':'alpha1 beta2 gamma3 '*1800}]})
             with pytest.raises(AIError,match='context_limit'):adapter._payload(AIInput(stage='discovery_extract',context=context))
     asyncio.run(run())

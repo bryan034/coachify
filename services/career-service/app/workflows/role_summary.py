@@ -111,7 +111,6 @@ async def generate(request,account,goal,record):
         context=jsonable_encoder({'role':goal.role,'company':goal.company,'field':goal.field,'location':goal.location,
             'employment_type':goal.employment_type,'seniority_level':goal.seniority_level,'cards':cards,'missing':missing})
         encoded=json.dumps(context,separators=(',',':'),ensure_ascii=False)
-        if len(encoded)>40000:raise AIError('context_limit')
         revision=f'{goal.id}:{goal.version}'
         async def current():
             state=await thread(request.app.state.goal_store.current,account)

@@ -407,12 +407,14 @@ is governed by `OPPORTUNITY_ENABLED`. Optional tuning values are passed by Compo
 | The model discovery conversation output | At most 4,096 tokens, bounded by shared configured output cap |
 | The model relevance assessment output | At most 2,048 tokens |
 
-The model input uses the existing tokenizer as an estimate, not a byte-count proxy;
-actual provider counts can differ. The effective input budget is the smaller of
-32,768 and `AI_CONTEXT_TOKENS` minus the output allowance and safety margin.
-Evidence is split rather than silently shortened at this boundary. Discovery extraction
-always sends an explicit 8,192-token maximum, independently of the shared
-`AI_MAX_OUTPUT_TOKENS` default. This is a ceiling, not a target length or minimum:
+With `AI_CONTEXT_TOKENS` blank (the default), Discovery sends the full request
+without a local input budget; each stage keeps its completion safety cap. When
+`AI_CONTEXT_TOKENS` is set, the model input uses the existing tokenizer as an
+estimate, not a byte-count proxy; actual provider counts can differ. The effective
+input budget is then the smaller of 32,768 and `AI_CONTEXT_TOKENS` minus the output
+allowance and safety margin. Evidence is split rather than silently shortened at this
+boundary. Discovery extraction always sends an explicit 8,192-token maximum,
+independently of `AI_MAX_OUTPUT_TOKENS`. This is a ceiling, not a target length or minimum:
 The model may finish earlier. Other stages/workflows retain their existing caps and
 shared configuration behavior. There is no new setting, provider, dependency or
 local tokens-per-minute limit.

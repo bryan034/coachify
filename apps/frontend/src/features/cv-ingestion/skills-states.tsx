@@ -6,7 +6,6 @@ import type {InterviewTopic} from './types';
 import { Icon } from '@/components/ui/icon';
 import { formatDate } from '@/lib/format';
 import { useComparison } from '@/features/assessment/comparison';
-import { dateSpan } from './dates';
 import { useProcessingPercent } from './cv-processing-progress';
 import type { CvDetail, CvItem, CvSummary } from './types';
 
@@ -66,18 +65,6 @@ export function SkillsProcessing({token, title, cv, items, busy, cancel, review,
     <p role="status" className="skills-run-note">You can leave this page. elo keeps reading, and your profile will be here when it’s done.</p>
    </div>
   </section>
-  <div className="skills-run-grid">
-   <section className="card skills-run-found" aria-labelledby="skills-found-title">
-    <div><h2 id="skills-found-title">Experiences found so far</h2><span>{found.length}</span></div>
-    <p>You’ll check these in the next step.</p>
-    <ul>{found.map(item => <li key={item.id}><Tick size={18} color="var(--ready-ink, #116149)"/><span><strong>{item.title}</strong>{dateSpan(item.start_date, item.end_date, item.ongoing) && <span>{dateSpan(item.start_date, item.end_date, item.ongoing)}</span>}</span></li>)}
-     <li aria-hidden="true" className="is-pending"><span className="skills-run-dash"/><span><i className="skills-sk" style={{width: '55%'}}/><i className="skills-sk" style={{width: '35%', height: 10}}/></span></li></ul>
-   </section>
-   <section className="card skills-run-skills" aria-label="Skills, loading">
-    <div><h2>Skills by category</h2><p>Skills appear here once your experiences are read.</p></div>
-    <div aria-hidden="true">{[[120, [78, 64, 92, 70]], [96, [88, 60, 100]], [130, [72, 96, 66, 84, 58]], [104, [90, 68]]].map(([label, chips]) => <div key={label as number} className="skills-run-row"><i className="skills-sk" style={{width: label as number, height: 12}}/><span>{(chips as number[]).map(width => <i key={width} className="skills-sk is-chip" style={{width}}/>)}</span></div>)}</div>
-   </section>
-  </div>
  </div>;
 }
 

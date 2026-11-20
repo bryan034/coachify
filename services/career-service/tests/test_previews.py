@@ -228,7 +228,41 @@ def test_tls_request_uses_validated_address_and_original_hostname():
         job_url.request_page('https://example.test/job',__import__('time').monotonic()+10)
         assert connect.call_args.args[0]==('93.184.216.34',443)
         assert context.return_value.wrap_socket.call_args.kwargs['server_hostname']=='example.test'
-        assert connection.return_value.request.call_args.kwargs['headers']['Accept-Encoding']=='identity'
+        headers=connection.return_value.request.call_args.kwargs['headers']
+        assert headers['Accept-Encoding']=='gzip, deflate'
+        assert headers['User-Agent']=='Mozilla/5.0 (compatible; eloPreview/1.0)'
+        assert headers['Accept'].startswith('text/html,')
+
+
+@pytest.mark.parametrize('encoding,compress',[
+    ('gzip',lambda data:__import__('gzip').compress(data)),
+    ('deflate',lambda data:__import__('zlib').compress(data)),
+    ('deflate',lambda data:(lambda c:c.compress(data)+c.flush())(__import__('zlib').compressobj(wbits=-15))),
+    ('identity',lambda data:data),
+])
+def test_compressed_responses_are_decoded_and_the_encoding_header_dropped(encoding,compress):
+    body=b'<main>Analyst requires SQL.</main>'
+    class Response:
+        status=200
+        def getheaders(self):return [('Content-Type','text/html'),('Content-Encoding',encoding)]
+        def read1(self,n):data,self.data=self.data,b'';return data
+        def isclosed(self):return not self.data
+        def close(self):pass
+    response=Response();response.data=compress(body)
+    with patch('socket.getaddrinfo',public_dns),patch('socket.create_connection'),patch('ssl.create_default_context'),patch('http.client.HTTPConnection') as connection:
+        connection.return_value.getresponse.return_value=response
+        status,headers,data=job_url.request_page('https://example.test/job',__import__('time').monotonic()+10)
+    assert (status,data)==(200,body) and 'content-encoding' not in headers
+
+
+def test_decompression_is_bounded_and_rejects_unreadable_or_unsupported_bodies():
+    import gzip
+    with pytest.raises(ValueError,match='too large'):
+        job_url.decode_body(gzip.compress(b'x'*(job_url.MAX_DOWNLOAD+1)),'gzip')
+    assert len(job_url.decode_body(gzip.compress(b'x'*job_url.MAX_DOWNLOAD),'gzip'))==job_url.MAX_DOWNLOAD
+    with pytest.raises(ValueError,match='unreadable'):job_url.decode_body(b'not gzip','gzip')
+    with pytest.raises(ValueError,match='unreadable'):job_url.decode_body(gzip.compress(b'x'*1000)[:-12],'gzip')
+    with pytest.raises(ValueError,match='unsupported'):job_url.decode_body(b'x','br')
 
 
 def test_jobposting_and_readable_html_extraction():
@@ -243,25 +277,18 @@ def test_jobposting_and_readable_html_extraction():
 @pytest.mark.parametrize('status,content_type',[(403,'text/html'),(404,'text/html'),(200,'application/pdf')])
 def test_blocked_or_unsupported_job_page_has_fallback(status,content_type):
     def fetch(url,deadline):
-        if url.endswith('/robots.txt'):return 404,{},b''
         return status,{'content-type':content_type},b'<main>Read this job</main>'
     with patch('socket.getaddrinfo',public_dns),pytest.raises(ValueError,match='[Pp]aste|upload'):
         job_url.import_url('https://example.test/job',fetch)
 
 
-def test_robots_and_redirect_limits():
-    seen=[]
-    def fetch(url,deadline):seen.append(url);return 200,{},b'User-agent: *\nDisallow: /'
-    with patch('socket.getaddrinfo',public_dns),pytest.raises(job_url.AccessBlocked,match='could not be extracted'):
-        job_url.import_url('https://example.test/job',fetch)
-    assert len(seen)==1
+def test_redirect_limits():
     with pytest.raises(ValueError,match='too many'):
         job_url.fetch_following('https://example.test/job',999999,lambda u,d:(302,{'location':'/again'},b''))
 
 
 def test_url_preview_has_only_temporary_metadata():
     def fetch(url,deadline):
-        if url.endswith('/robots.txt'):return 404,{},b''
         return 200,{'content-type':'text/html; charset=utf-8'},b'<main><h1>Analyst</h1><p>SQL</p></main>'
     with patch('socket.getaddrinfo',public_dns):result=job_url.import_url('https://example.test/job',fetch)
     assert result['kind']=='url' and result['source_url']=='https://example.test/job'
@@ -301,17 +328,15 @@ def test_chunked_upload_is_bounded_even_without_content_length():
         assert response.status_code==413,response.text
 
 
-def test_redirect_destination_robots_is_checked_before_job_content():
+def test_redirect_destination_is_validated_before_job_content():
     requested=[]
     def fetch(url,deadline):
         requested.append(url)
-        if url=='https://example.test/robots.txt':return 404,{},b''
-        if url=='https://example.test/job':return 302,{'location':'https://other.test/job'},b''
-        if url=='https://other.test/robots.txt':return 200,{},b'User-agent: *\nDisallow: /job'
+        if url=='https://example.test/job':return 302,{'location':'https://www.linkedin.com/jobs/view/1'},b''
         raise AssertionError('blocked destination job must not be downloaded')
-    with patch('socket.getaddrinfo',public_dns),pytest.raises(job_url.AccessBlocked):
+    with patch('socket.getaddrinfo',public_dns),pytest.raises(job_url.AccessBlocked,match='LinkedIn does not allow'):
         job_url.import_url('https://example.test/job',fetch)
-    assert requested==['https://example.test/robots.txt','https://example.test/job','https://other.test/robots.txt']
+    assert requested==['https://example.test/job']
 
 
 def test_jobposting_retains_metadata_outside_description_for_semantic_extraction():

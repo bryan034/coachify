@@ -401,8 +401,8 @@ class SourceAPIs:
     async def collect_question_query(self,context,query):
         return await self.search(query,country='ALL')
 
-    async def collect_opportunity_query(self,context,query):
-        return await self.search(query,country=search_country(context.location),focus=query,max_sources=OPPORTUNITY_SOURCE_LIMIT,
+    async def collect_opportunity_query(self,context,query,max_sources=OPPORTUNITY_SOURCE_LIMIT):
+        return await self.search(query,country=search_country(context.location),focus=query,max_sources=min(max_sources,MAX_URLS_LIMIT),
             evidence_chars=OPPORTUNITY_EXCERPT_LIMIT,context_tokens=16384,threshold='lenient',snippets_per_url=12,snippets=60,search_count=50)
 
     async def collect_discovery_query(self,context,query):

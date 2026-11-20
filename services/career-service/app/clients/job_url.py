@@ -1,4 +1,4 @@
-"""Public-page fetcher: pin validated IPs; preserve TLS host verification; no proxies/cookies/scripts."""
+"""Public-page fetcher for user-requested pages: pin validated IPs; preserve TLS host verification; no proxies/cookies/scripts."""
 import http.client
 import ipaddress
 import json
@@ -6,45 +6,34 @@ import re
 import socket
 import ssl
 import time
-from urllib.parse import urlsplit, urljoin, urlunsplit
-from urllib.robotparser import RobotFileParser
+import zlib
+from urllib.parse import urlsplit, urljoin
 from bs4 import BeautifulSoup
 from app.domain.documents import validate_text
 from app.schemas.preview import MAX_JD_TEXT,URL_NETWORK_TIMEOUT,URL_IMPORT_TIMEOUT
 
 MAX_DOWNLOAD = 2 * 1024 * 1024
-AGENT = 'eloPreview/1.0'
-# One user-facing message whenever a site refuses or blocks automated reading.
-BLOCKED = 'The information could not be extracted from this website. Copy and paste the job description instead.'
-# Job aggregators whose terms and bot protection forbid automated import.
-BLOCKED_HOSTS = ('linkedin.com', 'indeed.com', 'glassdoor.com', 'glassdoor.sg', 'jobstreet.com', 'jobstreet.com.sg')
+AGENT = 'Mozilla/5.0 (compatible; eloPreview/1.0)'
+REQUEST_HEADERS = {'User-Agent': AGENT, 'Accept': 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-SG,en;q=0.9', 'Accept-Encoding': 'gzip, deflate'}
+BLOCKED_PREFIX = 'The information could not be extracted from this website.'
+BLOCKED = BLOCKED_PREFIX + ' Copy and paste the job description instead.'
+# Job aggregators whose terms forbid automated reading of their listings.
+BLOCKED_HOSTS = {'linkedin.com': 'LinkedIn', 'indeed.com': 'Indeed', 'glassdoor.com': 'Glassdoor', 'glassdoor.sg': 'Glassdoor',
+    'jobstreet.com': 'JobStreet', 'jobstreet.com.sg': 'JobStreet'}
 
 
 class AccessBlocked(ValueError):
     """The site refused automated reading; the user should paste the description."""
-    def __init__(self):
-        super().__init__(BLOCKED)
+    def __init__(self, site=None):
+        super().__init__(BLOCKED if site is None else
+            f'{BLOCKED_PREFIX} {site} does not allow its job listings to be read automatically. '
+            f'Open the job on {site}, copy the description and paste it here.')
 
 
 def blocked_host(host):
     host = (host or '').lower().rstrip('.')
-    return any(host == name or host.endswith('.' + name) for name in BLOCKED_HOSTS)
-
-
-def robots_rules(robots, deadline, fetch):
-    """Parsed rules, or None when robots.txt is absent or does not answer in time."""
-    try:
-        _, status, _, data = fetch_following(robots, deadline, fetch)
-    except PageTimeout:
-        # An unresponsive robots.txt is unknown, not a refusal: try the page itself.
-        network_timeout(deadline)
-        return None
-    if status in {401,403,429} or status >= 500:
-        raise AccessBlocked()
-    if status != 200:
-        return None
-    rules = RobotFileParser(); rules.parse(data.decode('utf-8', errors='replace').splitlines())
-    return rules
+    return next((site for name, site in BLOCKED_HOSTS.items() if host == name or host.endswith('.' + name)), None)
 
 
 class RenderRequired(ValueError):
@@ -77,8 +66,9 @@ def destination(url):
         port = parsed.port or (443 if parsed.scheme == 'https' else 80)
     except (ValueError, UnicodeError) as exc:
         raise ValueError('Use a public HTTP or HTTPS page URL without credentials or custom ports.') from exc
-    if blocked_host(host):
-        raise AccessBlocked()
+    site = blocked_host(host)
+    if site:
+        raise AccessBlocked(site)
     try:
         addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
         if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
@@ -101,14 +91,12 @@ def request_page(url, deadline):
         transport=connection.sock
         transport.settimeout(network_timeout(deadline))
         path = (parsed.path or '/') + ('?' + parsed.query if parsed.query else '')
-        connection.request('GET', path, headers={'User-Agent': AGENT, 'Accept': 'text/html,text/plain', 'Accept-Encoding': 'identity'})
+        connection.request('GET', path, headers=REQUEST_HEADERS)
         transport.settimeout(network_timeout(deadline))
         response = connection.getresponse()
         headers = {k.lower(): v for k, v in response.getheaders()}
         if response.status in {301, 302, 303, 307, 308}:
             return response.status, headers, b''
-        if headers.get('content-encoding', 'identity').lower() != 'identity':
-            raise ValueError('This website uses an unsupported response format. Paste the description instead.')
         if int(headers.get('content-length', '0')) > MAX_DOWNLOAD:
             raise ValueError('The webpage is too large. Paste just the job description instead.')
         data = bytearray()
@@ -118,10 +106,10 @@ def request_page(url, deadline):
             data.extend(chunk)
             if len(data) > MAX_DOWNLOAD: raise ValueError('The webpage is too large. Paste the description instead.')
             if not chunk or response.isclosed(): break
-        return response.status, headers, bytes(data)
+        data = decode_body(bytes(data), headers.pop('content-encoding', 'identity'))
+        return response.status, headers, data
     except TimeoutError as exc:
-        stage='checking its robots.txt access rules' if parsed.path=='/robots.txt' else 'reading the webpage'
-        raise PageTimeout(f'The website timed out while {stage}. Retry, paste the description or upload a document.') from exc
+        raise PageTimeout('The website timed out while reading the webpage. Retry, paste the description or upload a document.') from exc
     except ssl.SSLCertVerificationError as exc:
         raise ValueError('The website’s TLS certificate could not be verified. Paste the description or upload a document.') from exc
     except ssl.SSLError as exc:
@@ -131,6 +119,27 @@ def request_page(url, deadline):
     finally:
         if response is not None:response.close()
         connection.close()
+
+
+def decode_body(data, encoding):
+    """Decompress gzip/deflate bodies without ever producing more than MAX_DOWNLOAD bytes."""
+    encoding = encoding.strip().lower()
+    if encoding in ('', 'identity'):
+        return data
+    modes = {'gzip': (31,), 'x-gzip': (31,), 'deflate': (15, -15)}.get(encoding)
+    if modes is None:
+        raise ValueError('This website uses an unsupported response format. Paste the description instead.')
+    for wbits in modes:
+        decoder = zlib.decompressobj(wbits)
+        try:
+            body = decoder.decompress(data, MAX_DOWNLOAD + 1)
+        except zlib.error:
+            continue
+        if len(body) > MAX_DOWNLOAD or decoder.unconsumed_tail:
+            raise ValueError('The webpage is too large. Paste the description instead.')
+        if decoder.eof:
+            return body
+    raise ValueError('This website returned an unreadable compressed response. Paste the description instead.')
 
 
 def fetch_with_timeout_retry(url,deadline,fetch):
@@ -236,17 +245,11 @@ def extract_page(data):
 def import_url(url, fetch=request_page):
     deadline = time.monotonic() + URL_IMPORT_TIMEOUT
     raw_fetch=fetch
-    # Wrap the actual request once, including redirect robots checks.
+    # Wrap the actual request once so redirects share the single timeout retry.
     fetch=lambda target,limit:fetch_with_timeout_retry(target,limit,raw_fetch)
-    # Validate before requesting robots as well as on every redirect connection.
     parsed, _, _, _ = destination(url)
     public_job=public_job_api_preview(parsed,url,deadline,fetch)
     if public_job is not None:return public_job
-    robots = urlunsplit((parsed.scheme, parsed.netloc, '/robots.txt', '', ''))
-    rules = robots_rules(robots, deadline, fetch)
-    if rules is not None and not rules.can_fetch(AGENT, url):
-        raise AccessBlocked()
-    # Re-check robots at a redirect destination before retrieving that page.
     final, status, headers, data = fetch_following(url, deadline,
         lambda u,d: fetch(u,d) if u == url else checked_redirect(u,d,fetch))
     check_page_status(status)
@@ -265,10 +268,7 @@ def public_job_api_preview(parsed,url,deadline,fetch):
 
 
 def checked_redirect(url, deadline, fetch):
-    parsed, _, _, _ = destination(url)
-    robots = urlunsplit((parsed.scheme, parsed.netloc, '/robots.txt', '', ''))
-    rules = robots_rules(robots, deadline, fetch)
-    if rules is not None and not rules.can_fetch(AGENT,url): raise AccessBlocked()
+    destination(url)
     return fetch(url,deadline)
 
 

@@ -42,7 +42,7 @@ def test_all_reasoning_and_context_routes_share_one_model_without_local_quota():
             output=plan().model_dump() if body['response_format']['json_schema']['name']=='context_route' else FocusedAnswer(reply='SQL is required.',references=['f1']).model_dump()
             return httpx.Response(200,json={'usage':{'prompt_tokens':100,'completion_tokens':50,'total_tokens':150},'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(AISettings(enabled=True,api_key='openrouter-fixture'),client)
+            adapter=AIAdapter(AISettings(enabled=True,api_key='openrouter-fixture',max_output_tokens=8192),client)
             for stage in ('context_route','context_answer','focused_answer'):
                 await ModelRouter(adapter,adapter).generate(AIInput(stage=stage,context='{"facts":[]}',conversation=[{'role':'user','content':'Explain SQL'}]),Operation('alice','1',stage),current_revision=lambda:'1')
         assert len(calls)==3

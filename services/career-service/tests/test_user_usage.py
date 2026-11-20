@@ -25,7 +25,7 @@ def test_large_requests_repeat_without_local_token_admission_or_output_reduction
             calls.append(json.loads(request.content))
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{}'}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(AISettings(enabled=True,api_key='fixture'),client)
+            adapter=AIAdapter(AISettings(enabled=True,api_key='fixture',max_output_tokens=8192),client)
             request=AIInput(stage='context_answer',context=json.dumps({'facts':['x '*9000]}),
                 conversation=[{'role':'user','content':'Explain these career requirements.'}])
             payload=adapter._payload(request)

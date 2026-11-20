@@ -1,7 +1,7 @@
 """Owner-scoped public API projection; worker tokens and private context never leave it."""
 from datetime import datetime
 from pydantic import Field,ConfigDict
-from app.schemas.opportunity import Model,Category,CategoryResult,OpportunityReport,Summary,Finding
+from app.schemas.opportunity import Model,Category,CategoryResult,OpportunityReport,Summary,Finding,MAX_RESEARCH_SOURCES
 from app.schemas.analysis import DomainId,ResearchSource
 from typing import Literal
 
@@ -50,7 +50,7 @@ class OpportunityView(Model):
     research_id:DomainId|None=None
     research_version:int|None=None
     categories:dict[Category,PublicCategoryResult]=Field(default_factory=dict,max_length=5)
-    sources:list[PublicSource]=Field(default_factory=list,max_length=30)
+    sources:list[PublicSource]=Field(default_factory=list,max_length=MAX_RESEARCH_SOURCES)
     summary:Summary=Field(default_factory=Summary)
     metrics:dict[str,dict[str,int]]=Field(default_factory=dict)
     error_code:str|None=None

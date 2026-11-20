@@ -41,31 +41,38 @@ disabled for imports; request bodies/URL fields/documents are not logged.
   limit with a clear error; it is neither submitted nor silently truncated.
   Imported over-limit previews are rejected with a paste-one-description fallback.
 - URL input: at most 2,048 characters; request at most 16 KiB.
-- Website response: at most 2 MiB, standard HTTP/HTTPS ports, identity encoding,
-  at most three followed redirects, five-second network operations and robots checks.
-  A timed-out request gets one retry within the shared 25-second import deadline;
-  redirect robots checks do not multiply that retry. Access restrictions and TLS
-  certificate failures are not retried. A robots.txt that still times out after its
-  retry is treated as absent and the job page is read within the remaining deadline;
-  robots disallow rules and robots 401/403/429/5xx responses still refuse the import.
-  Timeout messages identify robots.txt versus webpage reads; certificate, TLS and
-  other connection failures have distinct safe messages. Robots access checks must
-  complete or time out before fetching HTML job pages.
-- Blocked sites: robots refusals, page 401/403/429 responses, sign-in, captcha or
-  verification pages, and the job aggregators LinkedIn, Indeed, Glassdoor and
-  JobStreet (refused before any network request) all return one message: the
-  information could not be extracted from this website; copy and paste the job
-  description instead. The Career Goal page shows that message with a paste option.
+- Website response: at most 2 MiB, standard HTTP/HTTPS ports, identity, gzip or
+  deflate encoding (decompressed output is also capped at 2 MiB; other encodings
+  and corrupt bodies are rejected), at most three followed redirects and
+  five-second network operations. A timed-out request gets one retry within the
+  shared 25-second import deadline, including at a redirect destination. Access
+  restrictions and TLS certificate failures are not retried. Certificate, TLS and
+  other connection failures have distinct safe messages.
+- User-requested fetches: an import reads one page a person pasted, so it is not a
+  crawler and does not read or apply robots.txt. Requests identify as
+  `Mozilla/5.0 (compatible; eloPreview/1.0)`, prefer HTML and send
+  `Accept-Language: en-SG,en`. Sites decide access on their own servers: their
+  refusals and challenges below always stop the import.
+- Blocked sites: page 401/403/429 responses and sign-in, captcha or verification
+  pages return: the information could not be extracted from this website; copy and
+  paste the job description instead. The job aggregators LinkedIn, Indeed,
+  Glassdoor and JobStreet, whose terms forbid automated reading, are refused before
+  any network request (including as redirect or renderer destinations) with the
+  same first sentence followed by a site-named explanation, for example: LinkedIn
+  does not allow its job listings to be read automatically; open the job on
+  LinkedIn, copy the description and paste it here. The Career Goal page shows the
+  site-specific guidance when present, with a paste option.
   Pin connections to validated globally routable DNS addresses; reject mixed
   private/public results and private/loopback/link-local/metadata destinations.
   HTTPS verifies the original hostname using TLS and never follows unchecked DNS.
-  Redirect destinations are validated and their robots rules checked before the
-  job page is requested. Never use supplied credentials or browser-session cookies. Ordinary HTML parsing does not execute scripts.
+  Redirect destinations are validated before the job page is requested. Never use supplied credentials or browser-session cookies. Ordinary HTML parsing does not execute scripts.
 - Public job API adapters: HTTPS `careers.roblox.com/jobs/{numeric_id}` links,
   `boards.greenhouse.io/{board}/jobs/{id}` and
   `job-boards.greenhouse.io/{board}/jobs/{id}` use Greenhouse's public Job Board API.
   `jobs.lever.co/{site}/{uuid}` and `jobs.eu.lever.co/{site}/{uuid}` use the matching
-  global/EU Lever Postings API. No extra keys are needed. API origins and path
+  global/EU Lever Postings API. MyCareersFuture job links
+  (`[www.]mycareersfuture.gov.sg/job/[{category}/][{slug}-]{32-hex uuid}`) use the
+  public `api.mycareersfuture.gov.sg/v2/jobs/{uuid}` job API. No extra keys are needed. API origins and path
   grammars are allowlisted; input cannot choose an arbitrary API host or path.
   Existing IP pinning, verified TLS, size/time limits and one timeout retry apply.
   Reject API redirects, malformed/mismatched jobs and unreadable/over-limit descriptions.
@@ -74,27 +81,33 @@ disabled for imports; request bodies/URL fields/documents are not logged.
   be public HTTPS destinations and are never followed. Roblox retains its exact
   employer-host/path check. Lever requires the exact job ID and hosted URL host/path.
   Keep title and available metadata, Greenhouse description or Lever description,
-  requirements/benefits lists, closing and salary-description sections. Application
-  forms/questions are excluded. Preserve the input job URL and API provenance notice.
+  requirements/benefits lists, closing and salary-description sections.
+  MyCareersFuture requires the exact UUID, a non-empty description and a returned
+  MyCareersFuture HTTPS job URL ending in that UUID; it keeps company, region,
+  employment type, position level, work arrangement, job category, minimum
+  experience, salary range, skill tags and other requirements, and omits company,
+  address and salary whenever the employer marked them hidden. Application
+  forms/questions (including MyCareersFuture screening questions) are excluded. Preserve the input job URL and API provenance notice.
   No application submissions, paid research or LLM calls are made by these previews.
   Sources: [Greenhouse](https://docs.greenhouse.io/job-board.html),
-  [Lever](https://github.com/lever/postings-api).
+  [Lever](https://github.com/lever/postings-api),
+  [MyCareersFuture](https://www.mycareersfuture.gov.sg).
 - HTTP errors distinguish authentication (401), rejected automated access (403),
   missing/expired links (404/410), request throttling (429) and upstream failures.
   A 403 does not claim sign-in is required. Recognisable HTML access verification,
   CAPTCHA and sign-in pages are rejected even with status 200. URL import errors
   offer direct paste/document actions while retaining existing drafts.
-- JavaScript fallback: a successful, robots-permitted HTML page with a short script
+- JavaScript fallback: a successful HTML page with a short script
   shell or a JavaScript-required message may request one isolated Playwright Chromium
   render. Existing JobPosting data and ordinary static pages avoid the browser.
   Access restrictions, challenges, authentication and HTTP failures do not trigger
-  rendering. The renderer revalidates destinations and robots rules, including
-  redirects, and fulfils all supported browser GET requests through the existing
+  rendering. The renderer revalidates destinations, including redirects and blocked
+  job sites, and fulfils all supported browser GET requests through the existing
   public-IP-pinned fetcher. No browser cookies, Authorization or Set-Cookie headers
   are forwarded. Original CORS and content-security headers are retained.
   Service workers, WebSockets, submissions, frames and binary assets
   are blocked. A closed proxy and disabled browser DNS prevent direct HTTP egress.
-  Limits: 24 resource/robots reads (each with at most one timeout retry), 8 MiB total
+  Limits: 64 resource reads (each with at most one timeout retry), 16 MiB total
   fetched data, 2 MiB per response/rendered HTML, at most three redirects per chain,
   one renderer per container and the original shared 25-second import budget.
   Missing browser binaries, unsupported dynamic requests or incomplete rendering

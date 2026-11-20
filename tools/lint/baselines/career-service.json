@@ -522,40 +522,10 @@
     "text": "return bool(soup.find('script')) and len(text)<200"
   },
   {
-    "path": "app/clients/job_url.py",
-    "code": "PLR2004",
-    "scope": "robots_rules",
-    "text": "if status != 200:"
-  },
-  {
-    "path": "app/clients/job_url.py",
-    "code": "PLR2004",
-    "scope": "robots_rules",
-    "text": "if status in {401,403,429} or status >= 500:"
-  },
-  {
-    "path": "app/clients/public_job_api.py",
-    "code": "PLC0415",
-    "scope": "read_preview",
-    "text": "from app.clients.job_url import destination,html_text"
-  },
-  {
     "path": "app/clients/public_job_api.py",
     "code": "PLR2004",
     "scope": "read_preview",
     "text": "if not isinstance(lists,list) or len(lists)>100:raise ValueError"
-  },
-  {
-    "path": "app/clients/public_job_api.py",
-    "code": "PLR2004",
-    "scope": "read_preview",
-    "text": "if status!=200:raise ValueError('The employer’s public job API is unavailable. Retry, paste the description or upload a document.')"
-  },
-  {
-    "path": "app/clients/public_job_api.py",
-    "code": "PLR2004",
-    "scope": "read_preview",
-    "text": "if status==404:raise ValueError('This job is no longer available in the employer’s public job board. Paste the description or upload a document.')"
   },
   {
     "path": "app/clients/research.py",
@@ -1812,18 +1782,6 @@
     "text": "if len(encoded) > 40000:"
   },
   {
-    "path": "app/workflows/interview_prep.py",
-    "code": "PLR2004",
-    "scope": "generate",
-    "text": "if len(encoded)>40000:raise AIError('context_limit')"
-  },
-  {
-    "path": "app/workflows/interview_prep.py",
-    "code": "QF009",
-    "scope": "generate",
-    "text": "if len(encoded)>40000:raise AIError('context_limit')"
-  },
-  {
     "path": "app/workflows/jd_prefetch.py",
     "code": "BLE001",
     "scope": "prefetch",
@@ -1834,12 +1792,6 @@
     "code": "BLE001",
     "scope": "prefetch.retrieve",
     "text": "except Exception:"
-  },
-  {
-    "path": "app/workflows/jd_prefetch.py",
-    "code": "QF010",
-    "scope": "prefetch",
-    "text": "result={'queries':{category:[] for category in CATEGORIES},'history':{},'evidence':{},'waits':{},'source_provider':getattr(engine.source,'provider','brave')}"
   },
   {
     "path": "app/workflows/operations.py",
@@ -1921,27 +1873,9 @@
   },
   {
     "path": "app/workflows/opportunity/engine.py",
-    "code": "PLR2004",
-    "scope": "select_evidence.size",
-    "text": "if len(serialized)>24000:return budget+1"
-  },
-  {
-    "path": "app/workflows/opportunity/engine.py",
-    "code": "QF004",
-    "scope": "OpportunityEngine.branch",
-    "text": "retryable=isinstance(error,TimeoutError) or any(v in str(error).casefold() for v in ('timed out','connect','temporarily unavailable'))"
-  },
-  {
-    "path": "app/workflows/opportunity/engine.py",
     "code": "QF004",
     "scope": "OpportunityEngine.execute",
     "text": "if cached and cached.intelligence.status=='completed' and not any(w.startswith('Overall summary unavailable;') for w in cached.intelligence.warnings) and cached.intelligence.researched_at>=job['created_at'] and all(v.status in ('completed','not_applicable') and not v.error_code and v.expires_at and v.expires_at>now() for v in cached.intelligence.categories.values()):"
-  },
-  {
-    "path": "app/workflows/opportunity/engine.py",
-    "code": "QF009",
-    "scope": "select_evidence.size",
-    "text": "if len(serialized)>24000:return budget+1"
   },
   {
     "path": "app/workflows/opportunity/engine.py",
@@ -1974,12 +1908,6 @@
     "text": "try: await thread(self.app.state.workspace_store.phase,job['owner'],job['session'],job['run'],phase, error='Research is waiting for the AI allowance and will resume automatically.' if quota else 'Research is retrying automatically.' if retry_transient else 'Research could not finish. Your goal and available findings remain saved.', error_code=code,retry_after=max(1,min(3600,error.retry_after or 61)) if quota else None) except GoalError:pass"
   },
   {
-    "path": "app/workflows/opportunity/sources.py",
-    "code": "PLC0415",
-    "scope": "retain_useful",
-    "text": "from itertools import combinations"
-  },
-  {
     "path": "app/workflows/opportunity/store.py",
     "code": "QF004",
     "scope": "OpportunityStore.start",
@@ -2002,18 +1930,6 @@
     "code": "QF010",
     "scope": "assess",
     "text": "coverage={'platform':getattr(getattr(workflow.app.state,'research_client',None),'provider','brave'),'status':'succeeded' if useful else 'no_findings','round':round-1,"
-  },
-  {
-    "path": "app/workflows/role_summary.py",
-    "code": "PLR2004",
-    "scope": "generate",
-    "text": "if len(encoded)>40000:raise AIError('context_limit')"
-  },
-  {
-    "path": "app/workflows/role_summary.py",
-    "code": "QF009",
-    "scope": "generate",
-    "text": "if len(encoded)>40000:raise AIError('context_limit')"
   },
   {
     "path": "app/workflows/structured.py",

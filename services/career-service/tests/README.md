@@ -39,7 +39,8 @@ by a live inference server or the semantic quality of generated guidance.
 Tests use synthetic text/files, fake Profile responses and mocked website
 transport/DNS. They cover PDF/DOCX/TXT parsing in real child processes,
 authentication, no-store responses, file cleanup, limits, invalid files, safe XML,
-public-address checks, TLS host verification, robots, redirects and fallbacks.
+public-address checks, TLS host verification, bounded gzip/deflate decoding, the
+absence of robots.txt reads, site-named aggregator blocks, redirects and fallbacks.
 Schema and fake-provider tests also cover structured outputs, provenance, limits,
 provider failures, cancellation and stale input. No real credentials or
 external website calls are required. JD checks cover paraphrased support, structured
@@ -143,13 +144,15 @@ is read; provider and configuration tests use synthetic keys.
 shared import deadline, redirect retry limits, safe error distinctions and separate
 URL/document worker limits using mocked public sources; no live website is required.
 
-`test_public_job_api.py` verifies Roblox, standard Greenhouse and global/EU Lever
-adapters, board/job identity, complete requirements sections, source/API provenance,
-spoofed origins, invalid responses and existing HTML/robots behaviour.
+`test_public_job_api.py` verifies Roblox, standard Greenhouse, global/EU Lever and
+MyCareersFuture adapters, board/job identity, complete requirements sections,
+employer-hidden MyCareersFuture fields, source/API provenance, spoofed origins,
+invalid responses and the ordinary HTML flow for other hosts.
 `test_job_browser.py` covers JavaScript eligibility, HTTP/challenge errors, renderer
 handoff/deadlines, secret-free process launch, process-group cleanup, pinned resource
-acquisition, robots/private-address rejection and download/request caps. Frontend
-checks verify direct paste/upload fallbacks preserve existing drafts. These tests
+acquisition, private-address and blocked-job-site rejection and download/request caps.
+Frontend checks verify direct paste/upload fallbacks preserve existing drafts and show
+site-specific guidance for blocked job sites. These tests
 use only synthetic sources and do not require installed browser binaries.
 
 For an explicit real-browser smoke check (synthetic HTML/JS, no external requests),

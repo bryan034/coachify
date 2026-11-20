@@ -7,8 +7,8 @@ workflow. Search Jobs has its own navigation tab, which also holds application t
 
 The Skills Profile page has three entry states. With no CV, profile or manual capability it is an
 upload-first screen: a drop zone, **Add skills by chat**, and **What happens next**. While the only CV is
-still processing and none is active it shows a reading screen (`skills-states.tsx`) with real progress,
-the experiences found so far and skeleton skills, plus **Open review** and **Cancel upload**. When a CV is read but its review is unfinished, the page shows **Finish your CV review** at full page width (no separate CV card; **Upload new CV** scrolls to the upload panel beside **Your CVs**, which shows `x/max` CVs from the policy, 3 by default) instead of skills: a Continue review action, the saved topic progress (read from the CV's current saved conversation, without starting one) and a **Waiting for your review** list of what unlocks. Once the
+still processing and none is active it shows a reading screen (`skills-states.tsx`) with real progress
+and the reading steps, plus **Open review** and **Cancel upload**. When a CV is read but its review is unfinished, the page shows **Finish your CV review** at full page width (no separate CV card; **Upload new CV** scrolls to the upload panel beside **Your CVs**, which shows `x/max` CVs from the policy, 3 by default) instead of skills: a Continue review action, the saved topic progress (read from the CV's current saved conversation, without starting one) and a **Waiting for your review** list of what unlocks. Once the
 active CV is reviewed, a **Your CV review is complete** banner reports the questions answered and the skills added, corrected and removed (from the CV's `review_summary`) and offers Generate roadmap and Search jobs. A skill's side panel adds **From your review** when the backend holds a note for it.
 
 The page reads the merged CV, chat and manual evidence from `GET /api/v1/cv/skills`. Scores based on assumed levels carry an estimate label.

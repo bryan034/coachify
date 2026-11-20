@@ -109,12 +109,22 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
     asyncio.run(run())
 
 
-def test_larger_model_evidence_budget_still_respects_context_character_bounds():
+def test_configured_evidence_budget_fits_exact_prefixes_within_its_token_budget():
+    import tiktoken
     sources=[ResearchSource(source_id=f's{i}',platform='other',url=f'https://example.test/{i}',
-        evidence='a'*2400) for i in range(24)]
+        evidence='alpha beta gamma '*400) for i in range(24)]
     selected=select_evidence(sources,8192)
-    assert selected and len(json.dumps([s.model_dump(mode='json') for s in selected]))<=24000
-    assert all(s.evidence in sources[i].evidence for i,s in enumerate(selected))
+    encoded=json.dumps([s.model_dump(mode='json') for s in selected])
+    assert selected and len(tiktoken.get_encoding('o200k_harmony').encode(encoded))<=8192
+    assert all(sources[i].evidence.startswith(s.evidence) for i,s in enumerate(selected))
+
+
+def test_unset_evidence_budget_sends_every_source_whole():
+    sources=[ResearchSource(source_id=f's{i}',platform='other',url=f'https://example.test/{i}',
+        evidence='alpha beta gamma '*400) for i in range(20)]
+    sources.append(ResearchSource(source_id='empty',platform='other',url='https://example.test/empty'))
+    assert OpportunitySettings().evidence_tokens is None
+    assert select_evidence(sources,None)==sources[:20]
 
 
 @pytest.mark.parametrize('kind',['opportunity_job','career_discovery'])

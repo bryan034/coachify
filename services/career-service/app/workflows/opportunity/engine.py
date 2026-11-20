@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import time
+import httpx
 import tiktoken
 from datetime import timedelta
 from typing import Annotated,TypedDict
@@ -19,27 +20,28 @@ from app.ai.contracts import AIInput
 from app.ai.recovery import recover_responses,validation_feedback
 from app.ai.waiting import quota_progress
 from app.ai.metrics import usage_observer
-from app.ai.opportunity_contracts import structure_input
+from app.ai.opportunity_contracts import structure_input,triage_input
 from app.workflows.model_waits import resume_obsolete_model_waits
-from app.clients.search_sources import SourceRateLimit,OPPORTUNITY_SOURCE_LIMIT
+from app.clients.search_sources import SourceRateLimit
 from app.repositories.goals import GoalError,now,fingerprint
 from app.schemas.analysis import ResearchContext,ResearchSource,InterviewResearch,Generation
-from app.schemas.opportunity import CATEGORIES,FIELDS,CategoryResult,OpportunityReport,Summary
+from app.schemas.opportunity import CATEGORIES,FIELDS,CategoryResult,Finding,OpportunityReport,Summary
 from .store import OpportunityStore
-from .sources import pool,retain_useful,merge_sources,category_sources
-from .queries import ACTIVITIES,planned_queries
+from .sources import pool,retain_useful,category_sources,choose_reads
+from .queries import ACTIVITIES,planned_queries,topic_map
+from .topics import CANDIDATES_PER_SEARCH,TOPIC_CATEGORIES,TOPICS,category_topics,owner,policy,settled
 from app.domain.review import MAPPING_VERSION
 from .domain import whitespace,public_opportunity,validate_claims,summary_input,dedupe_findings,supported_claims,validated_skill_levels,weighted_skills
 
 logger=logging.getLogger('uvicorn.error.opportunity')
+NOT_FOUND_WARNING='Information pertaining to this category was not found in the retrieved sources.'
 
 def select_evidence(sources,budget):
-    """Fit exact source passages fairly within the existing evidence token budget."""
+    """Fit exact source passages fairly within the evidence token budget; no budget passes every source whole."""
+    if budget is None:return [s for s in sources if s.evidence]
     encoding=tiktoken.get_encoding('o200k_harmony')
     def size(values):
         serialized=json.dumps([s.model_dump(mode='json') for s in values])
-        # Leave room within the bounded AIInput context for identity, guidance and validated findings.
-        if len(serialized)>24000:return budget+1
         return len(encoding.encode(serialized,disallowed_special=()))
     selected=[]
     for index,source in enumerate(sources):
@@ -56,6 +58,12 @@ def select_evidence(sources,budget):
             else:high=length-1
         if best is not None:selected.append(best)
     return selected
+
+
+def transient(error):
+    """Timeouts, dropped connections and provider outages are retried; configuration and access errors are not."""
+    return (isinstance(error,TimeoutError) or getattr(error,'reason',None) in ('timeout','unavailable')
+        or isinstance(error.__context__,(httpx.TimeoutException,httpx.TransportError,TimeoutError)))
 
 
 def availability_issues(settings,ai,source):
@@ -94,9 +102,9 @@ class OpportunityEngine:
         self.availability_issues=availability_issues(settings,ai,self.source)
         self.available=not self.availability_issues
         graph=StateGraph(State)
-        for name,node in [('load_context',self.load),('cache_and_plan',self.plan),('research_category',self.branch),('quality',self.quality),('summarize',self.summarize),('rate_skills',self.rate_skills),('validate_persist',self.persist)]:graph.add_node(name,node)
+        for name,node in [('load_context',self.load),('cache_and_plan',self.plan),('search_topics',self.search_topics),('research_category',self.branch),('quality',self.quality),('summarize',self.summarize),('rate_skills',self.rate_skills),('validate_persist',self.persist)]:graph.add_node(name,node)
         graph.add_edge(START,'load_context');graph.add_edge('load_context','cache_and_plan')
-        graph.add_conditional_edges('cache_and_plan',self.fanout);graph.add_edge('research_category','quality');graph.add_edge('quality','summarize');graph.add_edge('summarize','rate_skills');graph.add_edge('rate_skills','validate_persist');graph.add_edge('validate_persist',END)
+        graph.add_edge('cache_and_plan','search_topics');graph.add_conditional_edges('search_topics',self.fanout);graph.add_edge('research_category','quality');graph.add_edge('quality','summarize');graph.add_edge('summarize','rate_skills');graph.add_edge('rate_skills','validate_persist');graph.add_edge('validate_persist',END)
         saver=MongoDBSaver(db.client,db_name=db.name,checkpoint_collection_name='career_checkpoints',writes_collection_name='career_checkpoint_writes',ttl=86400)
         self.graph=graph.compile(checkpointer=saver)
         self.sweeper=asyncio.create_task(self.recover())
@@ -158,105 +166,191 @@ class OpportunityEngine:
         job=await self.job(state)
         await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':'checking_sources'}})
         if all(v['status'] in ('completed','not_applicable') for v in job['categories'].values()):return {}
-        if job['queries'] and (not job.get('prefetched') or job.get('queries_planned')):return {}
-        plan=await self.generate(job,'opportunity_plan',{'opportunity':job['public'],'recruitment_year':now().year,'previous_queries':job.get('history',{})})
-        queries=planned_queries(plan,self.settings.max_searches,job['public'])
+        planned=topic_map(job.get('queries'))
+        if planned and job.get('queries_planned'):return {}
+        plan=await self.generate(job,'opportunity_plan',{'opportunity':job['public'],'recruitment_year':now().year,'previous_queries':topic_map(job.get('history'))})
+        queries=planned_queries(plan,self.settings.topic_searches,job['public'])
         if job.get('prefetched'):
             # Successful paid prefetch queries stay first.
-            queries={category:list(dict.fromkeys([*job.get('queries',{}).get(category,[]),*queries[category]]))[:self.settings.max_searches] for category in CATEGORIES}
+            queries={topic:list(dict.fromkeys([*topic_map(job.get('history')).get(topic,[]),*queries[topic]]))[:self.settings.topic_searches] for topic in TOPICS}
         await thread(self.store.update,job['_id'],job['worker_token'],queries=queries,queries_planned=True)
+        return {}
+
+    async def search_topic(self,job_id,topic):
+        """Run a topic's next planned search within its search allowances; returns the new candidate pages."""
+        job=await self.job({'job_id':job_id})
+        history=topic_map(job.get('history')).get(topic,[])
+        queries=topic_map(job.get('queries')).get(topic) or planned_queries(None,self.settings.topic_searches,job['public'])[topic]
+        found=pool(topic_map(job.get('evidence')).get(topic,[]))
+        read=topic_map(job.get('read')).get(topic,[])
+        if len(history)>=min(self.settings.topic_searches,len(queries)) or len(read)>=policy(topic).max_urls:return []
+        if not await thread(self.store.reserve_search,job['_id'],job['worker_token'],self.settings.run_searches):return []
+        query=queries[len(history)]
+        await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':ACTIVITIES[owner(topic)]}})
+        sources=None
+        for attempt in range(self.settings.retries+1):
+            try:
+                async with self.slots:
+                    async with asyncio.timeout(self.settings.timeout_seconds):
+                        with budget_owner(job['owner']):
+                            sources=await self.source.collect_opportunity_query(ResearchContext.model_validate(job['context']),query,
+                                max_sources=CANDIDATES_PER_SEARCH)
+                break
+            except (GoalError,TimeoutError) as error:
+                if not transient(error) or attempt==self.settings.retries:raise
+                await asyncio.sleep(.5*2**attempt)
+        known={s.source_id for s in found}
+        fresh=[s for s in pool([s.model_dump(mode='json') for s in sources or []]) if s.source_id not in known]
+        await thread(self.store.update,job['_id'],job['worker_token'],**{f'history.{topic}':[*history,query],
+            f'evidence.{topic}':[s.model_dump(mode='json') for s in [*found,*fresh]]})
+        return fresh
+
+    async def search_topics(self,state):
+        """Every requested topic's first search runs concurrently before any category evaluates."""
+        job=await self.job(state)
+        requested=[c for c,v in job['categories'].items() if v['status'] in ('pending','running')]
+        history=topic_map(job.get('history'))
+        topics=[t for c in requested for t in category_topics(c) if not history.get(t)]
+        async def first(topic):
+            try:await self.search_topic(job['_id'],topic)
+            except (GoalError,TimeoutError,SourceRateLimit,ValueError) as error:
+                # The owning category retries the search and reports its outcome.
+                logger.warning('topic=%s first_search_failed exception_type=%s',topic,type(error).__name__)
+        await asyncio.gather(*(first(t) for t in topics))
         return {}
 
     def fanout(self,state):return [Send('research_category',{'job_id':state['job_id'],'category':category}) for category in CATEGORIES]
 
+    def category_evidence(self,job,category):
+        """Every candidate page found for this category's topics, plus its previously retained sources."""
+        evidence=topic_map(job.get('evidence'))
+        return pool([*job.get('retained_sources',{}).get(category,[]),*[s for t in FIELDS[category] for s in evidence.get(t,[])]])
+
+    @staticmethod
+    def shared(job,category):
+        """Findings other categories extracted for this category's topics, with their cited sources."""
+        entries=job.get('shared',{}).get(category,[])
+        return [Finding.model_validate(e['finding']) for e in entries],pool([s for e in entries for s in e['sources']])
+
+    async def triage(self,job,topics,candidates):
+        """Map each candidate page to the needed topics its title, URL, date and preview suggest it answers."""
+        context=triage_input(job['public'],topics,candidates)
+        def validate(output):
+            problems=[{'field':f'pages.{i}','issue':'unknown_page_or_topic'} for i,page in enumerate(output.pages)
+                if page.ref>=len(candidates) or not set(page.topics)<=set(topics)]
+            if problems:raise AIError('invalid_output',True,reason='provenance',fields=('pages',),violations=problems)
+        try:output=await self.generate(job,'opportunity_triage',context,validate)
+        except AIError as error:
+            if error.code not in ('invalid_output','incomplete_output'):raise
+            return None
+        flags={}
+        for page in output.pages:flags.setdefault(candidates[page.ref].source_id,set()).update(page.topics)
+        return flags
+
+    async def share(self,job,category,findings,sources):
+        """Hand findings for another category's topics to that category, with only their cited passages."""
+        by_id={s.source_id:s for s in sources};entries={}
+        for finding in findings:
+            cited=[by_id[sid].model_copy(update={'evidence':quote}).model_dump(mode='json') for sid,quote in zip(finding.source_ids,finding.quotes)]
+            for target in TOPIC_CATEGORIES[finding.field]:
+                if target!=category:entries.setdefault(target,[]).append({'finding':finding.model_dump(mode='json'),'sources':cited})
+        if entries:
+            await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},
+                {'$push':{f'shared.{target}':{'$each':values} for target,values in entries.items()}})
+
     async def branch(self,state):
         category=state['category'];job=await self.job(state);old=CategoryResult.model_validate(job['categories'][category])
         if old.status not in ('pending','running'):return {'results':{category:old.model_dump(mode='json')}}
-        started=time.monotonic();stamp=now();queries=job['queries'].get(category,[]);history=job.get('history',{}).get(category,[])
-        evidence=pool([*job.get('evidence',{}).get(category,[]),*job.get('retained_sources',{}).get(category,[])])
-        evaluated=list(job.get('evaluated',{}).get(category,[]))
+        started=time.monotonic();stamp=now();own=category_topics(category)
+        fields=[*FIELDS[category],*[t for t in TOPICS if t not in FIELDS[category]]]
+        evaluated=set(job.get('evaluated',{}).get(category,[]))
+        triaged=set(job.get('triaged',{}).get(category,[]))
+        flags={sid:set(values) for sid,values in job.get('flags',{}).get(category,{}).items()}
         findings=old.findings;rejected=0;model_calls=0;error_code=None;pending=False;round_error=None
         relevant_ids=set(job.get('relevant_sources',{}).get(category,[]))|set(old.source_ids)
+        evidence=self.category_evidence(job,category)
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}.status':'running'})
         try:
-            rounds=0 if job.get('evaluation_complete',{}).get(category) else min(self.settings.max_searches,1+self.settings.max_followups)
+            rounds=0 if job.get('evaluation_complete',{}).get(category) else self.settings.topic_searches
             for index in range(rounds):
-                # Save a paid retrieval before evaluation.
-                if index>=len(history):
-                    query=queries[index] if index<len(queries) else None
-                    if not query:break
-                    stage=ACTIVITIES[category]
-                    await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':stage}})
-                    sources=None
-                    for attempt in range(self.settings.retries+1):
+                job=await self.job(state);read=topic_map(job.get('read'))
+                others,other_sources=self.shared(job,category)
+                evidence=self.category_evidence(job,category)
+                # A backed topic leaves the search list, whichever category found its sources.
+                due=[t for t in own if not settled(t,[*findings,*others],[*evidence,*other_sources]) and len(read.get(t,[]))<policy(t).max_urls]
+                if not due:
+                    await thread(self.store.update,job['_id'],job['worker_token'],**{f'evaluation_complete.{category}':True})
+                    break
+                history=topic_map(job.get('history'))
+                searchable=[t for t in due if len(history.get(t,[]))<=index]
+                if searchable:
+                    async with asyncio.TaskGroup() as group:
+                        for topic in searchable:group.create_task(self.search_topic(job['_id'],topic))
+                    job=await self.job(state);evidence=self.category_evidence(job,category)
+                found={t:pool(topic_map(job.get('evidence')).get(t,[])) for t in due}
+                unseen=pool([s.model_dump(mode='json') for t in due for s in found[t] if s.source_id not in triaged and s.evidence])
+                if unseen:
+                    model_calls+=1
+                    result=await self.triage(job,due,unseen)
+                    # Without a usable triage, each topic reads its own top-ranked results.
+                    if result is None:result={s.source_id:{t for t in due if s.source_id in {f.source_id for f in found[t]}} for s in unseen}
+                    for sid,topics in result.items():flags.setdefault(sid,set()).update(topics)
+                    triaged.update(s.source_id for s in unseen)
+                    await thread(self.store.update,job['_id'],job['worker_token'],**{f'triaged.{category}':sorted(triaged),
+                        f'flags.{category}':{sid:sorted(values) for sid,values in flags.items()}})
+                picks,reads=choose_reads(due,found,flags,read)
+                fresh=[s for s in picks if s.source_id not in evaluated]
+                if fresh:
+                    # Keep useful passages within the model evidence allowance.
+                    selected=select_evidence(fresh,self.settings.evidence_tokens)
+                    def validate(output):
+                        if any(ref<0 or ref>=len(selected) for ref in output.relevant_refs):
+                            raise AIError('invalid_output',True,reason='provenance',fields=('relevant_refs',),violations=[{'field':'relevant_refs','issue':'source_index_out_of_range'}])
+                        return supported_claims(output,category,selected,job['public'])
+                    context=structure_input(job['public'],category,selected,findings,fields)
+                    if context['evidence']:
+                        model_calls+=1
                         try:
-                            async with self.slots:
-                                async with asyncio.timeout(self.settings.timeout_seconds):
-                                    with budget_owner(job['owner']):
-                                        sources=await self.source.collect_opportunity_query(ResearchContext.model_validate(job['context']),query)
-                            break
-                        except (GoalError,TimeoutError) as error:
-                            # Retry only transient network/server errors.
-                            retryable=isinstance(error,TimeoutError) or any(v in str(error).casefold() for v in ('timed out','connect','temporarily unavailable'))
-                            if not retryable or attempt==self.settings.retries:raise
-                            await asyncio.sleep(.5*2**attempt)
-                    history.append(query)
-                    evidence=merge_sources([s.model_dump(mode='json') for s in evidence],[s.model_dump(mode='json') for s in (sources or [])])[:(self.settings.max_searches+1)*OPPORTUNITY_SOURCE_LIMIT]
-                    await thread(self.store.update,job['_id'],job['worker_token'],**{f'evidence.{category}':[s.model_dump(mode='json') for s in evidence],f'history.{category}':history})
-                # Quota pauses resume the unfinished evaluation, not earlier successful ones.
-                if history[index] in evaluated:continue
-                if not evidence:continue
-                # Keep useful passages within the model evidence allowance.
-                selected=select_evidence(evidence,self.settings.evidence_tokens)
-                if not selected:break
-                def validate(output):
-                    if any(ref<0 or ref>=len(selected) for ref in output.relevant_refs):
-                        raise AIError('invalid_output',True,reason='provenance',fields=('relevant_refs',),violations=[{'field':'relevant_refs','issue':'source_index_out_of_range'}])
-                    return supported_claims(output,category,selected,job['public'])
-                context=structure_input(job['public'],category,selected,findings)
-                if not context['evidence']:break
-                model_calls+=1
-                try:output=await self.generate(job,'opportunity_structure',context,validate)
-                except AIError as error:
-                    # Record an unusable round and try the next search.
-                    if error.code not in ('invalid_output','incomplete_output'):raise
-                    round_error=error.code;evaluated.append(history[index])
-                    await thread(self.store.update,job['_id'],job['worker_token'],**{f'evaluated.{category}':evaluated})
-                    continue
-                relevant_ids.update(selected[ref].source_id for ref in output.relevant_refs)
-                current,discarded=supported_claims(output,category,selected,job['public']);rejected+=discarded
-                findings=dedupe_findings(category,[*findings,*current])
-                present={f.field for f in findings}
-                adequate=set(FIELDS[category])<=present and all(f.confidence in ('high','medium') and f.scope=='exact' and not f.conflict_group for f in findings)
-                query=' '.join((output.follow_up_query or (queries[index+1] if not findings and index+1<len(queries) else '')).split())[:180]
-                complete=adequate or not query or query.casefold() in {q.casefold() for q in history} or index+1>=rounds
-                if not complete:
-                    if len(queries)<=index+1:queries.append(query)
-                    else:queries[index+1]=query
-                evaluated.append(history[index])
-                # Findings, next query and evaluation cursor commit together before any next call.
+                            output=await self.generate(job,'opportunity_structure',context,validate)
+                            relevant_ids.update(selected[ref].source_id for ref in output.relevant_refs)
+                            current,discarded=supported_claims(output,category,selected,job['public']);rejected+=discarded
+                            findings=dedupe_findings(category,[*findings,*[f for f in current if f.field in FIELDS[category]]])
+                            await self.share(job,category,[f for f in current if f.field not in FIELDS[category]],selected)
+                        except AIError as error:
+                            # Record an unusable round and try the next search.
+                            if error.code not in ('invalid_output','incomplete_output'):raise
+                            round_error=error.code
+                    evaluated.update(s.source_id for s in fresh)
+                complete=index+1>=rounds
+                # Findings, triage and read cursors commit together before any next call.
                 await thread(self.store.update,job['_id'],job['worker_token'],**{
                     f'categories.{category}.findings':[f.model_dump(mode='json') for f in findings],
-                    f'evaluated.{category}':evaluated,f'evaluation_complete.{category}':complete,f'queries.{category}':queries,
-                    f'relevant_sources.{category}':list(relevant_ids)})
+                    f'evaluated.{category}':sorted(evaluated),f'triaged.{category}':sorted(triaged),
+                    f'flags.{category}':{sid:sorted(values) for sid,values in flags.items()},
+                    **{f'read.{t}':sorted({*read.get(t,[]),*ids}) for t,ids in reads.items() if ids},
+                    f'evaluation_complete.{category}':complete,f'relevant_sources.{category}':list(relevant_ids)})
                 if complete:break
-        except AIError as error:
-            error_code=error.code
-            logger.warning('category=%s error_code=%s reason=%s limit_scope=%s',category,error.code,error.reason,error.limit_scope)
-            if error.code=='rate_limited':
-                pending=True
-                await thread(self.store.update,job['_id'],job['worker_token'],next_attempt_at=now()+timedelta(seconds=max(1,min(3600,error.retry_after or 60))),limit_scope=error.limit_scope,provider=error.provider)
-        except SourceRateLimit as error:
-            error_code='source_rate_limited'
-            waits=job.get('source_waits',{}).get(category,0)
-            if waits<self.settings.retries:
-                pending=True
-                await thread(self.store.update,job['_id'],job['worker_token'],next_attempt_at=now()+timedelta(seconds=error.retry_after),provider=error.provider,limit_scope='provider',**{f'source_waits.{category}':waits+1})
-        except (GoalError,TimeoutError,ValueError) as error:
-            error_code='source_timeout' if isinstance(error,TimeoutError) else 'source_unavailable'
-            logger.warning('category=%s error_code=%s exception_type=%s',category,error_code,type(error).__name__)
+        except* (AIError,SourceRateLimit,GoalError,TimeoutError,ValueError) as group:
+            error=group.exceptions[0]
+            while isinstance(error,BaseExceptionGroup):error=error.exceptions[0]
+            if isinstance(error,AIError):
+                error_code=error.code
+                logger.warning('category=%s error_code=%s reason=%s limit_scope=%s',category,error.code,error.reason,error.limit_scope)
+                if error.code=='rate_limited':
+                    pending=True
+                    await thread(self.store.update,job['_id'],job['worker_token'],next_attempt_at=now()+timedelta(seconds=max(1,min(3600,error.retry_after or 60))),limit_scope=error.limit_scope,provider=error.provider)
+            elif isinstance(error,SourceRateLimit):
+                error_code='source_rate_limited'
+                waits=job.get('source_waits',{}).get(category,0)
+                if waits<self.settings.retries:
+                    pending=True
+                    await thread(self.store.update,job['_id'],job['worker_token'],next_attempt_at=now()+timedelta(seconds=error.retry_after),provider=error.provider,limit_scope='provider',**{f'source_waits.{category}':waits+1})
+            else:
+                error_code='source_timeout' if isinstance(error,TimeoutError) else 'source_unavailable'
+                logger.warning('category=%s error_code=%s exception_type=%s',category,error_code,type(error).__name__)
         # Every round failed validation and nothing was kept: report the round error.
         if round_error and not findings and not error_code and not pending:error_code=round_error
+        evidence=self.category_evidence(await self.job(state),category)
         findings,retained=retain_useful(category,findings,evidence,relevant_ids)
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'retained_sources.{category}':[s.model_dump(mode='json') for s in retained]})
         outcome=None if pending else 'validation_failed' if error_code in ('invalid_output','incomplete_output') else 'provider_failed' if error_code else 'findings_found' if findings else 'information_not_found' if relevant_ids else 'no_relevant_sources'
@@ -264,13 +358,14 @@ class OpportunityEngine:
         status='pending' if pending else 'partial' if error_code and findings else 'failed' if error_code else 'completed'
         warnings=[]
         if rejected:warnings.append('Unsupported claims were excluded; only independently validated citations are shown.')
-        if not findings and not error_code:warnings.append('Information pertaining to this category was not found in the retrieved sources.')
+        if not findings and not error_code:warnings.append(NOT_FOUND_WARNING)
         if any(f.confidence in ('low','insufficient_evidence') for f in findings):warnings.append('Some findings have limited confidence; inspect their sources before relying on them.')
         if any(f.scope!='exact' for f in findings):warnings.append('Some reports concern related roles, locations or employment types.')
         if any(f.conflict_group for f in findings):warnings.append('Conflicting reports are preserved separately; figures are not averaged.')
+        history=topic_map((await self.job(state)).get('history'))
         result=CategoryResult(status=status,outcome=outcome,source_ids=[s.source_id for s in retained],findings=findings,missing_fields=missing,warnings=warnings,error_code=error_code,
             researched_at=stamp,expires_at=stamp+timedelta(hours=self.settings.incomplete_hours if missing or error_code else self.settings.freshness_hours),
-            searches=len(history),model_calls=min(20,old.model_calls+model_calls),latency_ms=int((time.monotonic()-started)*1000))
+            searches=min(50,sum(len(history.get(t,[])) for t in own)),model_calls=min(20,old.model_calls+model_calls),latency_ms=int((time.monotonic()-started)*1000))
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}':result.model_dump(mode='json')})
         logger.info('category=%s status=%s searches=%s model_calls=%s latency_ms=%s',category,status,result.searches,result.model_calls,result.latency_ms)
         return {'results':{category:result.model_dump(mode='json')}}
@@ -279,6 +374,18 @@ class OpportunityEngine:
         # Revalidate persisted branch values.
         job=await self.job(state);categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
         for key,result in categories.items():
+            others,other_sources=self.shared(job,key)
+            if others:
+                # Findings another category read for this one's topics join its own, under the same per-topic limits.
+                saved=pool([*job.get('retained_sources',{}).get(key,[]),*[s.model_dump(mode='json') for s in other_sources]])
+                kept,retained=retain_useful(key,dedupe_findings(key,[*result.findings,*others]),saved,result.source_ids)
+                job.setdefault('retained_sources',{})[key]=[s.model_dump(mode='json') for s in retained]
+                await thread(self.store.update,job['_id'],job['worker_token'],**{f'retained_sources.{key}':job['retained_sources'][key]})
+                result.findings=kept;result.source_ids=[s.source_id for s in retained]
+                if kept and result.outcome in ('information_not_found','no_relevant_sources'):
+                    result.outcome='findings_found'
+                    result.warnings=[w for w in result.warnings if w!=NOT_FOUND_WARNING]
+                if kept and result.status=='failed':result.status='partial'
             # Check each category against its own saved sources only.
             sources=category_sources(job,key)
             valid=[f for f in result.findings if all(s in sources and whitespace(q) in whitespace(sources[s].evidence or '') for s,q in zip(f.source_ids,f.quotes))]

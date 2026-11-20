@@ -86,6 +86,6 @@ def test_edit_context_omits_evidence_and_record_ids_and_does_not_lose_change_val
     text=json.dumps(context)
     assert 'SQL required.' not in text and 'requirement_id' not in text and 'item_id' not in text
     request=AIInput(stage='goal_edit',context=text,conversation=[{'role':'user','content':'London'}])
-    payload=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),None)._payload(request)
+    payload=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture',max_output_tokens=8192),None)._payload(request)
     assert payload['max_tokens']==2048
     assert json.loads(payload['messages'][1]['content'])['context']['pending_edit']['question']=='Where?'

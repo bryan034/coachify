@@ -173,31 +173,9 @@
 .skills-run-mark.is-now{border:6px solid var(--ready-ink,#116149);background:var(--white)}
 .skills-run-mark.is-todo{border:1.5px solid #64748b}
 .skills-run-note{margin:20px 0 0;padding-top:16px;border-top:1px solid rgb(71 85 105 / .14);color:var(--slate)}
-.skills-run-grid{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
-.skills-run-found{flex:1 1 380px;min-width:0;padding:20px 22px 12px;border-radius:20px}
-.skills-run-found>div{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px}
-.skills-run-found h2, .skills-run-skills h2{font-size:18px;font-weight:600}
-.skills-run-found>div span, .skills-run-found>p{font-size:13px;color:var(--slate)}
-.skills-run-found>p{margin:0 0 10px}
-.skills-run-found ul{list-style:none;margin:0;padding:0}
-.skills-run-found li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;align-items:start;padding:12px 0;border-top:1px solid rgb(71 85 105 / .14)}
-.skills-run-found li>svg{margin-top:2px}
-.skills-run-found li strong{display:block;font-weight:600}
-.skills-run-found li>span>span{font-size:13px;color:var(--slate)}
-.skills-run-found li.is-pending>span:last-child{display:flex;flex-direction:column;gap:6px;padding-top:4px}
-.skills-run-dash{width:18px;height:18px;margin-top:2px;border-radius:50%;border:1.5px dashed #64748b}
-.skills-run-skills{flex:999 1 560px;min-width:0;padding:0;overflow:hidden;border-radius:20px}
-.skills-run-skills>div:first-child{padding:18px 20px}
-.skills-run-skills>div:first-child p{margin:0;font-size:13px;color:var(--slate)}
-.skills-run-row{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;padding:16px 20px;border-top:1px solid rgb(71 85 105 / .14)}
-.skills-run-row>span{display:flex;flex-wrap:wrap;gap:8px}
-.skills-sk{display:block;height:12px;border-radius:8px;background:linear-gradient(90deg,var(--haze-soft) 0%,var(--snow) 50%,var(--haze-soft) 100%);background-size:200% 100%}
-.skills-sk.is-chip{height:32px;border-radius:999px}
-@keyframes skills-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 @keyframes skills-slide{from{transform:translateX(-100%)}to{transform:translateX(185%)}}
-@media (prefers-reduced-motion:no-preference){.skills-sk{animation:skills-shimmer 2.4s linear infinite}}
 @media (prefers-reduced-motion:reduce){.skills-run-track.is-indeterminate span{animation:none}}
-@media (max-width:700px){.skills-run-row{grid-template-columns:minmax(0,1fr);gap:10px}.skills-run-body{padding:18px}.cv-upload-panel .skills-dropzone{padding:40px 20px;margin:14px}}
+@media (max-width:700px){.skills-run-body{padding:18px}.cv-upload-panel .skills-dropzone{padding:40px 20px;margin:14px}}
 
 /* Review complete: say so, then point at what the profile unlocks. */
 

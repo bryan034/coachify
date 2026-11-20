@@ -144,7 +144,7 @@ def test_previous_intro_stays_display_only_after_guidance_copy_changes():
 def model_settings(**updates):
     return AISettings(**{'enabled':True,'model':'synthetic','api_key':'synthetic',
         'base_url':'https://example.test/v1','response_mode':'json_schema_strict',
-        'context_tokens':16384,**updates})
+        'context_tokens':16384,'max_output_tokens':8192,**updates})
 
 
 @pytest.mark.parametrize('context_tokens',[16384,65536])

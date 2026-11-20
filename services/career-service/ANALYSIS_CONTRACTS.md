@@ -232,8 +232,8 @@ extra proposal call within its original operation deadline. Prompt/schema output
 | `CAREER_LLM_MODEL` | the configured `OPENROUTER_MODEL`; one explicit model override shared by every stage |
 | `CAREER_LLM_BASE_URL` | OpenRouter by default; HTTPS only (HTTP only with `CAREER_LLM_ALLOW_HTTP=true` and `APP_ENV=development` for synthetic fixtures); no credentials/query/fragment |
 | `CAREER_LLM_RESPONSE_MODE` | `json_schema_strict` by default; `json_object` puts the schema in the prompt for providers without native schema support (Discovery then reports `unsupported_structured_output`); backend validation always applies |
-| `AI_MAX_OUTPUT_TOKENS` | 8192; overall completion ceiling; JD extraction uses up to 8192 and identification up to 4096; existing smaller stage caps still apply |
-| `AI_CONTEXT_TOKENS` | 65536 when unset; public template is 32768; match the actual model context |
+| `AI_MAX_OUTPUT_TOKENS` | Blank: each stage's own completion cap applies (JD extraction 8192, identification 4096, chat 1024, unlisted stages 8192). When set (at least 128): can only lower those caps |
+| `AI_CONTEXT_TOKENS` | Blank: requests are sent whole and the provider enforces its context window. When set (at least 2048): local input admission; match the actual model context |
 | `AI_TIMEOUT_SECONDS`, `AI_RETRIES` | 60-second model-call deadline (maximum 60), one bounded 5xx retry |
 | `CAREER_LLM_TOKEN_PARAMETER` | `max_tokens`; select `max_completion_tokens` for compatible models requiring it |
 | Legacy provider/model switches | `CAREER_LLM_PROVIDER`, `CAREER_LOCAL_TIMEOUT_SECONDS`, `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MODE`, `AI_TOKEN_PARAMETER`, `GEMINI_ENABLED`, `GEMINI_MODEL`, `OPPORTUNITY_GEMINI_MODEL` (obsolete) ignored by production reasoning |
@@ -313,8 +313,8 @@ There is no application-enforced requests-per-minute or tokens-per-minute limit.
 The model provider quotas, context validation and task output ceilings remain enforced.
 The Docker image bundles its tokenizer cache to avoid runtime downloads.
 
-Task output caps remain bounded by AI_MAX_OUTPUT_TOKENS: chat 1024, interview synthesis
-2048, JD identification 4096 and JD extraction 8192. Timeouts, context/input validation, bounded
+Task output caps are chat 1024, interview synthesis 2048, JD identification 4096 and JD
+extraction 8192; a set AI_MAX_OUTPUT_TOKENS can only lower them. Timeouts, context/input validation, bounded
 5xx/correction retries, ownership, authentication, stale-result protection and parser
 resource bounds remain. Numeric provider usage logs contain no private text. Graph
 memory does not create provider-side memory; nodes send relevant bounded context.

@@ -111,7 +111,10 @@ it('shows a page-level reading screen with real progress while the only CV is pr
  expect(screen.getByRole('progressbar',{name:'Reading your CV'})).toHaveAttribute('aria-valuenow','55');
  expect(screen.getByText('Finding your experiences',{selector:'strong'}).closest('li')).toHaveAttribute('aria-current','step');
  expect(screen.getByText(/You can leave this page/)).toBeVisible();
- expect(await screen.findByText('Team dashboard',{selector:'strong'})).toBeVisible();
+ expect(await screen.findByText('1 found so far')).toBeVisible();
+ expect(screen.queryByText('Team dashboard')).not.toBeInTheDocument();
+ expect(screen.queryByRole('heading',{name:'Experiences found so far'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('heading',{name:'Skills by category'})).not.toBeInTheDocument();
  expect(screen.getByRole('heading',{name:'Upload your CV'})).toBeInTheDocument();
 });
 

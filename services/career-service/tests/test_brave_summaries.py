@@ -52,7 +52,7 @@ def test_summary_rich_synthesis_stays_below_4000_input_tokens_and_keeps_claims()
     text=('Public reports describe technical interviews, SQL assessments and coding exercises. '*40)[:2400]
     sources=[ResearchSource(source_id=f's{i}',platform='other',url=f'https://example.test/{i}',evidence=(f'Interview {i} SQL coding assessment. '*30)[:600]) for i in range(6)]
     summaries=[BraveAnswer(summary_id=f'a{i}',text=text,source_ids=[s.source_id for s in sources],claims=[AnswerClaim(text=text[j:j+500],source_ids=['s0']) for j in (0,500,1000,1500)]) for i in range(2)]
-    adapter=AIAdapter(AISettings(enabled=True,model='openai/gpt-4o-mini',api_key='fixture'),None)
+    adapter=AIAdapter(AISettings(enabled=True,model='openai/gpt-4o-mini',api_key='fixture',max_output_tokens=8192),None)
     payload=adapter._payload(AIInput(stage='interview_synthesis',public_context={'role':'Analyst','field':'Data'},sources=sources,summaries=summaries))
     assert input_tokens(payload)<=4000 and payload['max_tokens']==2048
     sent=json.loads(payload['messages'][1]['content'])

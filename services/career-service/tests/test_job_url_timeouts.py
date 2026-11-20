@@ -13,7 +13,7 @@ def public_dns(host,port,**kwargs):return [(2,1,6,'',('93.184.216.34',port))]
 
 
 @pytest.mark.parametrize('failure,expected',[
-    (TimeoutError('private diagnostic'),'timed out while checking its robots.txt'),
+    (TimeoutError('private diagnostic'),'timed out while reading the webpage'),
     (ssl.SSLCertVerificationError('private diagnostic'),'TLS certificate could not be verified'),
     (ssl.SSLError('private diagnostic'),'secure TLS connection'),
     (ConnectionResetError('private diagnostic'),'could not be reached'),
@@ -22,7 +22,7 @@ def test_network_errors_are_distinct_and_sanitized(failure,expected):
     with patch('socket.getaddrinfo',public_dns),patch('socket.create_connection'),patch('ssl.create_default_context'),patch('http.client.HTTPConnection') as connection:
         connection.return_value.getresponse.side_effect=failure
         with pytest.raises(ValueError,match=expected) as raised:
-            job_url.request_page('https://example.test/robots.txt',job_url.time.monotonic()+60)
+            job_url.request_page('https://example.test/job',job_url.time.monotonic()+60)
         assert 'private diagnostic' not in str(raised.value)
         connection.return_value.close.assert_called_once()
         if isinstance(failure,TimeoutError):assert isinstance(raised.value,job_url.PageTimeout)
@@ -45,64 +45,59 @@ def test_five_second_network_cap_and_closed_response_body():
         assert all(call.args[0]<=5 for call in tls.return_value.wrap_socket.return_value.settimeout.call_args_list)
 
 
-def test_robots_timeout_retries_once_then_fetches_job():
+def test_page_timeout_retries_once_then_reads_job():
     seen=[]
     def fetch(url,deadline):
         seen.append(url)
         if len(seen)==1:raise job_url.PageTimeout('timed out')
-        if url.endswith('/robots.txt'):return 200,{},b'User-agent: *\nAllow: /'
         return 200,{'content-type':'text/html'},b'<main>Analyst requires SQL.</main>'
     with patch('socket.getaddrinfo',public_dns):result=job_url.import_url('https://example.test/job',fetch)
     assert result['text']=='Analyst requires SQL.'
-    assert seen==['https://example.test/robots.txt']*2+['https://example.test/job']
+    assert seen==['https://example.test/job']*2
 
 
-def test_unresponsive_robots_is_unknown_so_the_job_page_is_still_read():
+def test_user_requested_pages_never_consult_robots_txt():
     seen=[]
     def fetch(url,deadline):
         seen.append(url)
-        if url.endswith('/robots.txt'):raise job_url.PageTimeout('timed out')
+        if url.endswith('/robots.txt'):pytest.fail('robots.txt must not be requested')
         return 200,{'content-type':'text/html'},b'<main>Analyst requires SQL.</main>'
     with patch('socket.getaddrinfo',public_dns):result=job_url.import_url('https://example.test/job',fetch)
-    assert result['text']=='Analyst requires SQL.'
-    assert seen==['https://example.test/robots.txt']*2+['https://example.test/job']
+    assert result['text']=='Analyst requires SQL.' and seen==['https://example.test/job']
 
 
-def test_robots_and_page_timeouts_still_fail_as_a_timeout():
+def test_repeated_page_timeouts_fail_as_a_timeout():
     seen=[]
     def fetch(url,deadline):seen.append(url);raise job_url.PageTimeout('timed out')
     with patch('socket.getaddrinfo',public_dns),pytest.raises(job_url.PageTimeout):
         job_url.import_url('https://example.test/job',fetch)
-    assert seen==['https://example.test/robots.txt']*2+['https://example.test/job']*2
+    assert seen==['https://example.test/job']*2
 
 
-@pytest.mark.parametrize('status',[401,403,429,503])
-def test_robots_refusals_block_without_downloading_job(status):
+@pytest.mark.parametrize('status',[401,403,429])
+def test_server_refusals_block_with_the_paste_fallback(status):
     seen=[]
     def fetch(url,deadline):seen.append(url);return status,{},b''
     with patch('socket.getaddrinfo',public_dns),pytest.raises(job_url.AccessBlocked,match='Copy and paste the job description'):
         job_url.import_url('https://example.test/job',fetch)
-    assert seen==['https://example.test/robots.txt']
+    assert seen==['https://example.test/job']
 
 
-@pytest.mark.parametrize('url',['https://www.linkedin.com/jobs/view/1','https://sg.indeed.com/viewjob?jk=1',
-    'https://www.glassdoor.sg/job-listing/x','https://www.jobstreet.com.sg/job/1','https://LINKEDIN.COM/jobs/1'])
-def test_known_job_aggregators_are_blocked_before_any_network_request(url):
-    with patch('socket.getaddrinfo') as dns,pytest.raises(job_url.AccessBlocked):
+@pytest.mark.parametrize('url,site',[('https://www.linkedin.com/jobs/view/1','LinkedIn'),('https://sg.indeed.com/viewjob?jk=1','Indeed'),
+    ('https://www.glassdoor.sg/job-listing/x','Glassdoor'),('https://www.jobstreet.com.sg/job/1','JobStreet'),
+    ('https://sg.jobstreet.com/job/1','JobStreet'),('https://LINKEDIN.COM/jobs/1','LinkedIn')])
+def test_known_job_aggregators_are_blocked_before_any_network_request(url,site):
+    with patch('socket.getaddrinfo') as dns,pytest.raises(job_url.AccessBlocked) as blocked:
         job_url.import_url(url,lambda *args:pytest.fail('no request expected'))
     dns.assert_not_called()
+    message=str(blocked.value)
+    assert message.startswith(job_url.BLOCKED_PREFIX)
+    assert f'{site} does not allow its job listings to be read automatically' in message
+    assert f'Open the job on {site}, copy the description and paste it here.' in message
 
 
 def test_lookalike_hosts_are_not_treated_as_aggregators():
     assert not job_url.blocked_host('notlinkedin.com') and not job_url.blocked_host('indeed.com.example.test')
-
-
-def test_browser_treats_unresponsive_robots_as_unknown():
-    from app.clients.job_browser import BrowserAcquisition
-    def fetch(url,deadline):raise job_url.PageTimeout('timed out')
-    acquisition=BrowserAcquisition(job_url.time.monotonic()+25,fetch)
-    with patch('socket.getaddrinfo',public_dns):acquisition.allowed('https://example.test/job')
-    assert acquisition.robots=={'https://example.test':None} and acquisition.requests==1
 
 
 def test_access_restrictions_and_certificate_failures_are_not_retried():
@@ -114,7 +109,7 @@ def test_access_restrictions_and_certificate_failures_are_not_retried():
             return 403,{},b''
         with patch('socket.getaddrinfo',public_dns),pytest.raises(ValueError):
             job_url.import_url('https://example.test/job',fetch)
-        assert seen==['https://example.test/robots.txt']
+        assert seen==['https://example.test/job']
 
 
 def test_retry_cannot_exceed_the_overall_import_deadline():
@@ -128,18 +123,17 @@ def test_retry_cannot_exceed_the_overall_import_deadline():
     assert len(seen)==1
 
 
-def test_redirect_robot_timeouts_do_not_multiply_nested_retries():
+def test_redirect_destination_timeouts_get_one_retry():
     seen=[]
     def fetch(url,deadline):
         seen.append(url)
-        if url=='https://example.test/robots.txt':return 404,{},b''
         if url=='https://example.test/job':return 302,{'location':'https://other.test/job'},b''
-        if url=='https://other.test/robots.txt':raise job_url.PageTimeout('timed out')
         assert url=='https://other.test/job'
+        if seen.count(url)==1:raise job_url.PageTimeout('timed out')
         return 200,{'content-type':'text/html'},b'<main>Analyst requires SQL.</main>'
     with patch('socket.getaddrinfo',public_dns):result=job_url.import_url('https://example.test/job',fetch)
     assert result['source_url']=='https://other.test/job'
-    assert seen.count('https://other.test/robots.txt')==2 and len(seen)==5
+    assert seen==['https://example.test/job','https://other.test/job','https://other.test/job']
 
 
 @pytest.mark.parametrize('kind,expected',[('url',URL_WORKER_TIMEOUT),('document',DOCUMENT_WORKER_TIMEOUT)])

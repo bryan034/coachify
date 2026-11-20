@@ -329,10 +329,13 @@ Duplicate-finding regressions cover different summaries sharing one extract ID, 
 identity while merging corroborating citations, and quality-stage cleanup of persisted
 duplicates before final report validation.
 
-Opportunity-source limit checks verify that Brave receives a three-URL limit, the
-adapter retains no more than three results even if the provider returns extras, and
-weak coverage can replace initial sources through bounded follow-ups while the
-final report retains at most three useful sources per category.
+Opportunity-source limit checks verify per-topic research: triage sees only page
+metadata and pages it rejects are never read, each topic reads no more than its
+per-search and total allowances, a factual topic backed by two different sites is not
+searched again, a page read for one category can back another category's topic, an
+unusable triage falls back to each topic's own top results, each topic keeps at most
+its source limit with only cited passages, and a run never exceeds
+`OPPORTUNITY_RUN_SEARCHES`.
 
 Direct-structuring regressions accept faithful paraphrasing without a second model
 pass, preserve the model's exact final wording in storage/chat, and still reject

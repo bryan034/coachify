@@ -6,9 +6,10 @@ from app.ai.recovery import issues_for
 from urllib.parse import urlsplit,urlunsplit
 from datetime import timedelta
 from app.schemas.analysis import ResearchContext,InterviewSkill,InterviewProcess,InterviewStage,InterviewEvidence
-from app.schemas.opportunity import Finding,FIELDS,CATEGORIES,plain_text
+from app.schemas.opportunity import Finding,CATEGORIES,plain_text
 from app.repositories.goals import fingerprint,now
 from app.ai.adapter import AIError
+from .topics import TOPICS
 
 
 def public_job_url(value):
@@ -80,7 +81,7 @@ def numeric_support(value,evidence,index):
 def validate_claims(output,category,sources,public=None):
     found=[];stamp=now()
     for index,item in enumerate(output.findings):
-        if item.field not in FIELDS[category]:raise citation_error(index,'field','field_not_allowed')
+        if item.field not in TOPICS:raise citation_error(index,'field','field_not_allowed')
         if len(item.refs)!=len(item.quotes):raise citation_error(index,'refs','quote_reference_count_mismatch')
         if len(set(item.refs))!=len(item.refs):raise citation_error(index,'refs','duplicate_source_reference')
         for ref,quote in zip(item.refs,item.quotes):

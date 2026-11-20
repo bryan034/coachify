@@ -61,17 +61,21 @@ class Finding(Model):
         if self.round_name is not None and self.round_number is None:raise ValueError('A round name needs its round number.')
         return self
 
+# Each topic keeps at most five sources, so a category cites at most this many pages.
+MAX_CATEGORY_SOURCES=40
+MAX_RESEARCH_SOURCES=100
+
 class CategoryResult(Model):
     status:Literal['pending','running','completed','partial','failed','not_applicable']='pending'
     outcome:Literal['findings_found','no_relevant_sources','information_not_found','validation_failed','provider_failed']|None=None
     findings:list[Finding]=Field(default_factory=list,max_length=20)
-    source_ids:list[str]=Field(default_factory=list,max_length=3)
+    source_ids:list[str]=Field(default_factory=list,max_length=MAX_CATEGORY_SOURCES)
     missing_fields:list[str]=Field(default_factory=list,max_length=20)
     warnings:list[Text]=Field(default_factory=list,max_length=10)
     error_code:str|None=None
     researched_at:datetime|None=None
     expires_at:datetime|None=None
-    searches:int=Field(default=0,ge=0,le=12)
+    searches:int=Field(default=0,ge=0,le=50)
     model_calls:int=Field(default=0,ge=0)
     latency_ms:int=Field(default=0,ge=0)
     estimated_cost_usd:float|None=Field(default=None,ge=0)

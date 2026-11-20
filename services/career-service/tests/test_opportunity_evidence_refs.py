@@ -134,7 +134,7 @@ def test_adapter_and_bounded_repair_use_the_same_catalogue_and_preserve_safe_fee
         calls=[]
         def handler(request):
             calls.append(json.loads(request.content))
-            output={'findings':[claim(evidence_ref=99 if len(calls)==1 else 0)],'relevant_refs':[0],'follow_up_query':None}
+            output={'findings':[claim(evidence_ref=99 if len(calls)==1 else 0)],'relevant_refs':[0]}
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             engine=object.__new__(OpportunityEngine)
@@ -153,7 +153,7 @@ def test_adapter_and_bounded_repair_use_the_same_catalogue_and_preserve_safe_fee
 
 def test_passage_catalogue_is_never_silently_truncated_to_fit_context():
     context=structure_input({},'internship_insights',[source(text='資料 '*1400)])
-    adapter=AIAdapter(AISettings(context_tokens=8192),None)
+    adapter=AIAdapter(AISettings(context_tokens=8192,max_output_tokens=8192),None)
     with pytest.raises(AIError,match='context_limit'):
         adapter._payload(AIInput(stage='opportunity_structure',context=json.dumps(context,ensure_ascii=False)))
 
@@ -169,7 +169,7 @@ def test_referenced_provider_findings_persist_and_remain_readable_through_existi
         payload=json.loads(request.content);context=json.loads(payload['messages'][1]['content']);calls.append(context)
         passage=context['evidence'][0]
         output={'findings':[claim(field=context['allowed_fields'][0],value=passage['text'],evidence_ref=passage['ref'])],
-                'relevant_refs':[passage['source_ref']],'follow_up_query':None}
+                'relevant_refs':[passage['source_ref']]}
         return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
     transport=httpx.AsyncClient(transport=httpx.MockTransport(handler))
     adapter=AIAdapter(AISettings(enabled=True,api_key='synthetic'),transport)
@@ -180,13 +180,13 @@ def test_referenced_provider_findings_persist_and_remain_readable_through_existi
     try:
         assert ingest(opportunity_flow).status_code==202
         workspace,result,path=research(opportunity_flow)
-        assert result['status']=='completed' and len(calls)==5
+        assert result['status']=='completed' and len(calls)==2*len(CATEGORIES)
         assert all(category['findings'] for category in result['categories'].values())
         finding=result['categories']['internship_insights']['findings'][0]
         assert 'quotes' not in finding
         evidence=client.get(path+'/findings/'+finding['finding_id']+'/evidence?research_id='+workspace['research_id'],headers=headers())
         assert evidence.status_code==200
-        assert evidence.json()['quotes']==['Example interns report SGD 1500 per month.']
+        assert set(evidence.json()['quotes'])=={'Example interns report SGD 1500 per month.'}
         saved=db.interview_research.find_one({'intelligence.categories.internship_insights.findings.finding_id':finding['finding_id']})
         assert saved['intelligence']['categories']['internship_insights']['findings'][0]['quotes']==evidence.json()['quotes']
         historical=client.get(path+'?research_id='+workspace['research_id'],headers=headers())

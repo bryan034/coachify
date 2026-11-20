@@ -38,6 +38,7 @@ def test_sdk_model_switch_preserves_request_shape_and_does_not_own_http_client(m
     monkeypatch.setenv('CAREER_LLM_BASE_URL','https://compatible.example.test/v1')
     monkeypatch.setenv('CAREER_LLM_MODEL','synthetic-other-model')
     monkeypatch.setenv('CAREER_LLM_TOKEN_PARAMETER',parameter)
+    monkeypatch.setenv('AI_MAX_OUTPUT_TOKENS','8192')
     async def run():
         calls=[]
         def respond(request):

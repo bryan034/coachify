@@ -17,7 +17,7 @@ def settings(**values):
 
 @pytest.mark.parametrize('stage',['jd_extraction','jd_chat','jd_edit','chat'])
 def test_model_tasks_use_bounded_output(stage):
-    adapter=AIAdapter(AISettings(),None)
+    adapter=AIAdapter(AISettings(max_output_tokens=8192),None)
     request=AIInput(stage=stage,source_text='SQL required') if stage=='jd_extraction' else AIInput(
         stage=stage,context='{}',conversation=[{'role':'user','content':'Explain SQL'}])
     payload=adapter._payload(request)

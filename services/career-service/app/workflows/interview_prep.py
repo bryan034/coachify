@@ -78,7 +78,6 @@ async def generate(request,account,goal,record):
     if gaps:
         context=jsonable_encoder({'goal':goal_catalogue(goal),'research':research_catalogue(findings),'gaps':gaps})
         encoded=json.dumps(context,separators=(',',':'),ensure_ascii=False)
-        if len(encoded)>40000:raise AIError('context_limit')
         revision=f'{goal.id}:{goal.version}'
         async def current():
             state=await thread(request.app.state.goal_store.current,account)

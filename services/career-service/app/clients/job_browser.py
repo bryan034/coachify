@@ -1,11 +1,11 @@
 """Disposable JavaScript rendering, with every network read through the pinned fetcher."""
 import time
 import tempfile
-from urllib.parse import urlsplit,urlunsplit
+from urllib.parse import urlsplit
 from app.clients import job_url
 
-MAX_REQUESTS=24
-MAX_TOTAL_BYTES=8*1024*1024
+MAX_REQUESTS=64
+MAX_TOTAL_BYTES=16*1024*1024
 
 
 class BrowserAcquisition:
@@ -14,7 +14,6 @@ class BrowserAcquisition:
         self.fetch=fetch
         self.requests=0
         self.bytes=0
-        self.robots={}
         self.failure=None
 
     def read(self,url,deadline=None):
@@ -25,16 +24,6 @@ class BrowserAcquisition:
         self.bytes+=len(data)
         if self.bytes>MAX_TOTAL_BYTES:raise ValueError('This page is too large to render. Paste the description or upload a document.')
         return status,headers,data
-
-    def allowed(self,url):
-        parsed,*_=job_url.destination(url)
-        origin=urlunsplit((parsed.scheme,parsed.netloc,'','',''))
-        if origin not in self.robots:
-            # Redirect robots files go through the existing bounded public fetcher.
-            self.robots[origin]=job_url.robots_rules(origin+'/robots.txt',self.deadline,self.read)
-        rules=self.robots[origin]
-        if rules is not None and not rules.can_fetch(job_url.AGENT,url):
-            raise job_url.AccessBlocked()
 
     def route(self,route):
         request=route.request
@@ -49,7 +38,7 @@ class BrowserAcquisition:
             while previous is not None:
                 redirects+=1;previous=previous.redirected_from
                 if redirects>3:raise ValueError('The website redirects too many times. Paste the description instead.')
-            self.allowed(request.url)
+            job_url.destination(request.url)
             status,headers,data=self.read(request.url)
             if request.is_navigation_request():
                 if status not in (301,302,303,307,308):

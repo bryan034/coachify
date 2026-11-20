@@ -6,6 +6,7 @@ import pytest
 from app.ai.adapter import AIError
 from app.ai.opportunity_contracts import StructuredFindings
 from app.schemas.analysis import ResearchSource
+from app.schemas.opportunity import CATEGORIES
 from app.workflows.opportunity.domain import validate_claims,supported_claims
 from tests.test_workspace import ingest,headers,BASE,wait
 from tests.test_opportunity import opportunity_flow,research
@@ -162,9 +163,9 @@ def test_structured_wording_is_saved_without_another_model_pass(opportunity_flow
         return result
     primary.generate=generate;ingest(flow);_,result,_=research(flow)
     assert result['categories']['interview_intelligence']['findings'][0]['value']==text
-    assert calls.count('opportunity_structure')==5
+    assert calls.count('opportunity_structure')==2*len(CATEGORIES)
     job=flow[1].research_contexts.find_one({'kind':'opportunity_job'})
-    assert set(job['metrics'])=={'opportunity_plan','opportunity_structure','opportunity_skill_levels'}
+    assert set(job['metrics'])=={'opportunity_plan','opportunity_triage','opportunity_structure','opportunity_skill_levels'}
 
 
 def test_empty_retrieval_is_completed_with_category_not_found_notice(opportunity_flow):

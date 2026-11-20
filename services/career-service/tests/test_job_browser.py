@@ -17,19 +17,19 @@ SHELL=b'<html><body><div id="root"></div><script src="/app.js"></script><noscrip
 def public_dns(host,port,**kwargs):return [(2,1,6,'',('93.184.216.34',port))]
 
 
-def test_javascript_shell_requests_renderer_only_after_successful_robots_and_html():
+def test_javascript_shell_requests_renderer_only_after_successful_html():
     seen=[]
     def fetch(url,deadline):
         seen.append(url)
-        return (404,{},b'') if url.endswith('/robots.txt') else (200,{'content-type':'text/html'},SHELL)
+        return 200,{'content-type':'text/html'},SHELL
     with patch('socket.getaddrinfo',public_dns),pytest.raises(job_url.RenderRequired) as error:
         job_url.import_url(URL,fetch)
-    assert error.value.url==URL and seen==['https://synthetic.test/robots.txt',URL]
+    assert error.value.url==URL and seen==[URL]
 
 
 @pytest.mark.parametrize('status,message',[(401,'could not be extracted'),(403,'could not be extracted'),(404,'no longer available'),(410,'no longer available'),(429,'could not be extracted'),(503,'temporarily unavailable')])
 def test_http_failures_are_precise_and_never_request_browser(status,message):
-    def fetch(url,deadline):return (404,{},b'') if url.endswith('/robots.txt') else (status,{'content-type':'text/html'},SHELL)
+    def fetch(url,deadline):return status,{'content-type':'text/html'},SHELL
     with patch('socket.getaddrinfo',public_dns),pytest.raises(ValueError,match=message) as error:
         job_url.import_url(URL,fetch)
     assert not isinstance(error.value,job_url.RenderRequired)
@@ -82,12 +82,11 @@ def test_browser_network_is_fulfilled_by_pinned_fetcher_without_cookies():
     calls=[]
     def fetch(url,deadline):
         calls.append(url)
-        if url.endswith('/robots.txt'):return 404,{},b''
         return 200,{'content-type':'text/html','set-cookie':'secret','x-private':'private'},b'<main>Analyst SQL</main>'
     acquisition=BrowserAcquisition(time.monotonic()+25,fetch)
     request=route()
     with patch('socket.getaddrinfo',public_dns):acquisition.route(request)
-    assert calls==['https://synthetic.test/robots.txt',URL]
+    assert calls==[URL]
     request.fulfill.assert_called_once_with(status=200,headers={'content-type':'text/html'},body=b'<main>Analyst SQL</main>')
     request.continue_.assert_not_called()
 
@@ -101,17 +100,19 @@ def test_submissions_and_unnecessary_assets_never_reach_network(method,kind):
     request.abort.assert_called_once();fetch.assert_not_called()
 
 
-def test_browser_cannot_fetch_private_destinations_or_disallowed_robots():
+def test_browser_cannot_fetch_private_destinations_or_blocked_job_sites():
     request=route('http://127.0.0.1/private')
     fetch=Mock()
     acquisition=BrowserAcquisition(time.monotonic()+25,fetch)
     with patch('socket.getaddrinfo',return_value=[(2,1,6,'',('127.0.0.1',80))]):acquisition.route(request)
     request.abort.assert_called_once();fetch.assert_not_called()
     assert 'Private' in str(acquisition.failure)
-    request=route()
-    acquisition=BrowserAcquisition(time.monotonic()+25,lambda *args:(200,{},b'User-agent: *\nDisallow: /'))
+    request=route('https://www.linkedin.com/voyager/api/jobs',resource_type='xhr')
+    fetch=Mock()
+    acquisition=BrowserAcquisition(time.monotonic()+25,fetch)
     with patch('socket.getaddrinfo',public_dns):acquisition.route(request)
-    assert acquisition.requests==1 and isinstance(acquisition.failure,job_url.AccessBlocked)
+    fetch.assert_not_called()
+    assert acquisition.requests==0 and isinstance(acquisition.failure,job_url.AccessBlocked)
     request.abort.assert_called_once()
 
 
@@ -134,7 +135,6 @@ def test_timeout_cleanup_includes_detached_browser_descendants():
 
 def test_renderer_preserves_cors_and_page_security_headers_but_not_cookies():
     def fetch(url,deadline):
-        if url.endswith('/robots.txt'):return 404,{},b''
         return 200,{'content-type':'application/javascript','access-control-allow-origin':'*',
             'content-security-policy':"default-src 'self'",'set-cookie':'must-not-forward'},b'console.log("synthetic");'
     acquisition=BrowserAcquisition(time.monotonic()+25,fetch)
