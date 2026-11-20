@@ -1,5 +1,5 @@
 """Validate original excerpts and explicitly attributed Brave synthesis separately."""
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.domain.review import ALIASES
 from app.domain.skills import canonical_skill_id
 from app.schemas.analysis import InterviewSkill
@@ -31,10 +31,3 @@ def topics_from(output,sources,summaries=()):
         if skill_id and any(s.skill_id==skill_id for s in skills):continue
         skills.append(InterviewSkill(**data,skill_id=skill_id,independent_report_count=len({lookup[s].report_group for s in topic.source_ids if lookup[s].report_group})))
     return skills
-
-
-def supported_round_count(count,text):
-    import re
-    words=('one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen','twenty')
-    token=rf'(?:{count}|{words[count-1]})'
-    return bool(re.search(rf'\b{token}[-\s]+(?:interview\s+)?(?:rounds?|stages?)\b|\b(?:rounds?|stages?)\s*:\s*{token}\b',text,re.I))

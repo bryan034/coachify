@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from pymongo import MongoClient
 from bson import ObjectId
 from app.main import create_app
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.schemas.discovery import Scope,Decision,Plan,Listings,MarketSummary,Listing,Requirement,RecommendedSkill,ConversationMemory,SourceAssessment,SourceAssessments,DiscoveryUnderstanding,DiscoveryAnswer
 from app.schemas.analysis import Generation,CareerGoal
 from app.schemas.discovery import DiscoverySource as ResearchSource
@@ -84,7 +84,7 @@ class AI:
         return SimpleNamespace(data=result,generation=Generation(provider='synthetic',model='synthetic',prompt_version='test',generated_at=now()))
 
 class Sources:
-    configured=True;brave_mode='llm_context'
+    configured=True;brave_mode='llm_context';provider='brave';backend='brave'
     def __init__(self):self.calls=[];self.empty=False;self.fail=False
     async def collect_discovery_query(self,context,query):
         self.calls.append(query)
@@ -590,17 +590,6 @@ def test_new_session_returns_display_introduction_without_model_or_search_calls(
     assert flow[2].calls==[] and flow[3].calls==[]
 
 
-def test_fresh_open_does_not_load_previous_conversation_or_call_models(flow):
-    from app.domain.discovery_conversation import INTRODUCTION
-    previous=wait(flow,start(flow,'I enjoy problem solving'))
-    calls=list(flow[2].calls);searches=list(flow[3].calls)
-    response=flow[0].get(BASE+'/current?fresh=true',headers=headers())
-    assert response.status_code==200 and response.json()['session'] is None
-    assert response.json()['introduction']==INTRODUCTION
-    assert flow[2].calls==calls and flow[3].calls==searches
-    assert flow[0].get(BASE+'/current',headers=headers()).json()['session']['id']==previous['id']
-
-
 def test_distinct_start_keys_create_isolated_chats_with_no_inherited_memory(flow):
     from app.domain.discovery_conversation import INTRODUCTION
     previous=wait(flow,start(flow,'I enjoy problem solving'))
@@ -622,15 +611,13 @@ def test_distinct_start_keys_create_isolated_chats_with_no_inherited_memory(flow
 
 def test_introduction_is_display_only_and_never_sent_to_ai(flow):
     from app.domain.discovery_conversation import INTRODUCTION
-    opened=flow[0].get(BASE+'/current?fresh=true',headers=headers()).json()
+    opened=flow[0].get(BASE+'/current',headers=headers()).json()
     assert opened['introduction']==INTRODUCTION
     row=wait(flow,start(flow,'I enjoy problem solving'))
     for path in (BASE+'/current',f"{BASE}/{row['id']}"):
         payload=flow[0].get(path,headers=headers()).json()
         assert INTRODUCTION not in json.dumps(payload,ensure_ascii=False)
         assert 'introduction' not in payload
-    flow[1].research_contexts.update_one({'_id':row['id']},
-        {'$push':{'messages':{'$each':[{'role':'assistant','content':INTRODUCTION}],'$position':0}}})
     response=flow[0].post(f"{BASE}/{row['id']}/messages",headers=headers(),
         json={'expected_version':row['version'],'message':'Question: Tell me about SQL'})
     assert response.status_code==200
@@ -651,7 +638,7 @@ def replacement_provider(flow, *, fail_quota_once=False):
         if fail_quota_once and not quota:
             from app.clients.search_sources import SourceRateLimit
             quota=True
-            raise SourceRateLimit(1)
+            raise SourceRateLimit(1,'brave')
         return [ResearchSource(source_id=f'replacement-{i}',platform='employer',
             url=f'https://example.test/jobs/{i}',company=f'Employer {i}',
             title=f'Employer {i} · Software Engineer',
@@ -1019,10 +1006,14 @@ def test_late_discovery_cannot_replace_a_newer_conversation_or_goal(flow,replace
         elif replacement=='jd_input':
             flow[0].app.state.workspace_store.claim_input(OWNER,str(uuid4()),'synthetic-new-jd')
         else:
-            response=flow[0].post('/api/v1/career/goals/confirm',headers=headers(),json={
-                'target_type':'specific_job','role':'Analyst','field':'Finance','expected_selection_version':expected['selection_version'],'replace_current':True})
+            workspace=flow[0].get('/api/v1/career/workspace',headers=headers()).json()
+            content={k:v for k,v in workspace['current']['goal'].items() if k in JDExtraction.model_fields}
+            content['field']='Finance'
+            response=flow[0].patch('/api/v1/career/workspace/review',headers=headers(),json={
+                'session_id':workspace['session_id'],'expected_version':workspace['revision'],'content':content,'acknowledge_context':True})
             assert response.status_code==200,response.text
-            expected=response.json()
+            expected=flow[0].get('/api/v1/career/goals/current',headers=headers()).json()
+            assert expected['goal']['field']=='Finance'
     finally:release.set()
     stale=wait(flow,pending,'failed')
     assert stale['error_code']=='stale_input'
@@ -1048,15 +1039,6 @@ def test_messages_cannot_race_the_short_goal_publication_lease(flow):
     assert flow[1].research_contexts.find_one({'_id':row['id']})['messages']==row['messages']
 
 
-def test_pre_upgrade_discovery_adopts_auto_publication_on_its_next_refinement(flow):
-    initial=wait(flow,start(flow))
-    flow[1].career_state.update_one({'_id':OWNER},{'$unset':{'active_discovery':''}})
-    refined=wait(flow,send(flow,initial,'Remove Python'))
-    current=flow[0].get('/api/v1/career/goals/current',headers=headers()).json()
-    assert current['goal']['_id']==refined['review']['current']['goal']['_id']
-    assert [skill['name'] for skill in current['goal']['skills']]==['SQL']
-
-
 def test_publication_replay_after_a_worker_failure_does_not_select_the_goal_twice(flow,monkeypatch):
     from app.workflows.discovery import summary_message
     original=flow[0].app.state.goal_store.confirm
@@ -1077,7 +1059,7 @@ def test_publication_replay_after_a_worker_failure_does_not_select_the_goal_twic
     review=flow[0].app.state.review_store.get(goal.id,OWNER)
     evidence=flow[1].research_contexts.find_one({'_id':goal.discovery.research_id})
     summary=MarketSummary.model_validate(evidence['summary'])
-    message=summary_message(Scope.model_validate(raw['scope']),raw['aggregate'],summary,raw['sources'])
+    def message(status):return summary_message(Scope.model_validate(raw['scope']),raw['aggregate'],summary,raw['sources'],status)
     assert engine.publish_target(raw,review,summary,raw['aggregate'],goal.discovery,message)
     assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()==before
     assert engine.get(row['id'],OWNER)['status']=='review'

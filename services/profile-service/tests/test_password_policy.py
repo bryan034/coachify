@@ -1,6 +1,6 @@
 import pytest
 from pydantic import ValidationError
-from app.api.v1.accounts import Complete, ResetComplete
+from app.schemas.accounts import Complete, ResetComplete
 
 
 @pytest.mark.parametrize('length', [7, 8, 128, 129])

@@ -14,12 +14,6 @@ from app.domain.review_policy import effective_policy, map_legacy_counts, valida
 from app.conversation.interview_memory import MAX_TOPIC_QUESTIONS, durable_review_questions, question_groups, review_group, migrate_snapshot
 
 
-class DeferredTargetProvider:
-    """Explicitly injectable absent-context provider for isolated CV tests."""
-    async def context(self, bearer, identifier, version): return None
-    async def selected_context(self, bearer): return None
-
-
 def context_identity(context):
     if context is None: return None
     return {'id': context.id, 'version': context.version, 'selection_version': context.selection_version,

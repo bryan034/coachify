@@ -9,6 +9,7 @@ from app.repositories.analysis import AnalysisRepository
 from app.repositories.goals import GoalError, now
 from app.domain.review import MAPPING_VERSION
 from app.schemas.analysis import ResearchContext
+from app.workflows.opportunity.domain import public_opportunity
 
 POLICY='public-interview-brave-process-v4:answers'
 FRESHNESS=timedelta(days=7)
@@ -30,7 +31,6 @@ class ResearchStore:
         return goal
 
     def context_keys(self,goal):
-        from app.workflows.opportunity.domain import public_opportunity
         context=ResearchContext(**{key:getattr(goal,key,None) for key in ResearchContext.model_fields})
         return {context.reuse_key(),public_opportunity(goal)[1].reuse_key()}
 
@@ -67,8 +67,9 @@ class ResearchStore:
     def begin(self,context,refresh):
         key=context.reuse_key()
         latest=self.records.database.interview_research.find_one({'context_key':key},sort=[('version',-1)])
-        try:self.cache.update_one({'_id':key},{'$setOnInsert':{'version':latest['version'] if latest else 0,'status':'missing'}},upsert=True)
-        except DuplicateKeyError:pass
+        upsert=lambda:self.cache.update_one({'_id':key},{'$setOnInsert':{'version':latest['version'] if latest else 0,'status':'missing'}},upsert=True)
+        try:upsert()
+        except DuplicateKeyError:upsert()
         row=self.cache.find_one({'_id':key})
         current=self.records.get_research(row['result']) if row.get('result') else None
         if current and current.skill_mapping_version==MAPPING_VERSION and row.get('policy')==self.policy and current.last_researched_at>=now()-FRESHNESS and not refresh:
@@ -91,10 +92,6 @@ class ResearchStore:
     def fail(self,context,token,status):
         self.cache.update_one({'_id':context.reuse_key(),'lease.token':token},{'$set':{'status':status},'$unset':{'lease':''}})
 
-    def was_reused(self,owner,goal_id,record):
-        row=self.state.find_one({'_id':owner}) or {}
-        return bool(record and row.get('research_link_meta',{}).get(goal_id,{}).get(record.id,{}).get('reused'))
-
     def attach(self,owner,goal_id,selection,key,digest,record,*,goal_version,reused=False):
         if type(goal_version) is not int or goal_version<1:
             raise GoalError('The research revision is unavailable. Refresh the current goal.')
@@ -106,10 +103,3 @@ class ResearchStore:
             {'$set':{'research_link_meta.'+goal_id+'.'+record.id:{'reused':reused,'goal_version':goal_version,'context_key':record.context_key}},'$addToSet':{'research_links.'+goal_id:record.id},'$push':{'research_receipts':{'$each':[receipt],'$slice':-100}}})
         if not matched.matched_count:raise GoalError('The selected goal changed. Research was not attached to your goal.')
         self.goal(owner,goal_id,goal_version)
-
-    def replay(self,owner,key,digest):
-        row=self.state.find_one({'_id':owner}) or {}
-        receipt=next((r for r in row.get('research_receipts',[]) if r['key']==key),None)
-        if receipt:
-            if receipt['hash']!=digest:raise GoalError('This research key was used for different details.')
-            return self.read(owner,receipt['goal_id'],receipt['research_id'],current=True,goal_version=receipt.get('goal_version',1))

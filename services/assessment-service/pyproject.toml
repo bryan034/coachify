@@ -13,3 +13,10 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
+
+[tool.vulture]
+paths = ["app"]
+exclude = ["app/schemas.py"]
+ignore_decorators = ["@router.*", "@app.*", "@field_validator", "@model_validator"]
+ignore_names = ["required_level"]
+min_confidence = 60

@@ -3,10 +3,12 @@ import asyncio
 import json
 import httpx
 import pytest
-from app.ai.adapter import AIAdapter, AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
-from app.ai.jd_scope import CareerScopeError, identify_job
+from app.ai.jd_scope import CareerScopeError
+from app.workflows.job_identity import identify_job
 from app.ai.recovery import recover_responses
 
 SOURCE = 'ExampleCo is hiring a Software Engineer Intern in Singapore. Build Python APIs.'

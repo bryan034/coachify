@@ -1,5 +1,4 @@
 """Owner-scoped structured reviews. No JD buffers cross this persistence boundary."""
-from datetime import timedelta
 from uuid import uuid5, NAMESPACE_URL
 from bson import ObjectId
 from bson.codec_options import CodecOptions
@@ -15,9 +14,6 @@ class ReviewStore:
     def __init__(self, database):
         db=database.with_options(codec_options=CodecOptions(tz_aware=True))
         self.rows,self.state=db.career_goals,db.career_state
-        # Retired reset copies are removed on upgrade; effective content and receipts stay intact.
-        self.rows.update_many({'$or':[{'baseline':{'$exists':True}},{'baseline_origins':{'$exists':True}}]},
-            {'$unset':{'baseline':'','baseline_origins':''}})
 
     def _row(self, identifier, owner):
         row = self.rows.find_one({'_id': ObjectId(identifier), 'user_id': owner})
@@ -109,17 +105,15 @@ class ReviewStore:
             RequirementReview.model_validate({**draft.model_dump(mode='python'),**values})
         except ValidationError:
             raise GoalError('This review is too large or inconsistent. Shorten the edited context and retry.',422) from None
-        result = self.rows.update_one({'_id':ObjectId(identifier),'user_id':owner,'version':body.expected_version,
-            '$or':[{'processing':{'$exists':False}},{'processing.expires_at':{'$lt':now()}}]},
+        result = self.rows.update_one({'_id':ObjectId(identifier),'user_id':owner,'version':body.expected_version},
             {'$set':values,'$push':{'receipts':{'$each':[receipt],'$slice':-100}}})
         if not result.matched_count:
             latest=self._row(identifier,owner)
-            if receipt not in latest.get('receipts',[]): raise GoalError('This review changed or is being confirmed. Reload before retrying.')
+            if receipt not in latest.get('receipts',[]): raise GoalError('This review changed. Reload before retrying.')
         return self.get(identifier,owner)
 
-    def goal(self, draft, owner, key, data, *, allow_pending_context=False):
+    def goal(self, draft, owner, key, data):
         if draft.version != data.expected_review_version: raise GoalError('The review changed. Reload before confirming.')
-        if draft.requirements_need_review and not allow_pending_context: raise GoalError('Review the requirements for the edited role before confirming.',422)
         content=draft.content
         if any(getattr(data,f) != getattr(content,f) for f in METADATA) or data.target_type != draft.target_type:
             raise GoalError('Confirm the saved review values. Save your edits first.',422)
@@ -135,17 +129,6 @@ class ReviewStore:
             requirements_source={'text':'pasted_jd','url':'url_jd','document':'document_jd','career_exploration':'career_exploration'}[draft.source_kind],
             generation_version=draft.generation.prompt_version if draft.generation else 'pending-skills',generation=draft.generation,
             readiness='ready' if ready else 'pending',requirements_need_review=draft.requirements_need_review,source_review_id=draft.id,source_review_version=draft.version)
-
-    def claim_confirmation(self, identifier, owner, version, key):
-        result=self.rows.update_one({'_id':ObjectId(identifier),'user_id':owner,'record_type':'requirement_review','version':version,
-            '$or':[{'processing':{'$exists':False}},{'processing.expires_at':{'$lt':now()}}]},
-            {'$set':{'processing':{'key':key,'expires_at':now()+timedelta(seconds=75)}}})
-        if not result.matched_count: raise GoalError('This review changed or is being confirmed. Reload before confirming.')
-        return self.get(identifier,owner)
-
-    def release_confirmation(self,identifier,owner,key):
-        self.rows.update_one({'_id':ObjectId(identifier),'user_id':owner,'processing.key':key},{'$unset':{'processing':''}})
-
 
     def create_guidance(self, owner, key, digest, goal, content, generation):
         identifier=stable_id(owner,key,'guidance-review')
@@ -180,3 +163,4 @@ class ReviewStore:
         try:self.rows.insert_one({**mongo_document(review),'receipts':[]})
         except DuplicateKeyError:return self.get(identifier,owner)
         return review
+

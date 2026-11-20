@@ -1,9 +1,10 @@
 """Synthetic research routing: chat search decisions and Opportunity availability."""
 import asyncio
 import json
+from tests.api_views import label_passages
 from types import SimpleNamespace as NS
 import pytest
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.context_contracts import ContextPlan
 from app.ai.qa_contracts import FocusedAnswer
 from app.clients.search_sources import SourceAPIs
@@ -36,8 +37,8 @@ def test_configured_brave_search_enables_opportunity_pipeline():
     from app.workflows.opportunity.engine import availability_issues
     from app.schemas.opportunity_api import OpportunityView
     ai=NS(settings=NS(enabled=True,provider='compatible'),context_enabled=True)
-    assert availability_issues(OpportunitySettings(),ai,SourceAPIs(None,brave_key='synthetic'))==[]
-    assert availability_issues(OpportunitySettings(),ai,SourceAPIs(None))==['brave_not_configured']
+    assert availability_issues(OpportunitySettings(),ai,SourceAPIs(None,brave_key='synthetic',backend='brave'))==[]
+    assert availability_issues(OpportunitySettings(),ai,SourceAPIs(None,backend='brave'))==['brave_not_configured']
     view=OpportunityView(available=False,availability_issues=['model_not_configured','search_not_configured'],
         job_id=None,career_target_id='0'*24,status='failed')
     assert view.availability_issues==['model_not_configured','search_not_configured']
@@ -62,6 +63,7 @@ def test_saved_goal_questions_automatically_search_when_more_information_is_need
         async def generate(payload,operation,**kwargs):
             nonlocal repaired
             if payload.stage=='context_route':output=ContextPlan(topic='interview_process',missing=missing,resolved_question='What are the interview stages?')
+            elif payload.stage=='passage_scope':output=label_passages(payload)
             else:
                 answers.append(json.loads(payload.context))
                 output=FocusedAnswer(status='not_found',reply='Not saved.') if not_found and len(answers)==1 else FocusedAnswer(reply='Online interview [web0].',references=['web0'])
@@ -93,7 +95,7 @@ def test_metered_search_charges_the_current_account_before_any_provider_request(
         return httpx.Response(200,json={'grounding':{'generic':[]},'sources':{}})
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            source=SourceAPIs(client,brave_key='synthetic',metered=True,searches_per_account=1)
+            source=SourceAPIs(client,brave_key='synthetic',metered=True,searches_per_account=1,backend='brave')
             with pytest.raises(GoalError,match='attributed'):await source.search('public interview stages')
             with budget_owner('owner'):
                 assert await source.search('public interview stages')==[]
@@ -131,7 +133,7 @@ def test_url_cap_only_lowers_each_workflows_built_in_limit(cap,workflow,expected
         return httpx.Response(200,json={'grounding':{'generic':[]},'sources':{}})
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            source=SourceAPIs(client,brave_key='synthetic',max_urls=cap)
+            source=SourceAPIs(client,brave_key='synthetic',max_urls=cap,backend='brave')
             await getattr(source,workflow)(ResearchContext(role='Analyst',field='Data',location='Singapore'),'Analyst interviews')
     asyncio.run(run())
     assert params[0]['maximum_number_of_urls']==str(expected)

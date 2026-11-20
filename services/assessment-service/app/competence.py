@@ -1,6 +1,5 @@
 """Conservative understanding ceilings shared by both Assessment scoring paths."""
 import math
-import re
 from elo_shared.competence_scale import MODERATE_LEVEL
 
 RUBRIC_VERSION='evidence-role-v5'

@@ -2,7 +2,8 @@
 import asyncio
 import httpx
 import pytest
-from app.ai.adapter import AIAdapter, AIError, Operation
+from app.ai.adapter import AIAdapter, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.waiting import quota_progress
@@ -19,7 +20,7 @@ def test_repeated_quota_waits_resume_same_call_outside_active_timeout():
             calls.append(request.content)
             if len(calls) == 1: return httpx.Response(429, headers={'Retry-After':'2'})
             return httpx.Response(200, json={'usage':{'prompt_tokens':10,'completion_tokens':5,'total_tokens':15},
-                'choices':[{'finish_reason':'stop','message':{'content':'{"reply":"Hello","suggested_roles":[]}'}}]})
+                'choices':[{'finish_reason':'stop','message':{'content':'{"reply":"Hello"}'}}]})
         async def sleep(seconds):
             waits.append(seconds)
             clock[0] += seconds
@@ -28,8 +29,8 @@ def test_repeated_quota_waits_resume_same_call_outside_active_timeout():
                            sleep=sleep,clock=lambda:clock[0])
             context = quota_progress.set(states.append)
             try:
-                operation=Operation('alice','1','chat')
-                result=await ai.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}]),operation,current_revision=lambda:'1')
+                operation=Operation('alice','1','career_guidance')
+                result=await ai.generate(AIInput(stage='career_guidance',context='{}',conversation=[{'role':'user','content':'Hi'}]),operation,current_revision=lambda:'1')
             finally: quota_progress.reset(context)
         assert result.data.reply == 'Hello' and operation.status == 'succeeded'
         assert waits == [2] and states == [2,None]
@@ -51,8 +52,8 @@ def test_cancel_or_replace_during_wait_prevents_another_provider_call(cancel):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             ai=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),client,sleep=sleep)
             context=quota_progress.set(lambda _:None)
-            operation=Operation('alice','1','chat')
-            task=asyncio.create_task(ai.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}]),operation,current_revision=lambda:revision[0]))
+            operation=Operation('alice','1','career_guidance')
+            task=asyncio.create_task(ai.generate(AIInput(stage='career_guidance',context='{}',conversation=[{'role':'user','content':'Hi'}]),operation,current_revision=lambda:revision[0]))
             quota_progress.reset(context)
             await entered.wait()
             if cancel:
@@ -74,7 +75,7 @@ def test_permanent_errors_do_not_wait():
             context=quota_progress.set(lambda _:None)
             try:
                 with pytest.raises(AIError,match='provider_auth'):
-                    await ai.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}]),Operation('alice','1','chat'),current_revision=lambda:'1')
+                    await ai.generate(AIInput(stage='career_guidance',context='{}',conversation=[{'role':'user','content':'Hi'}]),Operation('alice','1','career_guidance'),current_revision=lambda:'1')
             finally: quota_progress.reset(context)
     asyncio.run(run())
 
@@ -111,13 +112,13 @@ def test_wait_longer_than_the_active_deadline_still_allows_completion():
         def respond(request):
             calls.append(1)
             if len(calls)==1:return httpx.Response(429,headers={'Retry-After':'1'})
-            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{"reply":"Resumed","suggested_roles":[]}'}}]})
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{"reply":"Resumed"}'}}]})
         async def sleep(_): await asyncio.sleep(1.05)
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             ai=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture',timeout_seconds=1),client,sleep=sleep)
             context=quota_progress.set(lambda _:None)
             try:
-                result=await ai.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}]),Operation('alice','1','chat'),current_revision=lambda:'1')
+                result=await ai.generate(AIInput(stage='career_guidance',context='{}',conversation=[{'role':'user','content':'Hi'}]),Operation('alice','1','career_guidance'),current_revision=lambda:'1')
             finally:quota_progress.reset(context)
         assert result.data.reply=='Resumed' and len(calls)==2
     asyncio.run(run())

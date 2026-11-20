@@ -3,10 +3,11 @@ import asyncio
 import json
 import httpx
 import pytest
-from app.ai.adapter import AIAdapter, AIError, Operation
+from app.ai.adapter import AIAdapter, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
-from app.api.v1.jd import validate_extraction
+from app.domain.extraction import validate_extraction
 
 SOURCE='ExampleCo is hiring a Software Engineer Intern. Python is required. Git is preferred.'
 

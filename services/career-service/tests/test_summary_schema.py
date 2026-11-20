@@ -3,7 +3,8 @@ import asyncio
 import json
 import httpx
 import pytest
-from app.ai.adapter import AIAdapter, AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.usage import input_tokens
@@ -14,7 +15,7 @@ from tests.test_goal_chat_presentation import environment
 def settings(**values):
     return AISettings(**{'enabled': True, 'model': 'synthetic', 'api_key': 'synthetic',
         'base_url': 'https://example.test/v1', 'response_mode': 'json_schema_strict',
-        'context_tokens': 16384, **values})
+        'context_tokens': 16384, 'max_output_tokens': 8192, **values})
 
 
 @pytest.mark.parametrize('mode', ['json_schema', 'json_schema_strict'])

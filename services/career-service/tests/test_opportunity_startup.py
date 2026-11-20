@@ -1,7 +1,6 @@
 """Regression: configured research must not depend on legacy chat/search switches."""
 import json
 import asyncio
-from app.schemas.opportunity import CATEGORIES
 import os
 from types import SimpleNamespace
 from uuid import uuid4
@@ -19,6 +18,7 @@ from app.ai.routing import ModelRouter,opportunity_models
 from app.clients.search_sources import SourceAPIs
 from app.main import create_app
 from app.workflows.opportunity.engine import availability_issues
+from app.workflows.opportunity.topics import TOPICS
 
 
 def test_research_uses_configured_model_even_when_chat_is_disabled():
@@ -27,7 +27,7 @@ def test_research_uses_configured_model_even_when_chat_is_disabled():
         def response(request):
             calls.append(request)
             assert request.headers['authorization']=='Bearer synthetic-key'
-            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps({category:['Example Analyst Singapore '+category] for category in CATEGORIES})}}]})
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps({topic:['Example Analyst Singapore '+topic] for topic in TOPICS})}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as client:
             primary=AIAdapter(AISettings(enabled=True,api_key='synthetic-key'),client)
             context_model=AISettings(enabled=False,api_key='synthetic-key')
@@ -46,7 +46,7 @@ def test_startup_enables_research_with_keys_independently_of_legacy_modes(monkey
     mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_startup_test_'+uuid4().hex]
     monkeypatch.setattr(AISettings,'from_env',classmethod(lambda cls:AISettings(enabled=True,api_key='synthetic-key')))
     monkeypatch.setattr(OpportunitySettings,'from_env',classmethod(lambda cls:OpportunitySettings()))
-    monkeypatch.setattr(SourceAPIs,'from_environment',classmethod(lambda cls,client:SourceAPIs(client,brave_key='synthetic-brave',brave_mode=mode)))
+    monkeypatch.setattr(SourceAPIs,'from_environment',classmethod(lambda cls,client:SourceAPIs(client,brave_key='synthetic-brave',brave_mode=mode,backend='brave')))
     profile=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(lambda _:httpx.Response(200,json={})))
     try:
         with TestClient(create_app(database=db,profile_client=profile)) as client:
@@ -72,7 +72,7 @@ def test_startup_enables_research_with_keys_independently_of_legacy_modes(monkey
 ])
 def test_unavailability_identifies_the_failed_gate_without_exposing_credentials(changes,expected):
     ai=SimpleNamespace(settings=SimpleNamespace(enabled=changes.get('primary',True)),context_enabled=changes.get('gemini',True))
-    source=SourceAPIs(None,brave_key=changes.get('key','PRIVATE_SYNTHETIC_KEY'),brave_mode=changes.get('mode','llm_context'))
+    source=SourceAPIs(None,brave_key=changes.get('key','PRIVATE_SYNTHETIC_KEY'),brave_mode=changes.get('mode','llm_context'),backend='brave')
     if 'mode' in changes:source.brave_mode=changes['mode']  # Simulate an incompatible injected adapter.
     issues=availability_issues(OpportunitySettings(enabled=changes.get('enabled',True)),ai,source)
     assert issues==expected and 'PRIVATE' not in str(issues)

@@ -1,5 +1,6 @@
 """Readiness is a backend decision grounded in this chat, not a model score."""
 import pytest
+from pydantic import ValidationError
 from app.domain.discovery_readiness import grounded_understanding,missing_fields,ready_for_research,clarification_bundle,REQUIRED_FIELDS
 from app.schemas.discovery import DiscoveryAnswer,DiscoveryUnderstanding,Decision,Scope
 
@@ -13,13 +14,25 @@ def test_assistant_text_and_unseen_quotes_cannot_supply_user_answers():
 
 
 @pytest.mark.parametrize('status',['unsure','skipped'])
-def test_uncertainty_requires_explicit_user_wording(status):
-    proposed=DiscoveryUnderstanding(location=DiscoveryAnswer(status=status,evidence='Finance'))
-    result=grounded_understanding(proposed,None,[],current_message='Finance')
+def test_uncertainty_cannot_also_carry_an_answer(status):
+    message='Not sure, maybe Finance'
+    proposed=DiscoveryUnderstanding(location=DiscoveryAnswer(status=status,value='Finance',evidence=message))
+    result=grounded_understanding(proposed,None,[],current_message=message)
     assert result.location.status=='unanswered'
-    proposed.location.evidence='Skip the rest' if status=='skipped' else 'Not sure about the rest'
-    result=grounded_understanding(proposed,None,[],current_message=proposed.location.evidence)
+    proposed.location.value=None
+    result=grounded_understanding(proposed,None,[],current_message=message)
     assert result.location.status==status
+
+
+def test_a_stated_answer_alone_cannot_mark_other_topics_unsure():
+    proposed=DiscoveryUnderstanding(field=DiscoveryAnswer(status='known',value='Finance',evidence='Finance'),
+                                    location=DiscoveryAnswer(status='unsure',evidence='Finance'))
+    result=grounded_understanding(proposed,None,[],current_message='Finance')
+    assert result.field.status=='known' and result.location.status=='unanswered'
+    message='Finance, but I am unsure about location'
+    proposed.field.evidence=proposed.location.evidence=message
+    result=grounded_understanding(proposed,None,[],current_message=message)
+    assert result.field.status=='known' and result.location.status=='unsure'
 
 
 def test_old_explicit_answers_survive_an_omitted_model_update_and_long_transcript():
@@ -61,24 +74,17 @@ def test_initial_bundle_has_six_ordered_topics_and_no_preface_or_extra_questions
     assert 'location' not in '\n'.join(questions) and 'industry' not in '\n'.join(questions)
 
 
-def test_removed_dictionaries_are_not_in_schema_and_legacy_broad_choice_is_preserved():
+def test_removed_dictionaries_are_not_in_schema_or_accepted():
     schema=DiscoveryUnderstanding.model_json_schema()['properties']
     assert 'broad_exploration' not in schema and 'industry' not in schema
     assert 'other_interests' in schema
-    value=DiscoveryUnderstanding.model_validate({
-        'field':{'status':'known','value':'Finance','evidence':'Finance'},
-        'role_family_or_work':{'status':'known','value':'Finance','evidence':'Finance'},
-        'broad_exploration':{'status':'known','value':'yes','evidence':'keep it broad'},
-        'industry':{'status':'known','value':'banking','evidence':'banking'}})
-    assert value.role_family_or_work.value=='keep it broad'
-    assert value.role_family_or_work.evidence=='keep it broad'
-    assert 'broad_exploration' not in value.model_dump() and 'industry' not in value.model_dump()
+    for removed in ('broad_exploration','industry'):
+        with pytest.raises(ValidationError):
+            DiscoveryUnderstanding.model_validate({removed:{'status':'known','value':'yes','evidence':'keep it broad'}})
 
 
-def test_introduction_copy_and_legacy_opening_are_display_only():
-    from app.domain.discovery_conversation import INTRODUCTION,LEGACY_INTRODUCTION,conversation_messages
+def test_introduction_copy():
+    from app.domain.discovery_conversation import INTRODUCTION
     assert 'career guidance assistant' in INTRODUCTION
     assert 'ask questions to understand your interests and preferences' in INTRODUCTION
     assert 'one focused question' not in INTRODUCTION
-    assert conversation_messages([{'role':'assistant','content':LEGACY_INTRODUCTION},
-        {'role':'assistant','content':INTRODUCTION},{'role':'user','content':'Finance'}])==[{'role':'user','content':'Finance'}]

@@ -1,13 +1,12 @@
 """Whole-document CAS publication works on standalone MongoDB without transactions."""
 from copy import deepcopy
-from threading import RLock
 from pymongo import ASCENDING
 from pymongo.errors import DuplicateKeyError
 from app.domain.errors import Conflict
-from app.repositories.conversations import ConversationRepository, MemoryConversationRepository
-from app.repositories.admission import AdmissionLedger, MemoryAdmissionLedger
-from app.repositories.model_usage import ModelUsageStore, MemoryModelUsageStore
-from app.repositories.extraction_state import ExtractionStateStore, MemoryExtractionStateStore
+from app.repositories.conversations import ConversationRepository
+from app.repositories.admission import AdmissionLedger
+from app.repositories.model_usage import ModelUsageStore
+from app.repositories.extraction_state import ExtractionStateStore
 
 
 SUMMARY_FIELDS = {'_id': 1, 'file_name': 1, 'display_name': 1, 'file_type': 1, 'operation': 1,
@@ -95,9 +94,6 @@ class CvRepository:
         if after is not None: query['_id'] = {'$gt': after}
         return list(self.collection.find(query, {'_id': 1, 'user_id': 1}).sort('_id', 1).limit(100))
 
-    def tracked_paths(self):
-        return {doc['_id'] for doc in self.collection.find({'original_available': True}, {'_id': 1})}
-
     def deletions(self, after=None):
         query = {'deletion.state': 'pending'}
         if after is not None: query['_id'] = {'$gt': after}
@@ -117,120 +113,3 @@ class CvRepository:
         elif not self.selections.replace_one({'_id': previous['_id'], 'revision': previous.get('revision', 0)}, deepcopy(document)).modified_count:
             raise Conflict('Selection changed; refresh before selecting a CV.')
         return deepcopy(document)
-
-
-class MemoryCvRepository:
-    """Deterministic test adapter implementing the same compare-and-set boundary."""
-    def __init__(self):
-        self.conversations = MemoryConversationRepository()
-        self.admission = MemoryAdmissionLedger()
-        self.model_usage = MemoryModelUsageStore()
-        self.extraction_states = MemoryExtractionStateStore()
-        self.documents, self.selections = {}, {}
-        self.lock = RLock()
-
-    def insert(self, document):
-        with self.lock:
-            previous = self.by_upload_key(document['user_id'], document['upload_key'])
-            if previous:
-                if previous.get('deletion'): raise Conflict('This upload was deleted. Start a new upload with a new request identity.')
-                if previous['upload_fingerprint'] != document['upload_fingerprint']:
-                    raise Conflict('This upload key was already used for a different file.')
-                return previous
-            self.documents[document['_id']] = deepcopy(document)
-            return deepcopy(document)
-
-    def get(self, owner, identifier):
-        with self.lock:
-            doc = self.documents.get(identifier)
-            return deepcopy(doc) if doc and doc['user_id'] == owner and not doc.get('deletion') else None
-
-    def get_for_deletion(self, owner, identifier):
-        with self.lock:
-            doc = self.documents.get(identifier)
-            return deepcopy(doc) if doc and doc['user_id'] == owner else None
-
-    def by_upload_key(self, owner, key):
-        with self.lock:
-            return next((deepcopy(doc) for doc in self.documents.values()
-                if doc['user_id'] == owner and doc['upload_key'] == key), None)
-
-    def by_operation(self, owner, identifier):
-        return next((doc for doc in self.list(owner) if doc['operation']['id'] == identifier), None)
-
-    def list(self, owner):
-        with self.lock:
-            return sorted([deepcopy(doc) for doc in self.documents.values() if doc['user_id'] == owner and not doc.get('deletion')],
-                          key=lambda doc: doc['created_at'], reverse=True)
-
-    def page(self, owner, limit, after=None):
-        with self.lock:
-            records = [doc for doc in self.documents.values() if doc['user_id'] == owner and not doc.get('deletion')
-                and (after is None or (doc['created_at'], doc['_id']) < after)]
-            records.sort(key=lambda doc: (doc['created_at'], doc['_id']), reverse=True)
-            return [{key: deepcopy(doc[key]) for key in SUMMARY_FIELDS if key in doc} for doc in records[:limit + 1]]
-
-    def capacity_records(self, limit):
-        with self.lock:
-            return [{key: deepcopy(doc[key]) for key in CAPACITY_FIELDS if key in doc}
-                for doc in self.documents.values() if doc.get('deletion', {}).get('state') != 'complete'][:limit]
-
-    def capacity_record(self, identifier):
-        with self.lock:
-            doc = self.documents.get(identifier)
-            return {key: deepcopy(doc[key]) for key in CAPACITY_FIELDS if key in doc} if doc else None
-
-    def visible_ids(self, identifiers):
-        with self.lock:
-            return {key for key in identifiers if key in self.documents and not self.documents[key].get('deletion')}
-
-    def replace(self, previous, document):
-        with self.lock:
-            current = self.get_for_deletion(previous['user_id'], previous['_id'])
-            if not current or current['revision'] != previous['revision']: raise Conflict()
-            self.documents[document['_id']] = deepcopy(document)
-            return deepcopy(document)
-
-    def candidates(self, now, after=None):
-        with self.lock:
-            return [{'_id': doc['_id'], 'user_id': doc['user_id']} for doc in sorted(self.documents.values(), key=lambda doc: doc['_id'])
-                if (after is None or doc['_id'] > after) and ((doc['operation']['status'] == 'queued' and doc['operation'].get('retry_at', 0) <= now) or
-                (doc['operation']['status'] == 'processing' and doc['operation']['lease_until'] <= now))][:10]
-
-    def pending_auto_selections(self):
-        with self.lock:
-            return [{'_id': cv['_id'], 'user_id': cv['user_id']} for cv in self.documents.values()
-                    if 'auto_selection_revision' in cv and not cv.get('deletion')][:10]
-
-    def cleanup_candidates(self, now, after=None):
-        with self.lock:
-            return [{'_id': doc['_id'], 'user_id': doc['user_id']} for doc in sorted(self.documents.values(), key=lambda doc: doc['_id'])
-                if (after is None or doc['_id'] > after) and doc['original_available'] and
-                doc['original_expires_at'] <= now and (doc['operation']['status'] != 'processing' or
-                doc['operation']['lease_until'] <= now)][:100]
-
-    def tracked_paths(self):
-        with self.lock: return {doc['_id'] for doc in self.documents.values() if doc['original_available']}
-
-    def deletions(self, after=None):
-        with self.lock:
-            return [{'_id': doc['_id'], 'user_id': doc['user_id']} for doc in sorted(self.documents.values(), key=lambda doc: doc['_id'])
-                if doc.get('deletion', {}).get('state') == 'pending' and (after is None or doc['_id'] > after)][:10]
-
-    def clear_selection(self, owner, identifier):
-        with self.lock:
-            previous = self.selections.get(owner)
-            if previous and previous['selected_cv_id'] == identifier:
-                previous['selected_cv_id'] = None
-                previous['version'] += 1
-                previous['revision'] = previous.get('revision', 0) + 1
-
-    def selection(self, owner):
-        with self.lock:
-            return deepcopy(self.selections.get(owner, {'_id': owner, 'selected_cv_id': None, 'version': 0, 'revision': 0, 'receipts': {}}))
-
-    def select(self, previous, document):
-        with self.lock:
-            if self.selection(previous['_id']).get('revision', 0) != previous.get('revision', 0): raise Conflict('Selection changed; refresh before selecting a CV.')
-            self.selections[previous['_id']] = deepcopy(document)
-            return deepcopy(document)

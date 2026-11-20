@@ -86,8 +86,6 @@ class AccountRepository:
         account = self.bound_account(flow)
         if flow.get('registration_candidate') and flow.get('otp_verified'):
             account = self.activate_registration(flow)
-        if account.get('migration_pending'):
-            raise HTTPException(409, 'Account maintenance in progress. Please retry later.')
         if not account.get('email_verified') or (flow.get('password_step_up') and not flow.get('otp_verified')):
             return self.verification.send(flow, account, settings, self.mailer)
         return self.publish(data, flow, account, settings)
@@ -153,8 +151,7 @@ class AccountRepository:
         account = flow.get('registration_candidate') or self.accounts.find_one({'id': flow.get('account_id')})
         if not account:
             raise HTTPException(409, 'This account access changed. Start again.')
-        if (flow.get('credential_hash') != account.get('password_hash')
-            and ('credential_hash' in flow or account.get('password_changed_at'))):
+        if flow.get('credential_hash') != account.get('password_hash'):
             raise HTTPException(409, 'Your password changed. Start a new sign-in attempt.')
         return account
 
@@ -236,8 +233,7 @@ class AccountRepository:
         if verified.get('registration_candidate'):
             account = self.activate_registration(verified)
         elif not verified.get('password_step_up'):
-            updated = self.accounts.update_one({'id': account['id'], 'identity': account['identity'], 'email': account['email'],
-                                               'migration_pending': {'$ne': True}},
+            updated = self.accounts.update_one({'id': account['id'], 'identity': account['identity'], 'email': account['email']},
                                               {'$set': {'email_verified': True, 'email_verified_at': now()}})
             if not updated.matched_count:
                 raise HTTPException(409, 'This account access changed. Start again.')
@@ -254,14 +250,11 @@ class AccountRepository:
         if (not session or (settings and session.get('auth_mode') != settings.mode)
             or not self.flows.find_one({'_id': session['flow'], 'active_session': session['_id'], 'status': 'completed'})):
             raise HTTPException(401, 'Your session ended. Please sign in again.')
-        account = self.accounts.find_one({'id': session['account_id'], 'email_verified': True, 'migration_pending': {'$ne': True}})
+        account = self.accounts.find_one({'id': session['account_id'], 'email_verified': True})
         if not account:
             raise HTTPException(401, 'Verify your email and sign in again.')
         if session.get('credential_hash') != account.get('password_hash'):
-            # Keep pre-upgrade sessions only until the first password reset.
-            legacy = 'credential_hash' not in session and not account.get('password_changed_at')
-            if not legacy:
-                raise HTTPException(401, 'Your password changed. Please sign in again.')
+            raise HTTPException(401, 'Your password changed. Please sign in again.')
         return {**account, 'expires_at': session['expires_at'].replace(tzinfo=now().tzinfo)}
 
     def logout(self, token):

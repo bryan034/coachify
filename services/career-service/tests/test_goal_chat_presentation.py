@@ -1,9 +1,10 @@
 """Synthetic overview and public follow-up tests; no credentials or database."""
 import asyncio
 import json
+from tests.api_views import label_passages
 from types import SimpleNamespace as NS
 import pytest
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.context_contracts import ContextPlan
 from app.ai.goal_summary import GoalSummary
 from app.ai.qa_contracts import FocusedAnswer
@@ -213,7 +214,7 @@ def test_followup_is_scoped_cited_and_never_exports_conversation(monkeypatch,top
         async def generate(payload,operation,**kwargs):
             calls.append(payload)
             output=ContextPlan(topic=topic,missing=True,research_focus='location',clarification=clarification,
-                resolved_question='Where is this internship located?') if payload.stage=='context_route' else FocusedAnswer(reply='The internship is in Singapore.',references=['web0'])
+                resolved_question='Where is this internship located?') if payload.stage=='context_route' else label_passages(payload) if payload.stage=='passage_scope' else FocusedAnswer(reply='The internship is in Singapore.',references=['web0'])
             kwargs['validate_output'](output)
             return NS(data=output)
         class Store:
@@ -270,7 +271,7 @@ def test_public_search_quota_resumes_without_repeating_successful_retrieval(monk
         calls=[];waits=[];checks=[]
         async def collect(context,query):
             calls.append(query)
-            if len(calls)==1:raise SourceRateLimit(1)
+            if len(calls)==1:raise SourceRateLimit(1,'brave')
             return record.sources
         async def pause(seconds):waits.append(seconds)
         async def check():checks.append(1)

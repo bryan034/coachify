@@ -1,30 +1,18 @@
-"""API-source extension point. No built-in search, scraping or user-entered URLs."""
+"""Validation of research connector output: bounded batches, canonical links and unique excerpts."""
 import hashlib
 import ipaddress
 import re
-from typing import Protocol
 from urllib.parse import urlsplit,urlunsplit,parse_qsl,urlencode
 from pydantic import ValidationError
 from app.repositories.goals import GoalError,now
-from app.schemas.analysis import ResearchContext,ResearchSource
+from app.schemas.analysis import ResearchSource
 from app.schemas.research import ResearchBatch
 
-class ResearchProvider(Protocol):
-    async def collect(self,context:ResearchContext)->list[ResearchSource]|ResearchBatch:
-        """Fetch permitted public API evidence for this context, or raise GoalError.
-
-        Provider summaries stay labelled as AI synthesis, separate from source excerpts.
-        """
-        ...
-
-class UnavailableResearchProvider:
-    async def collect(self,context):
-        raise GoalError('Interview research source APIs are not connected yet. Saved research is still available.',503)
-
+MAX_SOURCE_BATCH = 6
 
 def normalize_sources(values):
     """Validate bounded connector output, canonical links and duplicate excerpts."""
-    if not isinstance(values,list) or len(values)>6:
+    if not isinstance(values,list) or len(values)>MAX_SOURCE_BATCH:
         raise GoalError('The research API returned an invalid source batch.',503)
     sources=[];seen=set();identities=set()
     for value in values:
@@ -57,7 +45,6 @@ def normalize_sources(values):
 
 def normalize_batch(value):
     """Keep provider summaries separate from original source excerpts."""
-    from app.schemas.research import ResearchBatch
     if isinstance(value,list):return ResearchBatch(sources=normalize_sources(value))
     batch=ResearchBatch.model_validate(value)
     sources=normalize_sources(batch.sources);ids={s.source_id for s in sources};summaries=[]

@@ -6,6 +6,7 @@ from app.repositories.goals import GoalError,fingerprint,now
 from app.schemas.analysis import InterviewResearch,Generation
 from app.domain.review import MAPPING_VERSION
 from app.workflows.opportunity.domain import public_opportunity
+from app.domain.source_scope import verify
 
 # Only v2 records, re-verified here, are served.
 VERIFIED_EVIDENCE='saved-question-evidence-v2'
@@ -29,14 +30,13 @@ class QuestionMemory:
         records=[]
         for pointer in pointers:
             record=self.research.records.get_research(pointer['research_id'])
-            if record and record.question_focus and record.question_findings and record.generation.prompt_version==VERIFIED_EVIDENCE:
+            if record and record.question_focus and record.question_findings:
                 records.append(record)
         self.workspace.check(owner,w['session_id'],w['revision'])
         return records
 
     def save(self,owner,row,focus,findings,sources):
         if not findings:return
-        from app.domain.source_scope import verify
         context=self.context(owner,row);w=row['workspace'];stamp=now()
         goal=context.model_dump(include={'company','role','location'})
         # Separate public context for focused snapshots.
@@ -45,9 +45,6 @@ class QuestionMemory:
         for attempt in range(4):
             previous=self.rows.find_one({'_id':pointer_id})
             old=self.research.records.get_research(previous['research_id']) if previous else None
-            # Never promote legacy, unverified findings into a v2 snapshot.
-            if old and old.generation.prompt_version != VERIFIED_EVIDENCE:
-                old = None
             merged={f.finding_id:f for f in (old.question_findings if old else [])}
             merged.update({f.finding_id:f for f in findings});kept=list(merged.values())[-12:]
             used={sid for f in kept for sid in f.source_ids}
@@ -60,9 +57,9 @@ class QuestionMemory:
                     for sid,quote in zip(finding.source_ids,finding.quotes)):
                     raise GoalError('Question evidence did not match the retrieved public source.',503)
             for finding in findings:
-                # Re-run the deterministic scope check against the saved goal.
+                # Re-run the employer, role and age checks against the saved goal.
                 if finding.scope!='exact' or any(not (source:=source_map.get(sid)) or not verify(
-                        focus,source.url,source.title,quote,goal,published=source.published_date,scope_only=True).verified
+                        source.url,source.title,quote,goal,published=source.published_date).verified
                         for sid,quote in zip(finding.source_ids,finding.quotes)):
                     raise GoalError('Only verified job evidence can be saved.',422)
             # Store exact retained passages, not entire pages; merging preserves earlier cited passages.

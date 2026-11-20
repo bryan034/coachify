@@ -20,7 +20,6 @@ def main():
         +json.dumps(json.dumps(job))+';document.head.appendChild(s);document.body.innerHTML="<main>Synthetic analyst</main>";')
     def fetch(target,deadline):
         calls.append(target)
-        if target.endswith('/robots.txt'):return 404,{},b''
         if target.endswith('/app.js'):return 200,{'content-type':'application/javascript'},script.encode()
         assert target==url,target
         return 200,{'content-type':'text/html'},b'<html><head></head><body><div id="root"></div><script src="/app.js"></script></body></html>'
@@ -30,7 +29,7 @@ def main():
     result=json.loads(output.getvalue())
     assert 'preview' in result,result
     assert 'SQL' in result['preview']['text'] and result['preview']['source_url']==url,result
-    assert calls==['https://synthetic.test/robots.txt',url,'https://synthetic.test/app.js'],calls
+    assert calls==[url,'https://synthetic.test/app.js'],calls
     print('Real sandboxed browser worker: synthetic JavaScript extraction passed.')
 
 

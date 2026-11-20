@@ -3,13 +3,16 @@ import re
 import asyncio
 from app.ai.recovery import validation_budget
 from starlette.concurrency import run_in_threadpool as thread
-from app.ai.adapter import AIError,Operation
+from app.ai.adapter import Operation
+from app.ai.errors import AIError
 from app.ai.contracts import AIInput
-from app.api.v1.research import context_for
+from app.schemas.analysis import context_for
 from app.clients.research import normalize_sources
 from app.clients.search_sources import error_excerpt
 from app.repositories.goals import GoalError,now
 from datetime import timedelta
+
+MAX_STALLED_ROUNDS = 2
 
 TARGET_SOURCES=3
 MAX_SEARCHES=6
@@ -104,8 +107,8 @@ async def assess(workflow,state):
     context=getattr(getattr(workflow.app.state.ai,'context',None),'settings',settings)
     reserve=40+getattr(context,'timeout_seconds',45)+primary+5
     out_of_time=budget is not None and budget.when() is not None and budget.when()-asyncio.get_running_loop().time()<reserve
-    exhausted=round>=MAX_SEARCHES or stalled>=2 or out_of_time
-    coverage={'platform':getattr(getattr(workflow.app.state,'research_client',None),'provider','brave'),'status':'succeeded' if useful else 'no_findings','round':round-1,
+    exhausted=round>=MAX_SEARCHES or stalled>=MAX_STALLED_ROUNDS or out_of_time
+    coverage={'platform':workflow.app.state.research_client.provider,'status':'succeeded' if useful else 'no_findings','round':round-1,
               'useful_sources':len(useful),'target_sources':TARGET_SOURCES,
               'limit_reached':exhausted and len(useful)<TARGET_SOURCES}
     await thread(workflow.workspaces.phase,state['owner'],state['session'],state['run'],'researching',

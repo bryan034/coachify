@@ -5,6 +5,8 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from elo_shared.model_sdk import resolve_model_api_key
 
+MAX_TIMEOUT_SECONDS = 60
+
 
 OPENROUTER_BASE_URL='https://openrouter.ai/api/v1'
 REASONING_MODEL='openai/gpt-4o-mini'
@@ -22,14 +24,14 @@ class AISettings(BaseModel):
     token_parameter: Literal['max_tokens', 'max_completion_tokens'] = 'max_tokens'
     timeout_seconds: float = Field(default=60, ge=1, le=300)
     retries: int = Field(default=1, ge=0, le=2)
-    max_output_tokens: int = Field(default=8192, ge=128, le=8192)
-    context_tokens: int = Field(default=65536, ge=2048, le=262144)
+    max_output_tokens: int | None = Field(default=None, ge=128)
+    context_tokens: int | None = Field(default=None, ge=2048)
     # Plain HTTP only for synthetic fixture providers in a development stack.
     allow_http: bool = False
 
     @model_validator(mode='after')
     def valid_provider(self):
-        if self.timeout_seconds>60:
+        if self.timeout_seconds>MAX_TIMEOUT_SECONDS:
             raise ValueError('Cloud model request timeouts cannot exceed 60 seconds.')
         p = urlsplit(self.base_url)
         if p.scheme not in (('http','https') if self.allow_http else ('https',)) or not p.hostname or p.username or p.password or p.query or p.fragment:
@@ -53,7 +55,7 @@ class AISettings(BaseModel):
         for field in ('timeout_seconds','retries','max_output_tokens','context_tokens'):
             setting='AI_'+field.upper()
             if setting in os.environ:
-                if field=='context_tokens' and not os.environ[setting].strip():continue
+                if field in ('max_output_tokens','context_tokens') and not os.environ[setting].strip():continue
                 values[field]=os.environ[setting]
         try:return cls(**values)
         except ValueError:raise ValueError('Invalid Career model configuration. Check AI_ENABLED, CAREER_LLM_BASE_URL, CAREER_LLM_RESPONSE_MODE, CAREER_LLM_TOKEN_PARAMETER, CAREER_LLM_API_KEY, CAREER_LLM_ALLOW_HTTP, CAREER_LLM_MODEL and AI task limits.') from None

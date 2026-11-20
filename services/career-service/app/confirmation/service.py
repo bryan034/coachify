@@ -7,6 +7,8 @@ from app.repositories.goals import GoalError, fingerprint, now
 from app.schemas.analysis import CareerGoal
 from app.schemas.cv_confirmation import CvConfirmedContext, CvConfirmationView
 
+MIN_SUBJECT_CHARS = 2
+
 
 def identity(state):
     return state.get('goal_id'), state.get('version', 0)
@@ -34,13 +36,13 @@ def qualification_terms(description):
         nonlocal start,end
         if start is not None:
             phrase=' '.join(text[start:end].split())
-            if len(phrase)>=2:subjects.append(phrase)
+            if len(phrase)>=MIN_SUBJECT_CHARS:subjects.append(phrase)
         start=end=None
     for match in re.finditer(r"[^\W\d_]+(?:['’][^\W\d_]+)?",text):
         word=match.group().casefold()
         stem=re.sub(r"['’]s$",'',word)
         if start is not None and re.search(r'[/&;,()]',text[end:match.start()]):flush()
-        if stem in SUBJECT_BOUNDARIES or len(stem)<2:flush();continue
+        if stem in SUBJECT_BOUNDARIES or len(stem)<MIN_SUBJECT_CHARS:flush();continue
         if start is None:start=match.start()
         end=match.end()
     flush()

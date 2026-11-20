@@ -35,6 +35,28 @@ old database/URI, SMTP sender label, test project variable or file path yourself
 Keep the actual Jira workspace URL unchanged; renaming the product does not move
 an external Atlassian workspace.
 
+## Career stored-shape upgrade
+
+Career no longer reads records saved in older shapes. Existing installations run a
+one-off upgrade once, right after deploying this Career image and before users
+continue. It drops the retired `(user_id, create_key)` goal index (until then, saving
+a second goal can fail where that index exists) and removes the unused `create_key`
+and review `baseline` fields. It also removes stored Discovery introductions, folds
+old `broad_exploration`/`industry` answers into current fields, and makes each
+account's latest earlier Discovery chat active. Finally it clears version 1
+Opportunity reports so the next request researches again, flags reports whose
+overall summary failed, completes unfinished three-category research jobs, and
+removes links to unverified question research. Historical target documents are kept.
+
+```sh
+source infrastructure/docker/dev-shell.sh
+dc exec career-service python -m app.workers.upgrade_stored_shapes          # dry run: counts per step
+dc exec career-service python -m app.workers.upgrade_stored_shapes --apply  # rewrite
+```
+
+The upgrade is idempotent; a second `--apply` reports zero records. Back up
+`elo_career` first if the data matters.
+
 ## Configure and start
 
 From the repository root, copy the environment example if you do not already have
@@ -319,13 +341,16 @@ requiring that parameter. SDK retries are disabled; the existing workflow owns
 retries, deadlines and cooldowns. Requests use `AI_TIMEOUT_SECONDS=60` (maximum 60).
 No model credentials reach the frontend.
 
-JD input allows 8,000 characters. Identification has a 4,096-output-token ceiling
-and extraction 8,192, both subject to `AI_MAX_OUTPUT_TOKENS`. A `length` finish means
-the output ceiling was reached; increasing the HTTP timeout alone does not increase
-that ceiling. The code measures the full provider prompt, including
+JD input allows 8,000 characters. Every model stage keeps its own completion safety
+cap (for example identification 4,096 and extraction 8,192 tokens);
+`AI_MAX_OUTPUT_TOKENS` is blank by default and, when set, can only lower those caps.
+`AI_CONTEXT_TOKENS` is blank by default: the full request goes to the provider, which
+enforces its own context window. A `length` finish means the output ceiling
+was reached; increasing the HTTP timeout alone does not increase that ceiling. When
+`AI_CONTEXT_TOKENS` is set, the code measures the full provider prompt, including
 instructions/schema/repair feedback, in estimated tokens and reserves output plus a
-10% context margin (minimum 1,024). Requests that do not fit `AI_CONTEXT_TOKENS`
-fail rather than silently losing source text.
+10% context margin (minimum 1,024). Requests that do not fit fail rather than
+silently losing source text.
 
 The gateway permits 610 seconds of upstream inactivity for model-backed Career routes.
 For model work, prefer `Prefer: respond-async` and operation polling (as the application
@@ -459,10 +484,10 @@ or inspect your environment files. Dependencies/image changes still need rebuild
 
 Rebuild the Career image once after installing the new LangGraph/checkpointer/tokenizer dependencies. Subsequent source edits use the existing Docker hot reload setup. No LangSmith account or additional database server is required.
 
-Use `AI_ENABLED=true`, a configured OpenRouter key or `CAREER_LLM_API_KEY`, and the separate `CAREER_RESEARCH_API_KEY`. Chat output stays
-bounded at 1,024 tokens, interview synthesis at 2,048 and JD extraction at 4,096;
-`AI_MAX_OUTPUT_TOKENS` remains the overall ceiling. `AI_TIMEOUT_SECONDS`,
-`AI_RETRIES` and `AI_CONTEXT_TOKENS` retain their task limits. Production imposes no local token-per-minute admission limit; provider quotas and bounded requests still apply.
+Use `AI_ENABLED=true`, a configured OpenRouter key or `CAREER_LLM_API_KEY`, and the separate `CAREER_RESEARCH_API_KEY`. Chat
+output is bounded at 1,024 tokens, interview synthesis at 2,048 and JD extraction at
+4,096; a set `AI_MAX_OUTPUT_TOKENS` can only lower these caps. `AI_TIMEOUT_SECONDS` and `AI_RETRIES` retain their task
+limits; a blank `AI_CONTEXT_TOKENS` sends requests whole. Production imposes no local token-per-minute admission limit; provider quotas and bounded requests still apply.
 Model/search provider HTTP 429 responses still pause unfinished work using the provider's
 retry delay. Saved goals and completed research steps survive a wait.
 
@@ -481,9 +506,9 @@ using the configured Career model for coordination and reasoning and the selecte
 and Career storage are available. All model stages share the configured Career client. Existing JSON fields and immutable saved models are retained.
 Explicit guidance maps evidence into each allowed field; missing evidence stays missing.
 
-Compose passes `OPPORTUNITY_ENABLED` (true), max searches (2), follow-ups (1),
+Compose passes `OPPORTUNITY_ENABLED` (true), searches per topic (2), searches per run (40),
 concurrency (3), HTTP timeout (30s), transient retries (1), schema repairs (1),
-evidence tokens (8192), freshness (168h), incomplete freshness (1h) and worker
+evidence tokens (blank sends every passage), freshness (168h), incomplete freshness (1h) and worker
 deadline (300s). See the [complete settings/API/graph contract](../services/career-service/OPPORTUNITY_INTELLIGENCE.md).
 MongoDB indexes/job recovery are automatic. Existing goals/research need no destructive
 migration. Paid provider access and live response quality require your own setup;
@@ -571,7 +596,7 @@ To use a real model for Roadmap, configure both Assessment and Roadmap, because 
 Older extracted goals will not gain job dates automatically because their raw JDs are not retained. The adviser can discuss a user-selected preparation target; a new JD extraction can capture sourced application/interview/start wording. Existing CV skill keys and manual attachments are preserved. A null new canonical ID means unresolved mapping, not missing capability.
 
 Career research planning and category structuring each allow up to 4,096 output
-tokens, bounded by `AI_MAX_OUTPUT_TOKENS`. A 60-second model deadline does not
+tokens, lowered by `AI_MAX_OUTPUT_TOKENS` when it is set. A 60-second model deadline does not
 prevent output-token truncation. Planning uses the model deadline in both early
 retrieval and durable research; search HTTP deadlines stay separate. Existing private
 settings override defaults: apply `AI_TIMEOUT_SECONDS=60` in your private

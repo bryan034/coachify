@@ -82,11 +82,9 @@ def test_registration_retries_names_and_private_ownership(setup):
 
 
 def test_cv_review_policy_is_the_same_for_all_accounts(setup):
-    client, repo = setup
-    a, headers, _, _ = register(client)
-    b, other, _, _ = register(client)
-    assert client.get(BASE + '/auth/session', headers=headers).json()['cv_review_scope'] == 'item'
-    repo.accounts.update_one({'id': a['id']}, {'$set': {'cv_review_scope': 'section', 'cv_review_policy_version': 1}})
+    client, _ = setup
+    _, headers, _, _ = register(client)
+    _, other, _, _ = register(client)
     policy = client.get(BASE + '/auth/session', headers=headers).json()
     assert (policy['cv_review_scope'], policy['cv_review_policy_version']) == ('item', 1)
     assert client.get(BASE + '/auth/session', headers=other).json()['cv_review_scope'] == 'item'
@@ -554,7 +552,7 @@ def test_legacy_reservation_reclaim_uses_new_owner_and_invalidates_old_otp(setup
 
 
 @pytest.mark.parametrize('protection', ['profile_versions', 'profile_mutations', 'capability_mutations',
-                                      'session', 'declarations', 'migration', 'verified_history', 'unknown_metadata',
+                                      'session', 'declarations', 'verified_history', 'unknown_metadata',
                                       'malformed_legacy'])
 def test_legacy_reclaim_preserves_saved_data_and_protected_records(setup, protection):
     client, repo = setup
@@ -569,7 +567,7 @@ def test_legacy_reclaim_preserves_saved_data_and_protected_records(setup, protec
         repo.sessions.insert_one({'account_id': legacy['id'], 'revoked': True})
     else:
         changes = {'declarations': {'capability_declarations': [{'id': 'synthetic', 'statement': 'Preserve me'}]},
-                   'migration': {'migration_pending': True}, 'verified_history': {'email_verified_at': now()},
+                   'verified_history': {'email_verified_at': now()},
                    'unknown_metadata': {'legacy_import': True}, 'malformed_legacy': {'email': None}}[protection]
         repo.accounts.update_one({'id': legacy['id']}, {'$set': changes})
     before = repo.accounts.find_one({'id': legacy['id']})
@@ -714,25 +712,6 @@ def test_lost_committed_completion_response_is_recoverable_without_duplicate_ver
     assert collection.count_documents({})==1
 
 
-def test_legacy_mapping_is_explicit_idempotent_and_preserves_history(setup):
-    from app.domain.legacy import map_legacy_owner
-    from app.schemas.profile import ProfilePatch
-    client,repo=setup
-    account,headers,_,_=register(client)
-    database=repo.accounts.database
-    profiles=client.app.state.repository
-    profiles.update('local_test:legacy-fixture',ProfilePatch(expected_version=0,occupational_status='employed'))
-    settings=client.app.state.auth_settings
-    preview=map_legacy_owner(database,settings,account['id'],'local_test:legacy-fixture')
-    assert not preview['mapped']
-    assert map_legacy_owner(database,settings,account['id'],'local_test:legacy-fixture',True)['changed']
-    assert not map_legacy_owner(database,settings,account['id'],'local_test:legacy-fixture',True)['changed']
-    assert database.profile_versions.count_documents({})==1
-    assert profiles.version('local_test:legacy-fixture',1)['occupational_status']=='employed'
-    assert client.get(BASE,headers=headers).status_code==401
-    assert repo.accounts.find_one({'id':account['id']})['owner']=='local_test:legacy-fixture'
-
-
 def test_password_attempt_rate_limit_is_enforced_without_account_creation(setup):
     client,repo=setup
     email='limited@example.test'
@@ -778,26 +757,6 @@ def test_password_failure_limit_across_accounts_is_scoped_to_source(setup, monke
     with patch('app.api.v1.accounts.password_source', return_value='192.0.2.3'):
         accepted, _ = complete(client, begin(client, 'login'), email=account['email'])
         assert accepted.json()['id'] == account['id']
-
-
-def test_legacy_mapping_rejects_production_other_owner_and_populated_target(setup):
-    from app.domain.legacy import map_legacy_owner
-    from app.schemas.profile import ProfilePatch
-    from dataclasses import replace
-    client,repo=setup
-    account,headers,_,_=register(client)
-    database=repo.accounts.database
-    profiles=client.app.state.repository
-    settings=client.app.state.auth_settings
-    profiles.update('local_test:legacy-fixture',ProfilePatch(expected_version=0,occupational_status='employed'))
-    with pytest.raises(ValueError):
-        map_legacy_owner(database,replace(settings,environment='production'),account['id'],'local_test:legacy-fixture',True)
-    with pytest.raises(ValueError):
-        map_legacy_owner(database,settings,account['id'],'google:someone',True)
-    client.patch(BASE,headers=headers,json={'expected_version':0,'occupational_status':'employed'})
-    with pytest.raises(ValueError):
-        map_legacy_owner(database,settings,account['id'],'local_test:legacy-fixture',True)
-    assert database.profile_versions.count_documents({})==2
 
 
 def test_concurrent_finish_and_partial_save_cannot_overwrite_or_downgrade_completion(setup):

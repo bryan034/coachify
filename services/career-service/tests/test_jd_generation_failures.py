@@ -5,7 +5,8 @@ import logging
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from app.ai.adapter import AIAdapter, AIError, Operation, record_usage
+from app.ai.adapter import AIAdapter, Operation, record_usage
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.main import create_app
@@ -15,15 +16,15 @@ def settings(**values):
     return AISettings(enabled=True,model='openai/gpt-4o-mini',api_key='synthetic',max_output_tokens=512,**values)
 
 
-@pytest.mark.parametrize('stage',['jd_extraction','jd_chat','jd_edit','chat'])
+@pytest.mark.parametrize('stage',['jd_extraction','workspace_chat','exploration'])
 def test_model_tasks_use_bounded_output(stage):
-    adapter=AIAdapter(AISettings(),None)
+    adapter=AIAdapter(AISettings(max_output_tokens=8192),None)
     request=AIInput(stage=stage,source_text='SQL required') if stage=='jd_extraction' else AIInput(
         stage=stage,context='{}',conversation=[{'role':'user','content':'Explain SQL'}])
     payload=adapter._payload(request)
     assert 'reasoning_effort' not in payload
     assert payload['model']=='openai/gpt-4o-mini'
-    assert payload['max_tokens']==(1024 if stage=='jd_chat' else 8192)
+    assert payload['max_tokens']==(1024 if stage=='workspace_chat' else 8192)
 
 
 @pytest.mark.parametrize('timeout,expected_calls',[(20,1),(45,2)])
@@ -82,20 +83,3 @@ def test_usage_identifies_reasoning_cached_input_and_output_truncation(caplog):
     assert '"cached_tokens":128' in caplog.text
     assert 'finish_reason=length' in caplog.text
     assert 'SECRET' not in caplog.text and 'PRIVATE' not in caplog.text
-
-
-def test_edit_followup_is_not_started_near_deadline():
-    async def invoke():
-        now=[0.0];calls=[]
-        def handler(req):
-            calls.append(req)
-            now[0]+=9
-            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(
-                {'reply':'Propose a change','edit_requested':True})}}]})
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(settings(timeout_seconds=20),client,clock=lambda:now[0])
-            op=Operation('owner','1','jd_chat')
-            with pytest.raises(AIError,match='timeout'):
-                await adapter.generate(AIInput(stage='jd_chat',context='{}',conversation=[{'role':'user','content':'Add Python'}]),op,current_revision=lambda:'1')
-            assert len(calls)==1 and op.status=='failed'
-    asyncio.run(invoke())

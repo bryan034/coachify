@@ -4,12 +4,13 @@ import json
 from types import SimpleNamespace
 from bson import ObjectId
 import pytest
-from app.ai.adapter import AIAdapter,AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.qa_contracts import QuestionRoute,FocusedAnswer
 from app.ai.usage import input_tokens
-from app.domain.questions import direct_route,facts_for
+from app.domain.questions import facts_for
 from app.repositories.questions import QuestionStore
 from app.repositories.goals import GoalError
 from tests.test_workspace import flow,ingest,wait,headers,BASE,OWNER
@@ -19,34 +20,53 @@ def ask(flow,current,message,**extras):
     return flow[0].post(BASE+'/messages',headers=headers(),json={'session_id':current['session_id'],'expected_version':current['revision'],'message':message,**extras})
 
 
+def route_as(flow,route):
+    """Make the synthetic question router return this route."""
+    ai=flow[2];original=ai.generate
+    async def generate(request,operation,**kwargs):
+        if request.stage=='question_route':
+            ai.calls.append(request);return SimpleNamespace(data=route)
+        return await original(request,operation,**kwargs)
+    ai.generate=generate
+
+
+def answer_facts(ai,before):
+    [answer]=[call for call in ai.calls[before:] if call.stage=='focused_answer']
+    return json.loads(answer.context)['facts']
+
+
 def test_clear_skill_question_sends_only_relevant_fields_without_history(flow):
     ingest(flow);current=wait(flow);_,_,ai,sources=flow
     before=len(ai.calls)
     response=ask(flow,current,'Which skills are required?',conversation=[{'role':'assistant','content':'UNRELATED_OLD_HISTORY '*100} for _ in range(12)])
     assert response.status_code==200,response.text
-    calls=ai.calls[before:];assert [v.stage for v in calls]==['focused_answer']
-    context=json.loads(calls[0].context)
+    calls=ai.calls[before:];assert [v.stage for v in calls]==['question_route','focused_answer']
+    context=json.loads(calls[1].context)
     assert [f['kind'] for f in context['facts']]==['jd_skill']
     assert 'sources' not in context and 'summaries' not in context and 'responsibilities' not in str(context)
-    assert len(calls[0].conversation)==1 and 'OLD_HISTORY' not in calls[0].model_dump_json()
-    payload=AIAdapter(AISettings(enabled=True,model='openai/gpt-4o-mini',api_key='fixture'),None)._payload(calls[0])
+    assert len(calls[1].conversation)==1 and 'OLD_HISTORY' not in calls[1].model_dump_json()
+    payload=AIAdapter(AISettings(enabled=True,model='openai/gpt-4o-mini',api_key='fixture'),None)._payload(calls[1])
     assert input_tokens(payload)<1000
     assert 'SkillEdits' not in str(payload['response_format'])
 
 
-def test_missing_round_count_is_not_guessed_from_stage_list_and_uses_no_model(flow):
-    ingest(flow);current=wait(flow);before=len(flow[2].calls)
+def test_missing_round_count_is_never_supplied_as_a_fact(flow):
+    ingest(flow);current=wait(flow);ai=flow[2];before=len(ai.calls)
+    route_as(flow,QuestionRoute(topic='interview_process'))
     reply=ask(flow,current,'How many interview rounds are there?')
-    assert reply.status_code==200 and 'not found in the saved JD interpretation' in reply.json()['reply']
-    assert len(flow[2].calls)==before
+    assert reply.status_code==200,reply.text
+    facts=answer_facts(ai,before)
+    assert facts and all(f['kind']=='interview_stage' for f in facts)
 
 
-def test_saved_location_is_answered_without_a_model(flow):
+def test_saved_location_reaches_the_answer_as_a_job_detail(flow):
     ingest(flow);current=wait(flow);_,db,ai,_=flow
     db.career_goals.update_one({'_id':ObjectId(current['current']['goal']['_id'])},{'$set':{'location':'Singapore'}})
-    before=len(ai.calls);response=ask(flow,current,'Where is this role based?')
-    assert response.status_code==200 and '**Singapore**' in response.json()['reply']
-    assert len(ai.calls)==before
+    before=len(ai.calls);route_as(flow,QuestionRoute(topic='role'))
+    response=ask(flow,current,'Where is this role based?')
+    assert response.status_code==200,response.text
+    [details]=[f['data'] for f in answer_facts(ai,before) if f['kind']=='job_details']
+    assert details['location']=='Singapore'
 
 
 def test_ambiguous_question_routes_then_answers_and_followups_have_only_two_short_turns(flow):
@@ -103,7 +123,7 @@ def test_incomplete_skill_lists_are_marked_as_partial():
     assert partial and len(facts)==12
 
 
-def test_process_only_research_is_persisted_and_round_count_answers_without_model(flow):
+def test_process_only_research_is_persisted_and_its_round_count_reaches_the_answer(flow):
     from app.schemas.analysis import ResearchSource,InterviewProcess,InterviewEvidence
     from app.schemas.research import SourcedTopics
     text='There are three interview rounds. A technical interview includes SQL.'
@@ -120,16 +140,20 @@ def test_process_only_research_is_persisted_and_round_count_answers_without_mode
     ingest(flow);current=wait(flow)
     assert saved_research(flow,current)['skills']==[] and saved_research(flow,current)['research_status']=='succeeded'
     assert db.interview_research.find_one({'_id':ObjectId(current['research_id'])})['process']['round_count']==3
-    before=len(ai.calls);response=ask(flow,current,'How many interview rounds are there?')
-    assert response.status_code==200 and '**3 rounds**' in response.json()['reply']
-    assert 'https://example.test/interviews' in response.json()['reply'] and len(ai.calls)==before
+    before=len(ai.calls);route_as(flow,QuestionRoute(topic='interview_process'))
+    response=ask(flow,current,'How many interview rounds are there?')
+    assert response.status_code==200,response.text
+    assert {'kind':'interview_round_count','data':{'round_count':3}}.items()<=next(
+        f for f in answer_facts(ai,before) if f['kind']=='interview_round_count').items()
+    assert 'https://example.test/interviews' in response.json()['reply']
 
 
 def test_explicit_skill_edits_use_edit_contract_without_interview_payload(flow):
     ingest(flow);current=wait(flow);_,_,ai,_=flow;before=len(ai.calls)
+    route_as(flow,QuestionRoute(topic='edit'))
     response=ask(flow,current,'Add Python')
     assert response.status_code==200,response.text
-    request=ai.calls[before:][0]
+    request=ai.calls[before:][1]
     assert request.stage=='goal_edit' and 'interview_research' not in json.loads(request.context)
     assert len(request.conversation)==1
     assert response.json()['edit_status']=='saved'
@@ -158,21 +182,12 @@ def test_supporting_evidence_is_only_sent_for_questions_that_need_it():
     assert 'UNNEEDED FULL SUMMARY' not in str(facts)
 
 
-@pytest.mark.parametrize('message',['weather','Weather?',' weather! ','weather today','What is the weather?'])
-def test_weather_shortcuts_do_not_fall_through_to_ai_router(message):
-    assert direct_route(message).topic=='off_topic'
-
-
-def test_weather_job_context_is_not_blocked_by_a_blanket_keyword_filter():
-    assert direct_route('What skills are needed for this weather forecasting role?') is None
-
-
 def test_goal_questions_are_answered_in_refine_mode_without_the_edit_model(flow):
     ingest(flow);current=wait(flow);_,_,ai,_=flow
     before=len(ai.calls)
     response=ask(flow,current,'Which skills are required?',mode='refine')
     assert response.status_code==200,response.text
-    assert [v.stage for v in ai.calls[before:]]==['focused_answer']
+    assert [v.stage for v in ai.calls[before:]]==['question_route','focused_answer']
     assert response.json().get('edit_status') is None
 
 
@@ -207,8 +222,9 @@ def test_question_mode_still_refuses_career_path_exploration(flow):
     assert 'career_guidance' not in [v.stage for v in ai.calls[before:]]
 
 
-def test_refine_mode_still_blocks_unrelated_tasks_before_any_model_call(flow):
+def test_refine_mode_still_refuses_unrelated_tasks_the_router_rejects(flow):
     from app.domain.questions import REFUSAL
     ingest(flow);current=wait(flow);_,_,ai,_=flow;before=len(ai.calls)
+    route_as(flow,QuestionRoute(topic='off_topic'))
     response=ask(flow,current,'Write a python script that sorts a list',mode='refine')
-    assert response.json()['reply']==REFUSAL and len(ai.calls)==before
+    assert response.json()['reply']==REFUSAL and [v.stage for v in ai.calls[before:]]==['question_route']

@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {createLocalAccount,fillCurrentEmployment} from './account-helpers';
+import {seedCanonicalGoal} from './canonical-career';
 test('Career previews validate real sessions, read a document and discard source on reload',async({page})=>{
  const account=await createLocalAccount(page,'Synthetic Career user');
  await page.getByRole('button',{name:'Employed',exact:true}).click();
@@ -31,15 +32,15 @@ test('Career previews validate real sessions, read a document and discard source
  const input=page.getByRole('textbox',{name:'Job description',exact:true});
  await expect(input).toHaveValue(source);
  await expect(page.getByRole('button',{name:'Retry extraction',exact:true})).toBeEnabled();
- const goals=await account.get('/api/v1/career/goals');
+ const goals=await account.get('/api/v1/career/goals/current');
  expect(goals.ok()).toBe(true);
- expect((await goals.json()).reviews).toEqual([]);
+ expect((await goals.json()).goal).toBeNull();
  page.once('dialog',dialog=>dialog.accept());
  await page.reload();await expect(page.getByRole('textbox',{name:'Job description',exact:true})).toHaveValue('');
  const signedOut=await page.request.post('/api/v1/career/imports/url',{data:{url:'https://example.test/job'}});expect(signedOut.status()).toBe(401);
 });
 
-test('Career goal confirmation persists through the real gateway and owner database',async({page})=>{
+test('Career goal persists through the real gateway and owner database',async({page})=>{
  const account=await createLocalAccount(page,'Synthetic Goal user');
  await page.getByRole('button',{name:'Employed',exact:true}).click();await fillCurrentEmployment(page);
  await page.getByRole('button',{name:'No applicable previous education'}).click();
@@ -48,8 +49,7 @@ test('Career goal confirmation persists through the real gateway and owner datab
  await page.getByRole('button',{name:'Explore careers'}).click();
  await expect(page).toHaveURL(/\/career-goal\/discovery$/);
  await expect(page.getByRole('heading',{name:'Career discovery'})).toBeVisible();
- const saved=await page.request.post('/api/v1/career/goals/confirm',{headers:{...account.headers,'Idempotency-Key':crypto.randomUUID()},data:{target_type:'specific_job',role:'Synthetic analyst',field:'Research',expected_selection_version:0}});
- expect(saved.status()).toBe(200);expect((await saved.json()).goal.readiness).toBe('pending');
+ await seedCanonicalGoal(account,{role:'Synthetic analyst',field:'Research',skills:[]});
  await page.goto('/career-goal/chat');await page.reload();
  await expect(page.getByRole('main')).toContainText('Synthetic analyst');
  const restored=await account.get('/api/v1/career/goals/current');

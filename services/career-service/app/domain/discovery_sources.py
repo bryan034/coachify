@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 from urllib.parse import urlsplit, parse_qs
 from app.clients.research import normalize_sources
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.schemas.discovery import DiscoverySource
 
 POLICY = 'discovery-listings-v4-semantic-evidence'

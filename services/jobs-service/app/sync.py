@@ -10,7 +10,7 @@ from pymongo.errors import PyMongoError
 
 from app.normalise import build, source_id
 from app.providers import USER_AGENT, ProviderUnavailable, fetch_json, read_board
-from app.registry import Source, load_sources
+from app.registry import load_sources
 from app.store import JobsStore
 
 log = logging.getLogger('elo.jobs.sync')

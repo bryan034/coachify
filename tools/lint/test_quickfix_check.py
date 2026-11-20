@@ -193,6 +193,12 @@ def test_ruff_diagnostics_without_a_rule_code_stop_the_check(service, monkeypatc
         ruff_violations(service, {'app/domain/x.py': ([], [])})
 
 
+def test_missing_ruff_stops_the_check_instead_of_reporting_no_violations(service, monkeypatch):
+    monkeypatch.setattr(subprocess, 'run', lambda *a, **k: subprocess.CompletedProcess(a, 1, '', 'No module named ruff'))
+    with pytest.raises(SystemExit, match='No module named ruff'):
+        ruff_violations(service, {})
+
+
 def test_syntax_errors_stop_the_check_with_a_readable_message(service):
     write(service, 'app/domain/x.py', 'def f(:\n')
     with pytest.raises(SystemExit, match=r'x\.py:1: cannot parse'):

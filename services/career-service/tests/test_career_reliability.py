@@ -4,15 +4,17 @@ import json
 from types import SimpleNamespace
 import httpx
 import pytest
-from app.ai.adapter import AIAdapter, AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
-from app.ai.jd_scope import identify_job, CareerScopeError
+from app.ai.jd_scope import CareerScopeError
+from app.workflows.job_identity import identify_job
 from app.ai.recovery import recover_responses
-from app.schemas.opportunity import CATEGORIES
 from app.ai.opportunity_contracts import structure_input
 from app.schemas.analysis import ResearchSource
 from app.workflows.opportunity.engine import OpportunityEngine
+from app.workflows.opportunity.topics import TOPICS
 
 
 @pytest.mark.parametrize('stage', ['opportunity_plan', 'opportunity_structure'])
@@ -25,7 +27,7 @@ def test_research_output_has_room_and_json_object_schema_is_explicit(stage, ceil
     assert payload['response_format']=={'type':'json_object'}
     assert 'JSON schema:' in payload['messages'][0]['content']
     if stage=='opportunity_plan':
-        assert all(category in payload['messages'][0]['content'] for category in CATEGORIES)
+        assert all(topic in payload['messages'][0]['content'] for topic in TOPICS)
         assert 'query STRINGS' in payload['messages'][0]['content']
 
 
@@ -66,8 +68,8 @@ def test_research_repairs_log_safe_schema_fields_and_retain_truncation_reason(ca
         def handler(request):
             requests.append(json.loads(request.content))
             # Truncation followed by a complete but incorrectly typed category.
-            content={category:['Example public interview query'] for category in CATEGORIES}
-            content['company_intelligence']={'PRIVATE_EXTRA_FIELD':'PRIVATE_MODEL_TEXT'}
+            content={topic:['Example public interview query'] for topic in TOPICS}
+            content['management']={'PRIVATE_EXTRA_FIELD':'PRIVATE_MODEL_TEXT'}
             return httpx.Response(200,json={'choices':[{'finish_reason':'length' if len(requests)==1 else 'stop',
                 'message':{'content':json.dumps(content)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -78,9 +80,9 @@ def test_research_repairs_log_safe_schema_fields_and_retain_truncation_reason(ca
             with pytest.raises(AIError) as caught:
                 await engine.generate({'_id':'synthetic','owner':'synthetic','goal_id':'synthetic','worker_token':'synthetic'},'opportunity_plan',{})
         assert caught.value.reason=='schema_validation'
-        assert caught.value.violations==({'field':'company_intelligence','issue':'list_type'},)
+        assert caught.value.violations==({'field':'management','issue':'list_type'},)
         assert 'incomplete_json' in requests[1]['messages'][0]['content']
-        assert 'company_intelligence' in caplog.text and 'list_type' in caplog.text
+        assert 'management' in caplog.text and 'list_type' in caplog.text
         assert 'PRIVATE' not in caplog.text
         assert len(updates)==2
     asyncio.run(run())

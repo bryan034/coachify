@@ -5,7 +5,7 @@ import httpx
 import pytest
 from app.clients.search_sources import SourceAPIs,error_excerpt
 from app.repositories.goals import GoalError
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.ai.research_planning import ResearchAssessment
 from app.workflows import research_search
 from app.schemas.analysis import ResearchContext,ResearchSource
@@ -36,7 +36,7 @@ def test_llm_context_request_uses_its_own_parameters_and_extracts_content_not_me
                 {'url':'http://127.0.0.1/private','snippets':['An interview is reported.']}]},
                 'sources':{'https://example.test/b':{'title':'Second interview report'},'https://example.test/empty':{'description':'Metadata is not evidence'}}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            sources=await SourceAPIs(client,brave_key='fixture').collect_query(ResearchContext(role='Analyst',field='Data',location='Singapore'),'Analyst Singapore interview')
+            sources=await SourceAPIs(client,brave_key='fixture',backend='brave').collect_query(ResearchContext(role='Analyst',field='Data',location='Singapore'),'Analyst Singapore interview')
         assert len(calls)==1 and len(sources)==2
         assert {s.url for s in sources}=={'https://example.test/a','https://example.test/b'}
         assert sources[1].title=='Second interview report'
@@ -48,7 +48,7 @@ def test_llm_context_request_uses_its_own_parameters_and_extracts_content_not_me
 def test_error_envelopes_are_never_research_results(payload):
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(200,json=payload))) as client:
-            with pytest.raises(GoalError):await SourceAPIs(client,brave_key='fixture').brave('Analyst interview')
+            with pytest.raises(GoalError):await SourceAPIs(client,brave_key='fixture',backend='brave').brave('Analyst interview')
     asyncio.run(run())
 
 
@@ -56,7 +56,7 @@ def test_empty_grounding_and_metadata_only_are_not_counted_as_sources():
     async def run():
         payload={'grounding':{'generic':[]},'sources':{'https://example.test/x':{'title':'Interview report'}}}
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(200,json=payload))) as client:
-            assert await SourceAPIs(client,brave_key='fixture').brave('Analyst interview')==[]
+            assert await SourceAPIs(client,brave_key='fixture',backend='brave').brave('Analyst interview')==[]
     asyncio.run(run())
 
 
@@ -77,7 +77,7 @@ def test_useful_source_count_requires_a_real_supporting_quote(monkeypatch,text,q
                 output=ResearchAssessment(useful_sources=[{'ref':'s0','quote':quote}])
                 kwargs['validate_output'](output)
                 return SimpleNamespace(data=output)
-        workflow=SimpleNamespace(goal=goal,app=SimpleNamespace(state=SimpleNamespace(ai=AI())))
+        workflow=SimpleNamespace(goal=goal,app=SimpleNamespace(state=SimpleNamespace(ai=AI(),research_client=SimpleNamespace(provider='brave'))))
         source=ResearchSource(source_id='a',platform='other',url='https://example.test/report',evidence=text)
         state={'owner':'synthetic','sources':[source.model_dump(mode='json')],'latest_source_ids':['a']}
         with pytest.raises(AIError,match='invalid_output'):await research_search.assess(workflow,state)
@@ -94,7 +94,7 @@ def test_interview_passage_after_long_navigation_is_preserved():
 def test_legacy_followup_search_keeps_company_and_location():
     async def run():
         async with httpx.AsyncClient() as client:
-            provider=SourceAPIs(client,brave_key='fixture')
+            provider=SourceAPIs(client,brave_key='fixture',backend='brave')
             context=ResearchContext(company='Example Bank',role='Analyst',field='Data',location='Singapore')
             for round in (0,1):
                 query=provider.query(context,round)
@@ -124,7 +124,7 @@ def test_slow_round_stops_searching_with_time_left_for_synthesis(monkeypatch):
                 return SimpleNamespace(data=output)
         class Workspaces:
             def phase(self,*args,**kwargs):pass
-        workflow=SimpleNamespace(goal=goal,app=SimpleNamespace(state=SimpleNamespace(ai=AI())),workspaces=Workspaces())
+        workflow=SimpleNamespace(goal=goal,app=SimpleNamespace(state=SimpleNamespace(ai=AI(),research_client=SimpleNamespace(provider='brave'))),workspaces=Workspaces())
         source=ResearchSource(source_id='a',platform='other',url='https://example.test/report',evidence='An SQL assessment is reported.')
         state={'owner':'synthetic','session':'session','run':'run','sources':[source.model_dump(mode='json')],'latest_source_ids':['a']}
         async with asyncio.timeout(90) as budget:
@@ -143,7 +143,7 @@ def test_richer_context_preserves_later_snippets_and_six_sources():
         payload={'grounding':{'generic':[
             {'url':f'https://example.test/{i}','snippets':snippets+[f'Candidate report {i}.']} for i in range(8)]}}
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(200,json=payload))) as client:
-            sources=await SourceAPIs(client,brave_key='fixture').brave('Example Analyst internship interview')
+            sources=await SourceAPIs(client,brave_key='fixture',backend='brave').brave('Example Analyst internship interview')
         assert len(sources)==6
         assert all(detail in s.evidence and 600<len(s.evidence)<=2400 for s in sources)
     asyncio.run(run())
@@ -183,7 +183,7 @@ def test_opportunity_requests_five_brave_sources_with_wider_page_text():
                 {'url':f'https://example.test/{i}','snippets':[f'Candidate {i} reports an interview.']}
                 for i in range(6)]}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            sources=await SourceAPIs(client,brave_key='fixture').collect_opportunity_query(
+            sources=await SourceAPIs(client,brave_key='fixture',backend='brave').collect_opportunity_query(
                 ResearchContext(role='Analyst',field='Data'),'Analyst interview')
         assert len(sources)==5 and len({s.url for s in sources})==5
     asyncio.run(run())

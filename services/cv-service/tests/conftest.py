@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 from pymongo import MongoClient
 from app.core.config import Settings
 from app.main import create_app
-from app.repositories.cv import MemoryCvRepository, CvRepository
+from app.repositories.cv import CvRepository
+from tests.memory_repositories import MemoryCvRepository
 
 
 TEXT = ['Education: Example University, Computing',

@@ -122,13 +122,12 @@ def test_reused_mutation_key_cannot_confirm_a_different_selection():
     with pytest.raises(GoalError,match='different details'):repo.confirm(OWNER,changed)
 
 
-def test_api_requires_auth_and_default_app_has_no_legacy_target_writes(monkeypatch):
+def test_api_requires_auth(monkeypatch):
     monkeypatch.delenv('MONGODB_URI',raising=False)
     def profile(request):return httpx.Response(200,json={'id':OWNER,'email_verified':True} if request.url.path.endswith('/session') else {'onboarding_complete':True})
     with TestClient(create_app(profile_client=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile)))) as client:
         assert client.get(BASE+'/current/cv-confirmation').status_code==401
         assert client.get(BASE+'/current/cv-confirmation',headers={'Authorization':'Bearer owner'}).status_code==503
-        assert client.post('/api/v1/career/targets',json={}).status_code==404
         assert client.post(BASE+'/current/cv-confirmation',json={'expected_goal_id':'bad'},headers={'Authorization':'Bearer owner'}).status_code==422
 
 
@@ -152,54 +151,6 @@ def test_http_confirmation_uses_explicit_exact_revision_and_hides_foreign_contex
         assert client.get(BASE+'/'+ID+'/confirmed-context?expected_version=2').status_code==409
         assert client.get(BASE+'/current/confirmed-context',headers={'Authorization':'Bearer other'}).json() is None
         assert client.post(BASE+'/current/cv-confirmation',json=body,headers={'Authorization':'Bearer other'}).status_code==409
-
-
-def test_canonical_storage_keys_preserve_retired_unique_index_without_record_migration(documents):
-    first=CareerGoal.model_validate(documents['goal'])
-    second=first.model_copy(update={'id':'000000000000000000000099'})
-    assert mongo_document(first)['create_key']=='canonical:'+first.id
-    assert mongo_document(second)['create_key']!=mongo_document(first)['create_key']
-    assert 'create_key' not in first.model_dump()
-
-
-def test_existing_legacy_unique_index_allows_multiple_new_goals_and_drafts(documents):
-    import os
-    from pymongo import MongoClient
-    from app.repositories.goals import GoalStore
-    from app.repositories.targets import TargetRepository
-    from app.schemas.goals import CvContext
-    uri=os.getenv('MONGODB_TEST_URI')
-    if not uri:pytest.skip('Set MONGODB_TEST_URI for isolated index coexistence test.')
-    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000,tz_aware=True)
-    name='elo_confirmation_test_'+uuid4().hex
-    db=mongo[name]
-    try:
-        mongo.admin.command('ping')
-        TargetRepository(db) # Deliberately install the pre-upgrade unique index.
-        first=CareerGoal.model_validate(documents['goal']);owner=first.user_id
-        historical={'_id':str(uuid4()),'user_id':owner,'create_key':str(uuid4()),'role':'Historical target'}
-        db.career_goals.insert_one(deepcopy(historical))
-        store=GoalStore(db);store.ensure_indexes()
-        store.persist_target(first)
-        second=first.model_copy(update={'id':'000000000000000000000099'})
-        store.persist_target(second)
-        draft=store.start(owner,str(uuid4()),{'consent':True},CvContext())
-        assert store.draft(draft.id,owner)==draft
-        assert db.career_goals.find_one({'_id':historical['_id']})==historical
-        assert {g.id for g in store.list(owner)['goals']}=={first.id,second.id}
-        assert db.career_goals.index_information()['user_id_1_create_key_1']['unique'] is True
-        store.state.insert_one({'_id':owner,'version':1,'goal_id':ObjectId(first.id)})
-        acknowledgement=CvConfirmationService(store)
-        body=ConfirmCvGoal(expected_goal_id=first.id,expected_goal_version=first.version,
-            expected_selection_version=1,mutation_id=str(uuid4()))
-        saved=acknowledgement.confirm(owner,body)
-        assert saved['confirmed'] and acknowledgement.confirm(owner,body)==saved
-        assert len(store.state.find_one({'_id':owner})['cv_confirmation_receipts'])==1
-        store.state.update_one({'_id':owner},{'$set':{'goal_id':ObjectId(second.id)},'$inc':{'version':1}})
-        assert acknowledgement.context(owner) is None
-        with pytest.raises(GoalError):acknowledgement.confirm(owner,body)
-    finally:
-        mongo.drop_database(name);mongo.close()
 
 
 def test_confirmation_detects_changed_requirement_details_without_a_version_bump():

@@ -22,3 +22,10 @@ addopts = "--import-mode=importlib"
 
 [tool.setuptools.package-data]
 app = ["data/*.json", "data/*.txt", "data/*.md"]
+
+[tool.vulture]
+paths = ["app", "scripts"]
+exclude = ["app/schemas/"]
+ignore_decorators = ["@router.*", "@app.*", "@field_validator", "@model_validator"]
+ignore_names = ["trust_env"]
+min_confidence = 60

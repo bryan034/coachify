@@ -26,7 +26,7 @@ class FakeAI:
         self.inputs.append(data)
         if self.hook: self.hook()
         if self.fail:
-            from app.ai.adapter import AIError
+            from app.ai.errors import AIError
             raise AIError('unavailable',True)
         memory=json.loads(data.context)
         missing=memory['unresolved_topics']
@@ -84,20 +84,7 @@ def turn(client,draft,**kwargs):
     return client.post(BASE+'/explorations/'+draft['_id']+'/messages',json={'expected_version':draft['version'],'answer':'I built a small project.',**kwargs},headers=headers())
 
 
-def complete(client):
-    draft=start(client)
-    for _ in range(6):
-        response=turn(client,draft); assert response.status_code==200,response.text
-        draft=response.json()
-    return draft
-
-
-def confirm_body(draft=None,**kwargs):
-    return {'target_type':'career_exploration' if draft else 'specific_job','role':'Data analyst','field':'Analytics',
-        'expected_selection_version':0, **({'draft_id':draft['_id'],'expected_draft_version':draft['version']} if draft else {}),**kwargs}
-
-
-def test_no_cv_questions_resume_and_explicit_confirmation(flow):
+def test_no_cv_questions_resume_and_complete_context(flow):
     client,db,ai,cv=flow
     draft=start(client)
     assert draft['cv']['mode']=='none' and draft['next_question']=='aspirations'
@@ -107,11 +94,6 @@ def test_no_cv_questions_resume_and_explicit_confirmation(flow):
     for _ in range(5): first=turn(client,first).json()
     assert first['context_complete'] and first['suggestions'][0]['role']=='Data analyst'
     assert client.get(BASE+'/goals/current',headers=headers()).json()['goal'] is None
-    response=client.post(BASE+'/goals/confirm',json=confirm_body(first),headers=headers())
-    assert response.status_code==200,response.text
-    saved=response.json()
-    assert saved['goal']['company'] is None and saved['goal']['readiness']=='pending'
-    assert saved['goal']['skills']==[] and saved['selection_version']==1
     assert db.cvs.count_documents({})==0
     record=db.career_goals.find_one({'record_type':'exploration_draft'})
     assert 'attachment_text' not in record and len(record['turns'])==6
@@ -132,30 +114,11 @@ def test_skip_unknown_idempotency_conflict_and_failure_preserve_progress(flow):
     assert 'processing' not in db.career_goals.find_one({'record_type':'exploration_draft'})
 
 
-def test_owner_isolation_and_client_cannot_assign_skills(flow):
+def test_owner_isolation(flow):
     client,db,ai,cv=flow; draft=start(client)
     assert client.get(BASE+'/explorations/'+draft['_id'],headers=headers(owner='other')).status_code==404
     assert client.post(BASE+'/explorations',json={'consent':True,'user_id':OTHER},headers=headers()).status_code==422
-    assert client.post(BASE+'/goals/confirm',json={**confirm_body(),'skills':[{'name':'fake'}]},headers=headers()).status_code==422
-    assert client.get(BASE+'/goals',headers=headers(owner='other')).json()=={'goals':[],'explorations':[],'reviews':[]}
     assert client.post(BASE+'/explorations',json={'consent':True}).status_code==401
-
-
-def test_confirm_retries_replacement_cancel_noop_and_stale_draft(flow):
-    client,db,ai,cv=flow; draft=complete(client); body=confirm_body(draft); key=str(uuid4())
-    a=client.post(BASE+'/goals/confirm',json=body,headers=headers(key)).json()
-    b=client.post(BASE+'/goals/confirm',json=body,headers=headers(key)).json()
-    assert a==b and db.career_goals.count_documents({'record_type':{'$ne':'exploration_draft'}})==1
-    noop_key=str(uuid4())
-    assert client.post(BASE+'/goals/confirm',json={**body,'expected_selection_version':1},headers=headers(noop_key)).json()['selection_version']==1
-    assert client.post(BASE+'/goals/confirm',json={**body,'role':'Different','expected_selection_version':1,'replace_current':True},headers=headers(noop_key)).status_code==409
-    change=confirm_body(role='Designer',field='Design',expected_selection_version=1)
-    assert client.post(BASE+'/goals/confirm',json=change,headers=headers()).status_code==409
-    changed=client.post(BASE+'/goals/confirm',json={**change,'replace_current':True},headers=headers()).json()
-    assert changed['selection_version']==2 and changed['dependent_results_need_review']
-    assert client.post(BASE+'/goals/confirm',json={**change,'replace_current':True},headers=headers()).status_code==409
-    assert db.career_goals.count_documents({'record_type':{'$ne':'exploration_draft'}})==2
-    assert client.post(BASE+'/goals/confirm',json={**body,'expected_selection_version':2,'expected_draft_version':99,'replace_current':True},headers=headers()).status_code==409
 
 
 def test_temporary_cv_is_transient_and_reattach_is_required(flow):
@@ -190,21 +153,6 @@ def test_late_result_does_not_overwrite_newer_draft(flow):
     assert stored['version']==2 and not stored['turns']
 
 
-def test_confirmation_pins_cv_and_replays_even_if_cv_changes_after_success(flow,documents):
-    client,db,ai,cv=flow;cv.rows=[CvSnapshot.model_validate(documents['cv'])]
-    draft=start(client,cv_id=documents['cv']['_id'])
-    for _ in range(6):
-        response=turn(client,draft);assert response.status_code==200,response.text
-        draft=response.json()
-    key=str(uuid4());body=confirm_body(draft)
-    first=client.post(BASE+'/goals/confirm',json=body,headers=headers(key))
-    assert first.status_code==200,first.text
-    assert first.json()['goal']['source_profile_version']==1
-    cv.rows[0].version=2
-    assert client.post(BASE+'/goals/confirm',json=body,headers=headers(key)).status_code==200
-    assert client.post(BASE+'/goals/confirm',json={**body,'expected_selection_version':1,'replace_current':True},headers=headers()).status_code==409
-
-
 def test_agent_clarifies_vague_answers_and_uses_previous_messages(flow):
     client,db,ai,cv=flow
     original=ai.generate
@@ -221,7 +169,6 @@ def test_agent_clarifies_vague_answers_and_uses_previous_messages(flow):
     assert second['answers']=={} and len(ai.inputs[-1].conversation)==3
     assert ai.inputs[-1].conversation[0].content=='Hi'
     assert 'What would you like your working day' in ai.inputs[-1].conversation[1].content
-    assert client.post(BASE+'/goals/confirm',json=confirm_body(second),headers=headers()).status_code==409
 
 
 def test_grounded_partial_context_is_not_complete_and_forged_updates_cannot_publish(flow):

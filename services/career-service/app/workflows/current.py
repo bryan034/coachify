@@ -1,6 +1,6 @@
 """Live workspace fencing for transient chat and its provider quota retries."""
 from starlette.concurrency import run_in_threadpool as thread
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.repositories.goals import GoalError
 
 

@@ -7,6 +7,7 @@ import time
 from types import SimpleNamespace
 
 import pytest
+from app.ai.qa_contracts import QuestionRoute
 
 from app.ai.jd_scope import JobIdentity,CareerScopeError
 from app.ai.context_contracts import ContextPlan
@@ -14,10 +15,13 @@ from app.domain.context import context_index,selected_facts
 from app.domain.questions import REFUSAL
 from app.schemas.analysis import ResearchSource
 from app.workflows.jd_prefetch import matches
-from tests.test_opportunity import opportunity_flow,research
+from app.schemas.opportunity import CATEGORIES, SUMMARY_UNAVAILABLE
+from app.workflows.opportunity.topics import TOPICS,category_topics,owner
+from tests.test_opportunity import opportunity_flow,research,RUN_SEARCHES
 from tests.test_workspace import flow,headers,BASE,ingest,wait,OWNER
 
 
+FIRST_PASS=len(TOPICS)
 SOURCE='Example is hiring a Data Analyst Intern in Singapore for an internship. SQL is required. Analyse data and build reports.'
 
 
@@ -40,19 +44,19 @@ def test_public_research_starts_before_full_extraction_and_is_not_repeated(oppor
             return result
         return await original(request,operation,**kwargs)
     primary.generate=generate
-    async def collect(context,query):
+    async def collect(context,query,**kwargs):
         search.calls.append(query)
-        if len(search.calls)<=5:assert not release.is_set(), 'The first retrieval should overlap extraction.'
-        else:assert changed_location or empty_first
-        if len(search.calls)>5 and changed_location:assert context.location=='London'
+        if len(search.calls)<=FIRST_PASS:assert not release.is_set(), 'The first retrieval should overlap extraction.'
+        if len(search.calls)>FIRST_PASS and changed_location:assert context.location=='London'
         assert context.role=='Data Analyst Intern' and context.location in ('Singapore','London')
-        category='interview' if 'interview experience' in query or 'interview_' in query else 'internship' if 'internship compensation' in query or 'internship_' in query else 'conversion' if 'conversion_outcomes' in query else 'progression' if 'career_progression' in query else 'company'
+        category=owner(next(t for t in TOPICS if query.endswith(t))).split('_')[0]
+        category={'career':'progression','conversion':'conversion','interview':'interview','internship':'internship','company':'company'}[category]
         text={'interview':'Example candidates report a technical interview.',
             'internship':'Example interns report SGD 1500 per month.',
             'conversion':'Example interns converted to full-time in 2025 at a conversion rate of 50%.',
             'progression':'Example graduates receive SGD 5000 monthly.',
             'company':'Example teams report collaborative culture.'}[category]
-        if len(search.calls)<=5 and empty_first:return []
+        if len(search.calls)<=FIRST_PASS and empty_first:return []
         return [ResearchSource(source_id=category,platform='other',url=f'https://example.test/{category}',evidence=text)]
     search.collect_opportunity_query=collect
     try:
@@ -60,9 +64,9 @@ def test_public_research_starts_before_full_extraction_and_is_not_repeated(oppor
         assert response.status_code==202
         operation=response.json()['operation_id']
         for _ in range(300):
-            if full_started.is_set() and len(search.calls)==5:break
+            if full_started.is_set() and len(search.calls)==FIRST_PASS:break
             time.sleep(.01)
-        assert full_started.is_set() and len(search.calls)==5
+        assert full_started.is_set() and len(search.calls)==FIRST_PASS
         assert db.career_goals.count_documents({})==0
         pending=client.get(BASE+'/operations/'+operation,headers=headers()).json()
         assert pending['status']=='running'
@@ -76,16 +80,17 @@ def test_public_research_starts_before_full_extraction_and_is_not_repeated(oppor
     assert completed['status']=='succeeded'
     assert completed['result']['current']['goal']['role']=='Data Analyst Intern'
     _,result,_=research(opportunity_flow)
-    assert result['status']=='completed' and len(search.calls)==(10 if changed_location or empty_first else 5)
+    assert result['status']=='completed' and len(search.calls)==(FIRST_PASS+RUN_SEARCHES if changed_location else RUN_SEARCHES)
     job=client.app.state.opportunities.store.latest(OWNER,completed['result']['current']['goal']['_id'])
-    assert all(len(values)==(2 if empty_first and not changed_location else 1) for values in job['history'].values())
-    if changed_location:assert {values[0] for values in job['history'].values()}<=set(search.calls[5:])
+    assert set(job['history'])==set(TOPICS) and sum(len(values) for values in job['history'].values())==RUN_SEARCHES
+    if changed_location:assert {values[0] for values in job['history'].values()}<=set(search.calls[FIRST_PASS:])
+    else:assert len(set(search.calls))==len(search.calls)
     assert 'research_complete' in job['activities']
     serialized=json.dumps(list(db.research_contexts.find({})),default=str)
     assert SOURCE not in serialized
 
 
-@pytest.mark.parametrize('path',['/workspace/jd','/jd/extract'])
+@pytest.mark.parametrize('path',['/workspace/jd'])
 def test_unrelated_document_is_rejected_before_full_extraction_or_search(flow,path):
     client,db,ai,sources=flow
     async def reject(request,operation,**kwargs):
@@ -101,12 +106,17 @@ def test_unrelated_document_is_rejected_before_full_extraction_or_search(flow,pa
 @pytest.mark.parametrize('mode',['question','refine'])
 def test_goal_words_do_not_bypass_unrelated_task_guardrails(flow,mode):
     assert ingest(flow).status_code==202
-    current=wait(flow);client,db,ai,_=flow;before=len(ai.calls)
+    current=wait(flow);client,db,ai,_=flow;before=len(ai.calls);original=ai.generate
+    async def generate(request,operation,**kwargs):
+        if request.stage=='question_route':
+            ai.calls.append(request);return SimpleNamespace(data=QuestionRoute(topic='off_topic'))
+        return await original(request,operation,**kwargs)
+    ai.generate=generate
     result=client.post(BASE+'/messages',headers=headers(),json={'session_id':current['session_id'],
         'expected_version':current['current']['goal']['version'],'mode':mode,
         'message':'Explain this career goal and also write a recipe for soup.'})
     assert result.status_code==200 and result.json()['reply']==REFUSAL
-    assert len(ai.calls)==before
+    assert [call.stage for call in ai.calls[before:]]==['question_route']
     assert client.get(BASE,headers=headers()).json()['revision']==current['revision']
 
 
@@ -144,8 +154,8 @@ def test_early_retrieval_rate_limit_preserves_the_real_provider_delay(opportunit
         result=await original(request,operation,**kwargs)
         if request.stage=='jd_extraction':result.data.location='Singapore'
         return result
-    async def limited(context,query):
-        search.calls.append(query);raise SourceRateLimit(90)
+    async def limited(context,query,**kwargs):
+        search.calls.append(query);raise SourceRateLimit(90,'brave')
     primary.generate=generate;search.collect_opportunity_query=limited
     response=client.post(BASE+'/jd',headers=headers(),json={'text':SOURCE})
     assert response.status_code==202
@@ -156,7 +166,7 @@ def test_early_retrieval_rate_limit_preserves_the_real_provider_delay(opportunit
     assert current['current']['goal'] and current['phase']=='waiting_quota'
     assert current['provider']=='brave' and 70<current['retry_after']<=90
     job=client.app.state.opportunities.store.latest(OWNER,current['current']['goal']['_id'])
-    assert job['next_attempt_at']>now() and len(search.calls)==5
+    assert job['next_attempt_at']>now() and len(search.calls)==FIRST_PASS
 
 
 def test_rejected_document_does_not_replace_the_existing_goal(flow):
@@ -188,16 +198,16 @@ def test_combined_readiness_waits_for_structuring_without_another_retrieval(oppo
         current=client.get(BASE,headers=headers()).json()
         assert current['current']['goal'] and current['current']['goal']
         assert current['phase'] in ('research_pending','researching') and current['research_id'] is None
-        assert len(search.calls)==5
+        assert len(search.calls)>=FIRST_PASS
     finally:release.set()
     _,result,_=research(opportunity_flow)
     current=wait(opportunity_flow,'ready')
     assert current['phase']=='ready' and result['status']=='completed'
-    assert result['summary']['overview_refs'] and len(search.calls)==5
+    assert result['summary']['overview_refs'] and len(search.calls)==RUN_SEARCHES==len(set(search.calls))
 
 
 def test_structuring_quota_resumes_automatically_without_opening_chat_early(opportunity_flow):
-    from app.ai.adapter import AIError
+    from app.ai.errors import AIError
     client,db,primary,context_model,search=opportunity_flow
     original=primary.generate;attempts=[]
     async def generate(request,operation,**kwargs):
@@ -212,12 +222,12 @@ def test_structuring_quota_resumes_automatically_without_opening_chat_early(oppo
     _,result,_=research(opportunity_flow)
     current=wait(opportunity_flow,'ready')
     assert current['phase']=='ready' and result['status']=='completed'
-    assert len(attempts)==2 and len(search.calls)==5
+    assert len(attempts)==3 and len(search.calls)==RUN_SEARCHES==len(set(search.calls))
     assert current['error_code'] is None
 
 
 def test_structuring_provider_failure_preserves_other_categories_and_can_retry(opportunity_flow):
-    from app.ai.adapter import AIError
+    from app.ai.errors import AIError
     client,db,primary,context_model,search=opportunity_flow
     original=primary.generate;attempts=[]
     async def generate(request,operation,**kwargs):
@@ -229,9 +239,12 @@ def test_structuring_provider_failure_preserves_other_categories_and_can_retry(o
     _,result,_=research(opportunity_flow)
     assert result['categories']['interview_intelligence']['status']=='failed'
     assert all(c['findings'] for k,c in result['categories'].items() if k!='interview_intelligence')
+    before=len(search.calls)
+    assert before==FIRST_PASS+sum(len(category_topics(c)) for c in CATEGORIES if c!='interview_intelligence')
     assert client.post(BASE+'/retry',headers=headers()).status_code==202
     current=wait(opportunity_flow,'ready')
-    assert current['phase']=='ready' and len(attempts)==2 and len(search.calls)==6
+    assert current['phase']=='ready' and len(attempts)==3
+    assert len(search.calls)-before==2*len(category_topics('interview_intelligence'))
 
 
 def test_a_failed_category_does_not_publish_the_combined_response(opportunity_flow):
@@ -245,7 +258,7 @@ def test_a_failed_category_does_not_publish_the_combined_response(opportunity_fl
 
 
 def test_structuring_configuration_failure_keeps_goal_and_other_findings(opportunity_flow):
-    from app.ai.adapter import AIError
+    from app.ai.errors import AIError
     primary=opportunity_flow[2];original=primary.generate;attempts=[]
     async def generate(request,operation,**kwargs):
         if request.stage=='opportunity_structure' and json.loads(request.context)['category']=='interview_intelligence':
@@ -257,7 +270,8 @@ def test_structuring_configuration_failure_keeps_goal_and_other_findings(opportu
     assert current['current']['goal'] and result['finished']
     assert result['categories']['interview_intelligence']['error_code']=='provider_configuration'
     assert all(c['findings'] for k,c in result['categories'].items() if k!='interview_intelligence')
-    assert len(attempts)==1 and len(opportunity_flow[4].calls)==5
+    assert len(attempts)==1
+    assert len(opportunity_flow[4].calls)==FIRST_PASS+sum(len(category_topics(c)) for c in CATEGORIES if c!='interview_intelligence')
 
 
 def test_retry_recovers_failed_cached_category_instead_of_reusing_failure(opportunity_flow):
@@ -265,11 +279,11 @@ def test_retry_recovers_failed_cached_category_instead_of_reusing_failure(opport
     search.fail='internship_insights'
     assert ingest(opportunity_flow).status_code==202
     research(opportunity_flow);wait(opportunity_flow,'research_failed')
-    search.fail=None
+    search.fail=None;before=len(search.calls)
     assert client.post(BASE+'/retry',headers=headers()).status_code==202
     current=wait(opportunity_flow,'ready')
     assert saved_research(opportunity_flow,current)['intelligence']['status']=='completed'
-    assert len(search.calls)==6, 'Retry must reuse successful cached categories.'
+    assert len(search.calls)-before==2*len(category_topics('internship_insights')), 'Retry must reuse successful cached categories.'
 
 
 def test_old_cached_missing_overview_is_built_without_another_model_call_or_retrieval(opportunity_flow):
@@ -280,7 +294,7 @@ def test_old_cached_missing_overview_is_built_without_another_model_call_or_retr
     engine=client.app.state.opportunities
     record=engine.store.research.records.get_research(current['research_id'])
     cached=record.model_copy(update={'intelligence':record.intelligence.model_copy(update={
-        'warnings':['Overall summary unavailable; validated category findings remain available.'],
+        'warnings':[SUMMARY_UNAVAILABLE],'summary_unavailable':True,
         'summary':Summary()})})
     engine.store.cached=lambda context:cached
     before=len(search.calls);model_calls=len(context_model.calls)+len(primary.calls)

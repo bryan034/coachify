@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
-from app.api.v1.goals import owner, store
+from app.api.v1.dependencies import owner
+from app.api.v1.goals import store
 from app.repositories.goals import GoalError
 from elo_shared.skills import identity, MAPPING_VERSION
 from app.domain.competence import calibrated_goal

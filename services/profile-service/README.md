@@ -124,7 +124,7 @@ Employed users also provide employer, role and industry. Unemployed users answer
 Pending accounts have no private session. Codes expire in 10 minutes, allow five
 incorrect guesses and are replaced on resend. Local mail appears at localhost:8025.
 
-## Environment and legacy data — P15
+## Environment
 
 `auth-config` exposes `development_tools_enabled` only when `APP_ENV=development`,
 regardless of sign-in mode. This enables a browser-only onboarding preview; it does
@@ -132,9 +132,7 @@ not reset or write profile data. No extra environment variable is needed.
 
 `local_test` is development-only. `email` enables email/password production access;
 `google` adds Google access. Production requires encrypted authenticated SMTP and a
-server-only OTP hash key. Existing profiles are preserved; the explicit dry-run
-[legacy mapping script](scripts/map_legacy_owner.py) can map a fixed local owner
-without copying history. See [service rules](SPECIFICATION.md) for its procedure.
+server-only OTP hash key. See [service rules](SPECIFICATION.md).
 
 ## Using the service
 

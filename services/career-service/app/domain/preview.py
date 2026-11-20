@@ -1,3 +1,4 @@
+from contextlib import suppress
 import json
 import os
 import signal
@@ -50,10 +51,8 @@ def run_browser_preview(url,deadline):
             # Include Chromium's descendants before terminating the supervisor group.
             descendants=child_processes(process.pid)
             for child in reversed(descendants):
-                try:os.kill(child,signal.SIGKILL)
-                except ProcessLookupError:pass
-            try:os.killpg(process.pid,signal.SIGKILL)
-            except ProcessLookupError:pass
+                with suppress(ProcessLookupError):os.kill(child,signal.SIGKILL)
+            with suppress(ProcessLookupError):os.killpg(process.pid,signal.SIGKILL)
             process.wait()
 
 

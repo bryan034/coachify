@@ -139,8 +139,8 @@ most three distinct queries: subject, official-employer information, candidate e
 Missing projected facts, explicit `missing=true` or an answering-model `not_found` can
 start/continue retrieval. A successful answer stops searches. Each query admits up to six
 normalized sources; at most twelve deduplicated exact-passage candidates reach the answer.
-Simple salary/location lookups retain their deterministic topical-excerpt path. Other
-questions save only passages cited by a validated `answered` result, never irrelevant
+Passages are labelled by the `passage_scope` model before verification. Questions save
+only passages cited by a validated `answered` result, never irrelevant
 uncited pages, generated prose or invalid-answer fallbacks. The existing immutable
 `interview_research.question_findings` snapshots and owner/goal-version pointers in
 `research_contexts` append these findings to `question_research` JSON. Per-focus current
@@ -159,7 +159,6 @@ Five logical domain collections retain their existing ownership:
 | cvs | CV service, consumed through authenticated API snapshots |
 | career_goals | Career structured reviews and versioned current goals |
 | interview_research | Career immutable reusable public-context evidence |
-| skill_gap_analyses | Career version-pinned private results; analysis endpoints planned |
 
 Profile account IDs are authenticated UUID strings. Domain record IDs are BSON
 ObjectIds, represented as 24-character strings in JSON. Services never query another
@@ -190,7 +189,7 @@ Research results keep exact source references and versions; private per-goal lin
 constrain reads. Source URLs/excerpts and reposts are deduplicated. Unknown report
 independence stays unknown, with no invented counts. `coverage` preserves platform
 availability, including on cache reuse. Stage/type/difficulty require support in cited
-material; unmapped topics stay readable but cannot enter future gap analysis.
+material; unmapped topics stay readable but cannot enter Assessment comparisons.
 
 ## Structured requirements and comparison
 
@@ -232,8 +231,8 @@ extra proposal call within its original operation deadline. Prompt/schema output
 | `CAREER_LLM_MODEL` | the configured `OPENROUTER_MODEL`; one explicit model override shared by every stage |
 | `CAREER_LLM_BASE_URL` | OpenRouter by default; HTTPS only (HTTP only with `CAREER_LLM_ALLOW_HTTP=true` and `APP_ENV=development` for synthetic fixtures); no credentials/query/fragment |
 | `CAREER_LLM_RESPONSE_MODE` | `json_schema_strict` by default; `json_object` puts the schema in the prompt for providers without native schema support (Discovery then reports `unsupported_structured_output`); backend validation always applies |
-| `AI_MAX_OUTPUT_TOKENS` | 8192; overall completion ceiling; JD extraction uses up to 8192 and identification up to 4096; existing smaller stage caps still apply |
-| `AI_CONTEXT_TOKENS` | 65536 when unset; public template is 32768; match the actual model context |
+| `AI_MAX_OUTPUT_TOKENS` | Blank: each stage's own completion cap applies (JD extraction 8192, identification 4096, chat 1024, unlisted stages 8192). When set (at least 128): can only lower those caps |
+| `AI_CONTEXT_TOKENS` | Blank: requests are sent whole and the provider enforces its context window. When set (at least 2048): local input admission; match the actual model context |
 | `AI_TIMEOUT_SECONDS`, `AI_RETRIES` | 60-second model-call deadline (maximum 60), one bounded 5xx retry |
 | `CAREER_LLM_TOKEN_PARAMETER` | `max_tokens`; select `max_completion_tokens` for compatible models requiring it |
 | Legacy provider/model switches | `CAREER_LLM_PROVIDER`, `CAREER_LOCAL_TIMEOUT_SECONDS`, `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MODE`, `AI_TOKEN_PARAMETER`, `GEMINI_ENABLED`, `GEMINI_MODEL`, `OPPORTUNITY_GEMINI_MODEL` (obsolete) ignored by production reasoning |
@@ -313,8 +312,8 @@ There is no application-enforced requests-per-minute or tokens-per-minute limit.
 The model provider quotas, context validation and task output ceilings remain enforced.
 The Docker image bundles its tokenizer cache to avoid runtime downloads.
 
-Task output caps remain bounded by AI_MAX_OUTPUT_TOKENS: chat 1024, interview synthesis
-2048, JD identification 4096 and JD extraction 8192. Timeouts, context/input validation, bounded
+Task output caps are chat 1024, interview synthesis 2048, JD identification 4096 and JD
+extraction 8192; a set AI_MAX_OUTPUT_TOKENS can only lower them. Timeouts, context/input validation, bounded
 5xx/correction retries, ownership, authentication, stale-result protection and parser
 resource bounds remain. Numeric provider usage logs contain no private text. Graph
 memory does not create provider-side memory; nodes send relevant bounded context.
@@ -395,8 +394,8 @@ The UI refreshes the saved summary and waits for research before accepting anoth
 A message UUID Idempotency-Key is preserved across frontend retries. Published edits
 atomically store bounded hash/key receipts in career_state.chat_receipts; replay returns
 the current workspace without applying the change again. Receipts contain no transcript
-or model reply. Stale session/version requests fail before mutation. The older PATCH
-/workspace/review and legacy skill-proposal APIs remain compatibility interfaces.
+or model reply. Stale session/version requests fail before mutation. PATCH
+/workspace/review remains a direct-edit interface with the same version checks.
 
 
 ## The model semantic chat
@@ -406,8 +405,8 @@ adapter for both roles. Extraction, synthesis, planning, answers and edits all u
 Google's OpenAI-compatible endpoint, `max_tokens`, JSON Schema and minimal thinking.
 No SDK dependency, new endpoint or data-model migration is required.
 
-When enabled, `context_chat.py` replaces deterministic keyword routing for saved-goal
-chat. Its LangGraph interprets a compact index, retrieves selected facts, then answers.
+When enabled, `context_chat.py` routes saved-goal chat with the context model; the
+fallback graph uses the `question_route` model. Its LangGraph interprets a compact index, retrieves selected facts, then answers.
 The index contains metadata plus labels/references for skills, conditions and interview
 items, never full evidence, raw JD/CV, account credentials or database IDs. It is capped
 at 1,800 estimated tokens; a partial index is labelled. At most six recent messages,
@@ -524,8 +523,7 @@ leaves an existing Opportunity worker in control of its status and retry deadlin
 `jd_scope` is a transient configured-model classification/identity stage with a
 4,096-token output ceiling, bounded by the global completion setting. It verifies job-description intent and requires exact input
 support for public identity fields before speculative retrieval. Unrelated documents
-return HTTP 422 `career_scope`, with no full-extraction/search/goal write. The legacy
-`/jd/extract` endpoint uses the same gate. Metadata-free genuine job excerpts can
+return HTTP 422 `career_scope`, with no full-extraction/search/goal write. Metadata-free genuine job excerpts can
 continue to full extraction without speculative searches; missing titles are not invented.
 
 JD input remains capped at 8,000 Unicode characters. Both JD stages estimate the
@@ -566,8 +564,8 @@ Research completion is checked across all categories, even if interviews finish 
 Context routing additionally permits `opportunity` with `rN` references to saved
 findings. Backend-owned projections and exact owner/goal links retrieve compensation,
 workplace and company evidence; refs, confidence, related scope and citations are preserved.
-A narrow deterministic task/override guard applies before both question and refinement
-paths, alongside the semantic scope router and goal-edit schema. Source documents,
+Unrelated tasks and instruction overrides are rejected by the routing models (`off_topic`)
+and, during a pending edit, by the goal-edit model. Source documents,
 model output and recent conversation remain untrusted data, not instructions.
 
 

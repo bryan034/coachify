@@ -1,6 +1,10 @@
 """Owner/goal-linked reads with fixed MongoDB projections for each question topic."""
 from bson import ObjectId
 from app.repositories.goals import GoalError
+from app.repositories.question_memory import QuestionMemory
+from app.domain.questions import opportunity_findings
+from app.workflows.opportunity.domain import interview_projection
+from app.schemas.opportunity import CategoryResult
 
 META=('role','field','company','location','seniority_level')
 GOAL_FIELDS={
@@ -24,11 +28,9 @@ class QuestionStore:
     def metadata(self,owner,review_id):return self.goal(owner,review_id,META)
 
     def saved_questions(self,owner,row):
-        from app.repositories.question_memory import QuestionMemory
         return QuestionMemory(self.workspace,self.research).entries(owner,row)
 
     def save_question(self,owner,row,focus,findings,sources):
-        from app.repositories.question_memory import QuestionMemory
         return QuestionMemory(self.workspace,self.research).save(owner,row,focus,findings,sources)
 
     def fetch(self,owner,row,topic,include_evidence=False):
@@ -37,7 +39,6 @@ class QuestionStore:
         identifier=w.get('research_id')
         supplements=self.saved_questions(owner,row)
         def supplemented(research):
-            from app.domain.questions import opportunity_findings
             research['opportunity_findings']=[*opportunity_findings(research),
                 *[{**finding.model_dump(mode='json'),'category':'question_research'} for record in supplements for finding in record.question_findings]]
             sources={s['source_id']:s for s in research.get('sources',[])}
@@ -62,10 +63,8 @@ class QuestionStore:
         if not research:return supplemented({})
         if research.get('research_status') not in ('succeeded','no_findings','failed'):raise GoalError('Interview research is still running.')
         if research.get('intelligence'):
-            from app.workflows.opportunity.domain import compatibility
-            from app.schemas.opportunity import CategoryResult
             categories={k:CategoryResult.model_validate(v) for k,v in research['intelligence']['categories'].items()}
-            skills,process=compatibility(categories)
+            skills,process=interview_projection(categories)
             # In-memory question projection only; all citations still resolve through linked research.
             research.update(skills=[s.model_dump(mode='json') for s in skills],process=process.model_dump(mode='json'))
         return supplemented(research)

@@ -1,14 +1,20 @@
-"""Deterministic boundaries for public context, citations and compatibility findings."""
+"""Deterministic boundaries for public context, citations and interview projections."""
 import re
 import ipaddress
 from pydantic import ValidationError
 from app.ai.recovery import issues_for
 from urllib.parse import urlsplit,urlunsplit
-from datetime import timedelta
 from app.schemas.analysis import ResearchContext,InterviewSkill,InterviewProcess,InterviewStage,InterviewEvidence
-from app.schemas.opportunity import Finding,FIELDS,CATEGORIES,plain_text
+from app.schemas.opportunity import Finding,plain_text
 from app.repositories.goals import fingerprint,now
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
+from app.ai.opportunity_contracts import SkillLevels
+from .topics import TOPICS
+from types import SimpleNamespace
+from app.domain.competence import reference
+
+MIN_ANNUAL_AMOUNT = 1000
+MIN_COMPANY_WORD = 3
 
 
 def public_job_url(value):
@@ -61,26 +67,24 @@ def number_value(token):
 
 
 def numeric_support(value,evidence,index):
-    """Every number shown must come from the cited passage, written in any common format.
+    """Every number shown in digits must come from the cited passage's digits, written in any common format.
 
     The one derived number allowed is a monthly amount computed from an annual figure in the passage,
     and only when that annual figure is also shown in the value.
     """
-    words={w:i for i,w in enumerate('zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty'.split())}
     available={number_value(n) for n in NUMBER.findall(evidence)}-{None}
-    available|={float(words[w]) for w in re.findall(r'[a-z]+',evidence.casefold()) if w in words}
     shown=[number_value(n) for n in NUMBER.findall(plain_text(value))]
     stated={n for n in shown if n in available}
     for number in shown:
         if number in stated:continue
-        if number is not None and any(abs(annual/12-number)<=max(1,annual/12*.01) for annual in stated if annual>=1000):continue
+        if number is not None and any(abs(annual/12-number)<=max(1,annual/12*.01) for annual in stated if annual>=MIN_ANNUAL_AMOUNT):continue
         raise citation_error(index,'value','unsupported_number')
 
 
 def validate_claims(output,category,sources,public=None):
     found=[];stamp=now()
     for index,item in enumerate(output.findings):
-        if item.field not in FIELDS[category]:raise citation_error(index,'field','field_not_allowed')
+        if item.field not in TOPICS:raise citation_error(index,'field','field_not_allowed')
         if len(item.refs)!=len(item.quotes):raise citation_error(index,'refs','quote_reference_count_mismatch')
         if len(set(item.refs))!=len(item.refs):raise citation_error(index,'refs','duplicate_source_reference')
         for ref,quote in zip(item.refs,item.quotes):
@@ -93,7 +97,7 @@ def validate_claims(output,category,sources,public=None):
         values=item.model_dump(exclude={'refs'})
         if public:
             cited=' '.join((sources[i].title or '')+' '+(sources[i].evidence or '') for i in item.refs).casefold()
-            company=[w for w in re.findall(r'[a-z0-9]+',(public.get('company') or '').casefold()) if len(w)>2 and w not in {'ltd','limited','inc','pte','corp','corporation','company'}]
+            company=[w for w in re.findall(r'[a-z0-9]+',(public.get('company') or '').casefold()) if len(w)>=MIN_COMPANY_WORD and w not in {'ltd','limited','inc','pte','corp','corporation','company'}]
             if item.scope=='exact' and company and not any(w in cited for w in company):values.update(scope='general',confidence='low')
             if public.get('employment_type')=='internship' and re.search(r'full[ -]time|permanent employee',cited) and not re.search(r'\bintern(?:s|ship)?\b',cited):values.update(scope='related_employment',confidence='low')
         if public and not public.get('company'):values.update(scope='general',confidence='low')
@@ -110,8 +114,8 @@ def validate_claims(output,category,sources,public=None):
     return found
 
 
-def compatibility(categories,sources=()):
-    """Keep existing interview chat/read consumers working."""
+def interview_projection(categories,sources=()):
+    """Interview skills and stages that questions read, taken from interview findings."""
     skills=[];stages=[]
     for finding in categories['interview_intelligence'].findings:
         if finding.field=='recruitment_stages':
@@ -130,8 +134,6 @@ def rating_skills(goal):
 
 def weighted_skills(skills,public,categories):
     """Rating input: each skill with elo's weighted reference score and the weights behind it."""
-    from types import SimpleNamespace
-    from app.domain.competence import reference
     role=SimpleNamespace(**{k:public.get(k) for k in ('role','seniority_level','employment_type','field','company')})
     rows=[]
     for s in skills:
@@ -142,6 +144,7 @@ def weighted_skills(skills,public,categories):
 
 def validated_skill_levels(output,skills,finding_ids):
     """One rating per requested skill, citing only this report's findings."""
+    if not isinstance(output,SkillLevels):raise ValueError('Skill ratings have an unexpected shape.')
     wanted={' '.join(s['name'].casefold().split()):s['name'] for s in skills};seen={};problems=[]
     for index,rated in enumerate(output.levels):
         key=' '.join(rated.skill.casefold().split())

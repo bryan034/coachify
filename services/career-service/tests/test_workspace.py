@@ -13,7 +13,7 @@ from bson import ObjectId
 from fastapi.testclient import TestClient
 from pymongo import MongoClient
 from app.main import create_app
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 from app.repositories.goals import now
 from app.schemas.analysis import Generation,ResearchSource
 from app.schemas.jd import JDExtraction,JDReply
@@ -24,7 +24,7 @@ TEXT='A technical interview includes SQL exercise and joins.'
 
 def headers(key=None,other=False):return {'Authorization':'Bearer '+('other' if other else 'owner'),'Idempotency-Key':key or str(uuid4())}
 class AI:
-    settings=SimpleNamespace(enabled=True)
+    settings=SimpleNamespace(enabled=True,provider='compatible')
     def __init__(self):self.calls=[];self.fail=False;self.quota=False
     async def generate(self,request,operation,**kwargs):
         self.calls.append(request)
@@ -51,7 +51,7 @@ class AI:
             output=GoalEditDecision(status='ready',reply='Added Python to your goal.',intent='Add Python',changes=[
                 {'collection':'skills','action':'add','reference':'new1','field':'name','value':'Python'},
                 {'collection':'skills','action':'add','reference':'new1','field':'category','value':'Technical'}])
-        elif request.stage in ('jd_chat','workspace_chat'):
+        elif request.stage=='workspace_chat':
             context=json.loads(request.context)
             assert context['career_goal']['skills']
             output=JDReply(reply='Practise SQL joins for the reported technical interview.',proposed_skills=None)
@@ -60,6 +60,7 @@ class AI:
         if kwargs.get('validate_output'):kwargs['validate_output'](output)
         return SimpleNamespace(data=output,generation=Generation(provider='fixture',model='fixture',prompt_version='test',generated_at=now()))
 class Sources:
+    provider='brave';backend='brave'
     def __init__(self):self.calls=[];self.block=False;self.empty=False
     async def collect_platform(self,context,platform,round=0):
         self.calls.append((context,platform,round))

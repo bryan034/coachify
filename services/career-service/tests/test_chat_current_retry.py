@@ -2,11 +2,14 @@
 import asyncio
 from types import SimpleNamespace as NS
 import httpx
+import json
 import pytest
-from app.ai.adapter import AIAdapter, AIError, Operation
+from app.ai.adapter import AIAdapter, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.context_contracts import ContextPlan
+from app.ai.passage_scope import PassageScopes
 from app.ai.qa_contracts import FocusedAnswer
 from app.ai.waiting import quota_reason
 from app.clients.search_sources import SourceAPIs
@@ -37,7 +40,7 @@ def test_changed_workspace_releases_chat_during_long_quota_wait(monkeypatch,work
             def metadata(self,*args):return {'role':'Data Analyst','field':'Data'}
             def fetch(self,*args):return {'role':'Data Analyst','field':'Data'},{}
         monkeypatch.setattr('app.workflows.context_chat.QuestionStore',Questions)
-        monkeypatch.setattr('app.repositories.questions.QuestionStore',Questions)
+        monkeypatch.setattr('app.workflows.chat.QuestionStore',Questions)
         def respond(request):calls.append(request);return httpx.Response(429,headers={'Retry-After':'600'})
         async def sleep(seconds):
             waits.append(seconds)
@@ -69,8 +72,8 @@ def test_cancellation_during_async_revision_check_prevents_provider_call():
         async def current():entered.set();await release.wait();return '1'
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request:calls.append(request))) as client:
             ai=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),client)
-            operation=Operation('owner','1','chat')
-            task=asyncio.create_task(ai.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hello'}]),operation,current_revision=current))
+            operation=Operation('owner','1','career_guidance')
+            task=asyncio.create_task(ai.generate(AIInput(stage='career_guidance',context='{}',conversation=[{'role':'user','content':'Hello'}]),operation,current_revision=current))
             await entered.wait();operation.cancel();release.set()
             with pytest.raises(AIError,match='cancelled'):await task
             assert not calls
@@ -93,7 +96,10 @@ def test_public_research_quota_rechecks_current_workspace(monkeypatch,outcome):
         monkeypatch.setattr('app.workflows.context_chat.QuestionStore',Questions)
         def model_response(request):
             model_calls.append(request)
-            output=ContextPlan(topic='role',research_focus='location',resolved_question='Where is this internship?') if len(model_calls)==1 else FocusedAnswer(reply='The internship is in Singapore.',references=['web0'])
+            stage=json.loads(request.content)['response_format']['json_schema']['name']
+            if stage=='context_route':output=ContextPlan(topic='role',research_focus='location',resolved_question='Where is this internship?')
+            elif stage=='passage_scope':output=PassageScopes(passages=[{'ref':0,'market':'target','states_detail':True}])
+            else:output=FocusedAnswer(reply='The internship is in Singapore.',references=['web0'])
             return httpx.Response(200,json={'usage':{'prompt_tokens':10,'completion_tokens':5,'total_tokens':15},
                 'choices':[{'finish_reason':'stop','message':{'content':output.model_dump_json()}}]})
         def search_response(request):
@@ -112,7 +118,7 @@ def test_public_research_quota_rechecks_current_workspace(monkeypatch,outcome):
         async with httpx.AsyncClient(transport=httpx.MockTransport(model_response)) as model_client, httpx.AsyncClient(transport=httpx.MockTransport(search_response)) as search_client:
             ai=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),model_client)
             request=NS(app=NS(state=NS(workspace_store=repo,research_store=NS(),ai=ai,
-                research_client=SourceAPIs(search_client,brave_key='fixture'))))
+                research_client=SourceAPIs(search_client,brave_key='fixture',backend='brave'))))
             body=NS(session_id='session',expected_version=1,message='Research the location.',conversation=[])
             async def execute():
                 try:return await semantic_chat(request,'owner',row,body)
@@ -127,7 +133,7 @@ def test_public_research_quota_rechecks_current_workspace(monkeypatch,outcome):
                 assert len(searches)==4 and waits==[5,2]*3 and sum(waits)==21
                 assert len({request.url.params['q'] for request in searches})==1
                 if outcome=='unchanged':
-                    assert len(model_calls)==2
+                    assert len(model_calls)==3
                     assert 'https://example.test/job' in jobs.read('owner',job.id)['result'].reply
                 else:
                     assert len(model_calls)==1

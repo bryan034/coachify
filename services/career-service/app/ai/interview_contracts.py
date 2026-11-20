@@ -4,8 +4,11 @@ import re
 import tiktoken
 from typing import Literal
 from pydantic import Field
-from app.schemas.analysis import Contract,Text,Evidence,InterviewProcess,InterviewEvidence,InterviewStage
+from app.schemas.analysis import Contract,Text,Evidence,InterviewProcess,InterviewEvidence,InterviewStage,supported_round_count
 from app.schemas.research import SourcedTopics,Topic
+
+EXCERPT_CHARS = 600
+MIN_SENTENCE_BREAK = 200
 
 
 RESEARCH_EVIDENCE_TOKENS = 1000
@@ -18,10 +21,10 @@ def evidence_items(request):
             # Split saved retrieval on text boundaries before token selection, retaining exact substrings and provenance.
             remaining=source.evidence
             while remaining:
-                end=min(600,len(remaining))
+                end=min(EXCERPT_CHARS,len(remaining))
                 if end<len(remaining):
                     boundary=remaining.rfind('. ',0,end)
-                    if boundary<200:boundary=remaining.rfind(' ',0,end)
+                    if boundary<MIN_SENTENCE_BREAK:boundary=remaining.rfind(' ',0,end)
                     if boundary>0:end=boundary+1
                 text=remaining[:end].strip()
                 remaining=remaining[end:].lstrip()
@@ -102,7 +105,6 @@ class InterviewFindings(Contract):
                 return InterviewEvidence(evidence_origin=item['origin'],summary_id=item['summary_id'],source_ids=item['source_ids'],text=item['text'])
             if self.process.round_count is not None:
                 count_link=link(self.process.count_evidence_ref)
-                from app.domain.interview import supported_round_count
                 if not supported_round_count(self.process.round_count,count_link.text):raise ValueError('Unsupported round count')
                 process.round_count=self.process.round_count
                 process.round_count_evidence=count_link

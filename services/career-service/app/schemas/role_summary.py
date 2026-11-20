@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 from typing import Annotated
 from pydantic import BaseModel,ConfigDict,Field,StringConstraints
+from app.schemas.opportunity import MAX_BOLD_SPANS
 
 
 class Model(BaseModel):
@@ -22,7 +23,7 @@ def markup_issue(text):
     spans=BOLD.findall(text)
     rest=BOLD.sub('',text)
     if '*' in rest or re.search(r'[`#<>]|\]\(',rest):return 'unsupported_markup'
-    if len(spans)>3:return 'too_much_bold'
+    if len(spans)>MAX_BOLD_SPANS:return 'too_much_bold'
     if spans and len(rest.strip())<len(''.join(spans)):return 'bold_dominates'
     return None
 

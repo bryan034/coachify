@@ -1,7 +1,7 @@
 """Normalize presentation citations against backend-approved sources only."""
 import re
 from urllib.parse import quote
-from app.ai.adapter import AIError
+from app.ai.errors import AIError
 
 
 def citation_error(issue):

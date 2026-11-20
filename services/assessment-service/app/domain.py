@@ -1,7 +1,7 @@
 """Component evidence validation and deterministic AND/OR outcomes."""
 from elo_shared.runtime import Problem
 from app.schemas import Component
-from app.competence import role_level,evidence_level,goal_score,reviewed_estimate,unreviewed,RUBRIC_VERSION
+from app.competence import role_level,evidence_level,goal_score,reviewed_estimate,RUBRIC_VERSION
 
 class OutputProblem(Problem):
     """Rejected model output with exact repair guidance kept out of the user-facing detail."""

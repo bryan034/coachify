@@ -1,4 +1,5 @@
 """Resumable goal-setting and market research using existing Career stores/providers."""
+from contextlib import suppress
 from elo_shared.model_budget import budget_owner
 import asyncio
 import json
@@ -12,7 +13,8 @@ from langgraph.graph import StateGraph,START,END
 from langgraph.checkpoint.mongodb import MongoDBSaver
 from langsmith import tracing_context
 from starlette.concurrency import run_in_threadpool as thread
-from app.ai.adapter import AIError,Operation
+from app.ai.adapter import Operation
+from app.ai.errors import AIError
 from app.ai.discovery_config import DiscoverySettings
 from app.ai.contracts import AIInput,Message,DiscoveryHistoryMessage
 from app.workflows.model_waits import resume_obsolete_model_waits
@@ -25,8 +27,20 @@ from app.schemas.discovery import Scope,Decision,Plan,Listings,MarketSummary,Sou
 from app.schemas.jd import JDExtraction,ReviewSkill
 from app.schemas.goals import SaveGoal
 from app.domain.discovery_sources import POLICY,excluded_kind,candidates,validate_assessments,ranked_sources
-from app.domain.discovery_conversation import conversation_messages,conversational_reply
+from app.domain.discovery_conversation import conversational_reply
 from app.domain.discovery_readiness import clarification_bundle,grounded_understanding,ready_for_research,research_context,missing_fields
+from pymongo.errors import PyMongoError
+from app.workflows.boundaries import UnexpectedFailure, contained
+
+HIGHLIGHTED_SKILLS = 8
+NARROWED_REQUIREMENTS = 8
+MAX_SUMMARY_MESSAGE = 12000
+
+AUTO_SAVED = 'Your Career Goal has been updated automatically.'
+NEEDS_CONFIRMATION = 'This direction is saved. Confirm below before it replaces your current Career Goal.'
+
+MAX_TRANSCRIPT_MESSAGES = 996
+MAX_TRANSCRIPT_BYTES = 3_500_000
 
 log=logging.getLogger('uvicorn.error.discovery')
 
@@ -41,7 +55,7 @@ def normal(value):return ' '.join((value or '').casefold().split())
 
 def check_conversation_capacity(row):
     messages=row.get('messages',[])
-    if len(messages)>=996 or len(json.dumps(messages,ensure_ascii=False).encode())>=3_500_000:
+    if len(messages)>=MAX_TRANSCRIPT_MESSAGES or len(json.dumps(messages,ensure_ascii=False).encode())>=MAX_TRANSCRIPT_BYTES:
         raise GoalError('This conversation is full. Save your reviewed goal before starting another discovery.',422)
 
 
@@ -67,9 +81,9 @@ def plain_reply(value):
     return re.sub(r'https?://\S+', '', re.sub(r'\[([^]]+)\]\([^)]*\)', r'\1', value)).strip() or 'What would you like to explore?'
 
 
-def summary_message(scope,result,summary,sources):
+def summary_message(scope,result,summary,sources,status=AUTO_SAVED):
     """Readable display of validated findings; all links resolve from saved evidence."""
-    sections=[f"## Your career direction\n\n**{plain_reply(scope.area)}**\n\nYour Career Goal has been updated automatically.",
+    sections=[f"## Your career direction\n\n**{plain_reply(scope.area)}**\n\n{status}",
         '### Research coverage\n\n'+f"Researched **{len(result['listings'])} distinct listings** across **{result['employers']} identified employers** · {result['coverage']} coverage."]
     if summary.responsibility_refs:
         work=[]
@@ -80,11 +94,11 @@ def summary_message(scope,result,summary,sources):
     if summary.skills:
         labels={'core':'Foundation','specialisation':'Specialisation-dependent','optional':'Optional tool'}
         skills=[]
-        for skill in summary.skills[:8]:
+        for skill in summary.skills[:HIGHLIGHTED_SKILLS]:
             ids=list(dict.fromkeys(source for i in skill.skill_refs for source in result['stats'][i]['source_ids']))
             skills.append('- **'+plain_reply(skill.name)+'** — '+labels[skill.requirement_type]+', **'+skill.learning_priority+' learning priority**. '+plain_reply(skill.relevance)+' '+
                 (citations(ids[:1],sources) if ids else '(user-requested addition; no listing evidence)'))
-        scope_note=f" This summary highlights 8 of {len(summary.skills)} recommended skills." if len(summary.skills)>8 else ''
+        scope_note=f" This summary highlights {HIGHLIGHTED_SKILLS} of {len(summary.skills)} recommended skills." if len(summary.skills)>HIGHLIGHTED_SKILLS else ''
         sections.append('### Recommended skills\n\nLearning priorities are AI recommendations informed by this sample, not universal employer requirements.'+scope_note+'\n\n'+'\n'.join(skills))
     if result['qualifications']:
         conditions=['- '+plain_reply(item['name'])+' '+citations(item['source_ids'][:1],sources) for item in result['qualifications'][:2]]
@@ -98,7 +112,7 @@ def summary_message(scope,result,summary,sources):
     # Reserve space for the invitation even when unusually long citations hit the bound.
     message=''
     for section in sections:
-        if len(message)+len(section)+len(closing)+4<=12000:message+=('\n\n' if message else '')+section
+        if len(message)+len(section)+len(closing)+4<=MAX_SUMMARY_MESSAGE:message+=('\n\n' if message else '')+section
     return message+'\n\n'+closing
 
 
@@ -169,10 +183,14 @@ def aggregate(scope,listings,settings=None):
         'listings':listings,'employers':len(employers),'coverage':'insufficient' if not skills else 'good' if count>=settings.target_listings and len(employers)>=settings.target_employers else 'limited','warnings':warnings}
 
 
+class PublicationPending(Exception):
+    """Another worker is publishing this chat's goal; retry the run shortly."""
+
+
 class DiscoveryEngine:
     def __init__(self,app,db,ai,source):
         self.app,self.ai,self.source=app,ai,source
-        self.policy=POLICY if getattr(source,'backend',getattr(source,'provider','brave'))=='brave' else POLICY+':'+source.cache_policy
+        self.policy=POLICY if source.backend=='brave' else POLICY+':'+source.cache_policy
         self.settings=DiscoverySettings.from_env()
         self.rows=app.state.goal_store.db.research_contexts
         self.tasks={};self.stopping=False
@@ -241,7 +259,7 @@ class DiscoveryEngine:
         allowed={source for fact in facts for source in fact['source_ids']}
         async def understand(state):
             previous=row.get('decision') or {}
-            messages=conversation_messages(row.get('messages',[]))
+            messages=row.get('messages',[])
             social_reply=conversational_reply(body.message,ongoing=bool(messages))
             if social_reply:
                 question=None
@@ -359,14 +377,6 @@ class DiscoveryEngine:
     def publication_selection(self,row):
         store=self.app.state.goal_store
         selection=store.state.find_one({'_id':row['owner']}) or {}
-        # Adopt the latest pre-upgrade chat once.
-        if 'active_discovery' not in selection and (self.current(row['owner']) or {}).get('_id')==row['_id']:
-            current=store.current(row['owner'])['goal']
-            same_chat=current and current.discovery and current.discovery.research_id.split(':')[0]==row['_id']
-            if not current or same_chat or current.updated_at<=row['created_at']:
-                store.state.update_one({'_id':row['owner']},{'$setOnInsert':{'version':0,'goal_id':None,'receipts':[]}},upsert=True)
-                store.state.update_one({'_id':row['owner'],'active_discovery':{'$exists':False}}, {'$set':{'active_discovery':row['_id']}})
-                selection=store.state.find_one({'_id':row['owner']})
         if selection.get('active_discovery')!=row['_id']:raise GoalError('A newer conversation replaced this discovery. Start a new chat to change your goal.')
         return selection.get('version',0)
 
@@ -531,7 +541,7 @@ class DiscoveryEngine:
         if not batch:return
         signature=fingerprint([v.source_id for v in batch])
         split=signature in (row.get('split_batches') or [])
-        if len(batch)==1 and batch[0].source_id in (row.get('narrowed_sources') or []):max_requirements=8
+        if len(batch)==1 and batch[0].source_id in (row.get('narrowed_sources') or []):max_requirements=NARROWED_REQUIREMENTS
         if not split:
             scope=Scope.model_validate(row['scope'])
             def validate(output):
@@ -547,9 +557,9 @@ class DiscoveryEngine:
                 if error.code not in ('incomplete_output','context_limit'):raise
                 if len(batch)>1:
                     await thread(self.update,row,split_batches=[*(row.get('split_batches') or []),signature]);split=True
-                elif max_requirements>8:
+                elif max_requirements>NARROWED_REQUIREMENTS:
                     await thread(self.update,row,narrowed_sources=list(dict.fromkeys([*(row.get('narrowed_sources') or []),batch[0].source_id])))
-                    return await self.extract_batch(state,batch,max_requirements=8)
+                    return await self.extract_batch(state,batch,max_requirements=NARROWED_REQUIREMENTS)
                 else:
                     await thread(self.update,row,extraction_failures=list(dict.fromkeys([*(row.get('extraction_failures') or []),batch[0].source_id])),
                         evaluated=[*(row.get('evaluated') or []),batch[0].source_id])
@@ -691,9 +701,9 @@ class DiscoveryEngine:
             await thread(self.rows.update_one,{'_id':evidence.research_id},{'$setOnInsert':{
                 'kind':'career_discovery_evidence','owner':row['owner'],'review_id':review.id,'scope':row['scope'],
                 'sources':row.get('sources') or [],'aggregate':result,'summary':summary.model_dump(),'created_at':now()}},upsert=True)
-            message=summary_message(scope,result,summary,row.get('sources') or [])
+            def message(status):return summary_message(scope,result,summary,row.get('sources') or [],status)
             if await thread(self.publish_target,row,review,summary,result,evidence,message):return state
-        raise AIError('rate_limited',retry_after=1,provider=getattr(self.ai.settings,'provider',None))
+        raise PublicationPending
 
     def publish_target(self,row,review,summary,result,evidence,message):
         """Publish validated guidance and complete its chat entry with bounded replay."""
@@ -706,7 +716,7 @@ class DiscoveryEngine:
             command=SaveGoal(target_type='career_exploration',role=review.content.role,field=review.content.field,
                 company=None,job_url=None,location=review.content.location,seniority_level=review.content.seniority_level,
                 employment_type=review.content.employment_type,review_id=review.id,expected_review_version=review.version,
-                expected_selection_version=row['publication_selection_version'],replace_current=True)
+                expected_selection_version=row['publication_selection_version'])
             current=self.app.state.goal_store.current(owner).get('goal')
             # Refining (or replaying) this chat's own goal needs no consent; replacing another goal does.
             own_goal=current and current.discovery and current.discovery.research_id.split(':')[0]==row['_id']
@@ -716,16 +726,16 @@ class DiscoveryEngine:
                 changed=self.rows.update_one(query,{'$set':{'summary':summary.model_dump(),'summary_version':row['version'],
                     'review_id':review.id,'status':'review','aggregate':result,'stage':'awaiting_goal_confirmation',
                     'researched_at':evidence.researched_at,'error_code':None,'lease_until':now(),'updated_at':now()},
-                    '$push':{'messages':{'role':'assistant','content':message.replace('Your Career Goal has been updated automatically.','This direction is saved. Confirm below before it replaces your current Career Goal.')}}})
+                    '$push':{'messages':{'role':'assistant','content':message(NEEDS_CONFIRMATION)}}})
                 return bool(changed.matched_count)
-            goal=self.app.state.review_store.goal(review,owner,key,command,allow_pending_context=True)
+            goal=self.app.state.review_store.goal(review,owner,key,command)
             memory=(row.get('decision') or {}).get('memory',{})
             goal.interests=memory.get('interests',[]);goal.preferences=memory.get('preferences',[])
             self.app.state.goal_store.confirm(owner,key,command,goal,discovery_id=row['_id'])
             changed=self.rows.update_one(query,{'$set':{'summary':summary.model_dump(),'summary_version':row['version'],
                 'review_id':review.id,'status':'review','aggregate':result,'stage':'career_goal_updated',
                 'researched_at':evidence.researched_at,'error_code':None,'lease_until':now(),'updated_at':now()},
-                '$push':{'messages':{'role':'assistant','content':message}}})
+                '$push':{'messages':{'role':'assistant','content':message(AUTO_SAVED)}}})
             return bool(changed.matched_count)
         finally:self.rows.update_one(query,{'$unset':{'publication_until':''}})
 
@@ -740,24 +750,23 @@ class DiscoveryEngine:
         if not row:return
         try:
             async with asyncio.timeout(seconds):
-                with tracing_context(enabled=False):await self.graph.ainvoke({'id':identifier,'run':row['run'],'lease':row['lease']},config={'configurable':{'thread_id':'discovery:'+identifier+':'+row['run']}})
+                with tracing_context(enabled=False):await contained(self.graph.ainvoke({'id':identifier,'run':row['run'],'lease':row['lease']},config={'configurable':{'thread_id':'discovery:'+identifier+':'+row['run']}}),(AIError,SourceRateLimit,TimeoutError,ValueError,GoalError,PublicationPending))
         except asyncio.CancelledError:
             await thread(self.update,row,lease_until=now());raise
+        except PublicationPending:
+            with suppress(GoalError):await thread(self.update,row,next_attempt_at=now()+timedelta(seconds=1),lease_until=now())
         except (AIError,SourceRateLimit,TimeoutError,ValueError) as error:
             wait=isinstance(error,SourceRateLimit) or isinstance(error,AIError) and error.code=='rate_limited'
             code=error.code if isinstance(error,AIError) else 'source_rate_limited' if isinstance(error,SourceRateLimit) else 'research_timeout' if isinstance(error,TimeoutError) else 'research_validation_failed'
             delay=max(1,getattr(error,'retry_after',None) or 60)
             log.warning('error_code=%s limit_scope=%s',code,getattr(error,'limit_scope',None))
-            try:await thread(self.update,row,status='waiting' if wait else 'failed',error_code=code,limit_scope=getattr(error,'limit_scope',None),provider=getattr(error,'provider',None),next_attempt_at=now()+timedelta(seconds=delay),lease_until=now())
-            except GoalError:pass
+            with suppress(GoalError):await thread(self.update,row,status='waiting' if wait else 'failed',error_code=code,limit_scope=getattr(error,'limit_scope',None),provider=getattr(error,'provider',None),next_attempt_at=now()+timedelta(seconds=delay),lease_until=now())
         except GoalError:
-            try:await thread(self.update,row,status='failed',error_code='stale_input',lease_until=now())
-            except GoalError:pass
+            with suppress(GoalError):await thread(self.update,row,status='failed',error_code='stale_input',lease_until=now())
             return
-        except Exception as error:
-            log.error('discovery_worker_failed exception_type=%s',type(error).__name__)
-            try:await thread(self.update,row,status='failed',error_code='research_unavailable',lease_until=now())
-            except GoalError:pass
+        except UnexpectedFailure as error:
+            log.error('discovery_worker_failed exception_type=%s',type(error.__cause__).__name__)
+            with suppress(GoalError):await thread(self.update,row,status='failed',error_code='research_unavailable',lease_until=now())
 
     async def recover(self):
         while not self.stopping:
@@ -766,7 +775,7 @@ class DiscoveryEngine:
                     await thread(resume_obsolete_model_waits,self.rows,'career_discovery')
                 rows=await thread(lambda:list(self.rows.find({'kind':'career_discovery','status':{'$in':['researching','waiting']},'next_attempt_at':{'$lte':now()},'lease_until':{'$lte':now()}},{'_id':1}).limit(10)))
                 for row in rows:self.launch(row['_id'])
-            except Exception:log.warning('discovery_recovery_unavailable')
+            except PyMongoError:log.warning('discovery_recovery_unavailable')
             await asyncio.sleep(2)
 
     async def close(self):
@@ -774,3 +783,14 @@ class DiscoveryEngine:
         tasks=[self.sweeper,*self.tasks.values()]
         for task in tasks:task.cancel()
         await asyncio.gather(*tasks,return_exceptions=True)
+
+    def sessions(self,owner,anchor,limit):
+        query={'owner':owner,'kind':'career_discovery'}
+        if anchor:
+            query['$or']=[{'updated_at':{'$lt':anchor['updated_at']}},{'updated_at':anchor['updated_at'],'_id':{'$lt':anchor['_id']}}]
+        return list(self.rows.find(query).sort([('updated_at',-1),('_id',-1)]).limit(limit))
+
+    def mark_published(self,identifier,owner,version,key):
+        self.rows.update_one({'_id':identifier,'owner':owner,'version':version},
+            {'$set':{'stage':'career_goal_updated','published_key':key,'updated_at':now()},'$inc':{'version':1},
+             '$push':{'messages':{'role':'assistant','content':'Your Career Goal has been replaced with this direction.'}}})

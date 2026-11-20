@@ -128,6 +128,19 @@ describe('extracting a career goal',()=>{
  });
 });
 
+it('names the job site and how to paste when its terms forbid automated reading',async()=>{
+ vi.mocked(importCareer).mockRejectedValueOnce(new Error('The information could not be extracted from this website. LinkedIn does not allow its job listings to be read automatically. Open the job on LinkedIn, copy the description and paste it here.'));
+ renderPage(<CareerGoal/>);
+ fireEvent.click(screen.getByRole('tab',{name:'Job URL'}));
+ fireEvent.change(screen.getByLabelText('Job description URL'),{target:{value:'https://www.linkedin.com/jobs/view/1'}});
+ fireEvent.click(screen.getByRole('button',{name:'Import job page'}));
+ const alert=await screen.findByRole('alert');
+ expect(alert).toHaveTextContent('The information could not be extracted from this website.');
+ expect(alert).toHaveTextContent('LinkedIn does not allow its job listings to be read automatically. Open the job on LinkedIn, copy the description and paste it here.');
+ expect(alert).not.toHaveTextContent('copy its description and paste it instead');
+ expect(within(alert).getByRole('button',{name:'Paste description'})).toBeInTheDocument();
+});
+
 it('tells the user to copy and paste when a website blocks extraction, keeping drafts',async()=>{
  vi.mocked(importCareer).mockRejectedValueOnce(new Error('The information could not be extracted from this website. Copy and paste the job description instead.'));
  renderPage(<CareerGoal/>);

@@ -2,7 +2,8 @@
 import json
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
-from app.ai.adapter import AIError,Operation
+from app.ai.adapter import Operation
+from app.ai.errors import AIError
 from app.ai.contracts import AIInput
 from app.ai.routing import chat_models
 from app.repositories.goals import now
@@ -78,7 +79,6 @@ async def generate(request,account,goal,record):
     if gaps:
         context=jsonable_encoder({'goal':goal_catalogue(goal),'research':research_catalogue(findings),'gaps':gaps})
         encoded=json.dumps(context,separators=(',',':'),ensure_ascii=False)
-        if len(encoded)>40000:raise AIError('context_limit')
         revision=f'{goal.id}:{goal.version}'
         async def current():
             state=await thread(request.app.state.goal_store.current,account)

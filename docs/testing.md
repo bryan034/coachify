@@ -329,10 +329,13 @@ Duplicate-finding regressions cover different summaries sharing one extract ID, 
 identity while merging corroborating citations, and quality-stage cleanup of persisted
 duplicates before final report validation.
 
-Opportunity-source limit checks verify that Brave receives a three-URL limit, the
-adapter retains no more than three results even if the provider returns extras, and
-weak coverage can replace initial sources through bounded follow-ups while the
-final report retains at most three useful sources per category.
+Opportunity-source limit checks verify per-topic research: triage sees only page
+metadata and pages it rejects are never read, each topic reads no more than its
+per-search and total allowances, a factual topic backed by two different sites is not
+searched again, a page read for one category can back another category's topic, an
+unusable triage falls back to each topic's own top results, each topic keeps at most
+its source limit with only cited passages, and a run never exceeds
+`OPPORTUNITY_RUN_SEARCHES`.
 
 Direct-structuring regressions accept faithful paraphrasing without a second model
 pass, preserve the model's exact final wording in storage/chat, and still reject
@@ -489,7 +492,7 @@ cd services/assessment-service
 PYTHONPATH=../../packages/elo-shared:. python -m pytest
 ```
 
-Repeat in `services/roadmap-service`, then run its static analysis with `python -m pip install -e '.[lint]'`, `python -m ruff check app` and `python -m vulture`. Shared runtime MongoDB race/recovery tests live under `packages/elo-shared/tests` and require an explicit disposable `MONGODB_TEST_URI`; they create/drop only uniquely named `elo_planning_test_*` databases. Never point these tests at application databases. Existing service tests also need the shared package installed or on `PYTHONPATH`. Career tests need a populated local `TIKTOKEN_CACHE_DIR` so synthetic provider checks never download encodings.
+Repeat in `services/roadmap-service`, then run its static analysis with `python -m pip install -e '.[lint]'`, `python -m ruff check app` and `python -m vulture`. Every other service runs `python -m vulture` from its folder with `vulture==2.16`. Shared runtime MongoDB race/recovery tests live under `packages/elo-shared/tests` and require an explicit disposable `MONGODB_TEST_URI`; they create/drop only uniquely named `elo_planning_test_*` databases. Never point these tests at application databases. Existing service tests also need the shared package installed or on `PYTHONPATH`. Career tests need a populated local `TIKTOKEN_CACHE_DIR` so synthetic provider checks never download encodings.
 
 New tests cover shared aliases, exact limitation/evidence references, complete requirement coverage, AND/OR rules, explicit partial research, source-change races, owner isolation, pending-operation restart recovery, idempotent lost-response retry, runway capacity, plan validation, preview acceptance, stale preview rejection and session completion. Frontend tests cover input gates, next-message preservation, partial-analysis choice, old-account response isolation and exact retry identities. `test_planner_model.py` sends chat and plan requests through the real model client and OpenAI SDK with a mock transport. `test_planner_capacity.py`, `test_planner_validator.py` and `test_planner_flow.py` cover runway arithmetic, each validation rule and the full API flow with a scripted model and fixed clock: a partial first week, one-off and recurring blackouts and time slots, preferred and backup blocks, insufficient runway with a bounded retry, and a schedule change after a completed session. `roadmap-flow.test.tsx` covers the planner form, chat helper, blackout rules, gating, review and revision UI. `roadmap.spec.ts` exercises chat helper → planner → generate → review → accept → complete → revise and desktop/mobile layout using synthetic HTTP fixtures.
 

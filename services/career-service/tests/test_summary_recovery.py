@@ -3,7 +3,8 @@ import asyncio
 import json
 from types import SimpleNamespace as NS
 import pytest
-from app.ai.adapter import AIAdapter,AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.goal_summary import summary_schema
 from app.repositories.goals import GoalError
 from app.workflows.goal_summary import summarize

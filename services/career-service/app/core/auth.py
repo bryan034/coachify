@@ -2,6 +2,7 @@
 import httpx
 from fastapi import HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from http import HTTPStatus
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -14,9 +15,9 @@ async def current_account(request: Request, credentials: HTTPAuthorizationCreden
             headers={'Authorization': 'Bearer ' + credentials.credentials})
     except httpx.HTTPError as exc:
         raise HTTPException(503, 'Account verification is unavailable. Please retry.') from exc
-    if response.status_code == 401:
+    if response.status_code == HTTPStatus.UNAUTHORIZED:
         raise HTTPException(401, 'Your session has ended. Sign in again.')
-    if response.status_code != 200:
+    if response.status_code != HTTPStatus.OK:
         raise HTTPException(503, 'Account verification is unavailable. Please retry.')
     try:
         account = response.json()
@@ -28,9 +29,9 @@ async def current_account(request: Request, credentials: HTTPAuthorizationCreden
     try:
         response = await request.app.state.profile_client.get('/api/v1/profile',
             headers={'Authorization': 'Bearer ' + credentials.credentials})
-        if response.status_code == 401:
+        if response.status_code == HTTPStatus.UNAUTHORIZED:
             raise HTTPException(401, 'Your session has ended. Sign in again.')
-        if response.status_code != 200:
+        if response.status_code != HTTPStatus.OK:
             raise ValueError
         profile = response.json()
         if not isinstance(profile, dict):

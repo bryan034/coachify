@@ -13,7 +13,7 @@ from app.clients.extraction_schema import extraction_schema
 from app.domain.extraction_feedback import feedback_for
 from app.domain.service import now
 from app.schemas.cv import Extraction, ExtractedItem, SourceExcerpt
-from app.repositories.extraction_state import MemoryExtractionStateStore
+from tests.memory_repositories import MemoryExtractionStateStore
 from app.workflows.checkpoints import LatestStateSaver
 from app.workflows.extraction import ExtractionHarness
 

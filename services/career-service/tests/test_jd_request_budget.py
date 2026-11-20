@@ -2,7 +2,8 @@
 import json
 import pytest
 from pydantic import ValidationError
-from app.ai.adapter import AIAdapter,AIError
+from app.ai.adapter import AIAdapter
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.recovery import validation_feedback
@@ -15,7 +16,7 @@ def jd_text():
 
 
 def settings(mode='json_object',**overrides):
-    return AISettings(**{'response_mode':mode,'context_tokens':16384,**overrides})
+    return AISettings(**{'response_mode':mode,'context_tokens':16384,'max_output_tokens':8192,**overrides})
 
 
 @pytest.mark.parametrize('stage,cap',[('jd_scope',4096),('jd_extraction',8192)])
@@ -73,5 +74,5 @@ def test_explicit_global_output_ceiling_is_still_respected():
 
 
 def test_identification_keeps_its_existing_output_budget():
-    adapter=AIAdapter(AISettings(response_mode='json_object'),None)
+    adapter=AIAdapter(AISettings(response_mode='json_object',max_output_tokens=8192),None)
     assert adapter._payload(AIInput(stage='jd_scope',source_text=jd_text()))['max_tokens']==4096

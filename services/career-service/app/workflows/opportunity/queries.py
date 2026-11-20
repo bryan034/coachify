@@ -1,5 +1,6 @@
-"""Five fixed research intents; The model owns the role-specific search wording."""
+"""Per-topic search wording: the model owns role-specific queries, with plain employer-and-role fallbacks."""
 from app.schemas.opportunity import CATEGORIES
+from .topics import TOPICS,topic_query
 
 ACTIVITIES={
  'interview_intelligence':'searching_interviews',
@@ -9,24 +10,17 @@ ACTIVITIES={
  'company_intelligence':'searching_company',
 }
 
-# What a person would type after the employer and role: short, without location or year.
-BROAD_TOPICS={
- 'interview_intelligence':'interview process questions',
- 'internship_insights':'internship experience',
- 'career_progression':'salary career progression',
- 'conversion_outcomes':'return offer conversion rate',
- 'company_intelligence':'work culture',
-}
 
-def broad_query(public,category):
-    """A plain search that runs before the model's targeted queries."""
-    if not public:return None
-    who=' '.join(' '.join((public.get(key) or '').split()) for key in ('company','role')).strip()
-    return f'{who[:140]} {BROAD_TOPICS[category]}' if who else None
+def planned_queries(plan,searches,public=None):
+    """Up to `searches` distinct queries per topic: the planner's wording first, then plain fallbacks."""
+    def queries(topic):
+        planned=list(getattr(plan,topic,None) or []) if plan is not None else []
+        fallbacks=[topic_query(public,topic,attempt) for attempt in range(searches)]
+        values=[' '.join(q.split())[:180] for q in [*planned,*fallbacks] if q]
+        return list(dict.fromkeys(values))[:searches]
+    return {topic:queries(topic) for topic in TOPICS}
 
-def planned_queries(plan,limit,public=None):
-    # Each required category has a nonempty validated QueryPlan list.
-    def queries(category):
-        broad=broad_query(public,category)
-        return list(dict.fromkeys(' '.join(q.split()) for q in [*([broad] if broad else []),*getattr(plan,category)]))[:limit]
-    return {category:queries(category) for category in CATEGORIES}
+
+def topic_map(value):
+    """Per-topic job state; jobs saved before per-topic research hold per-category lists instead."""
+    return {k:v for k,v in (value or {}).items() if k not in CATEGORIES} if isinstance(value,dict) else {}

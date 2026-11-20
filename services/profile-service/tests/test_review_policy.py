@@ -6,38 +6,26 @@ from app.main import create_app
 
 
 class Accounts:
-    def __init__(self):
-        self.records = {
-            'free-token': {'id': 'free', 'cv_review_scope': 'section', 'cv_review_policy_version': 1},
-            'paid-token': {'id': 'paid', 'cv_review_scope': 'item', 'cv_review_policy_version': 1},
-            'legacy-token': {'id': 'legacy'},
-        }
-
     def session(self, token, settings):
-        return {'name': 'Synthetic', 'email': 'person@example.test', 'email_verified': True,
-                'provider': 'email', 'expires_at': datetime.now(timezone.utc), **self.records[token]}
+        return {'id': 'synthetic', 'name': 'Synthetic', 'email': 'person@example.test', 'email_verified': True,
+                'provider': 'email', 'expires_at': datetime.now(timezone.utc)}
 
     def finish(self, data, settings, verify_google, source):
-        return self.session('free-token', settings)
+        return self.session('token', settings)
 
     def verify_email(self, data, settings):
-        return self.session('free-token', settings)
+        return self.session('token', settings)
 
 
-def test_session_projects_same_current_review_policy_for_all_accounts():
-    accounts = Accounts()
-    with TestClient(create_app(repository=object(), accounts=accounts, capabilities=object())) as client:
-        for token in ('free-token', 'paid-token', 'legacy-token'):
-            response = client.get('/api/v1/profile/auth/session?cv_review_scope=section',
-                                  headers={'Authorization': 'Bearer ' + token, 'X-Review-Scope': 'section'})
-            assert response.status_code == 200
-            assert response.json()['cv_review_scope'] == 'item'
-            assert response.json()['cv_review_policy_version'] == 1
-    assert accounts.records['free-token']['cv_review_scope'] == 'section'
-    assert accounts.records['paid-token']['cv_review_policy_version'] == 1
+def test_session_returns_item_review_policy_regardless_of_request():
+    with TestClient(create_app(repository=object(), accounts=Accounts(), capabilities=object())) as client:
+        response = client.get('/api/v1/profile/auth/session?cv_review_scope=section',
+                              headers={'Authorization': 'Bearer token', 'X-Review-Scope': 'section'})
+        assert response.status_code == 200
+        assert (response.json()['cv_review_scope'], response.json()['cv_review_policy_version']) == ('item', 1)
 
 
-def test_sign_in_and_verification_also_project_current_review_policy():
+def test_sign_in_and_verification_return_item_review_policy():
     body = {'flow_id': 'f' * 32, 'attempt_id': 'a' * 32, 'session_token': 's' * 32}
     with TestClient(create_app(repository=object(), accounts=Accounts(), capabilities=object())) as client:
         complete = client.post('/api/v1/profile/auth/complete', json=body)

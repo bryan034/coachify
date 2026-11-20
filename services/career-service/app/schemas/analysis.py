@@ -4,11 +4,9 @@ Account IDs remain Profile UUIDs; domain IDs are ObjectIds represented as hex st
 at the API boundary.
 """
 from __future__ import annotations
-
 from elo_shared.skills import resolve, MAPPING_VERSION
 from elo_shared.skill_groups import skill_groups
 from elo_shared.dates import JobDate
-
 import hashlib
 import json
 import re
@@ -16,9 +14,13 @@ from datetime import date, datetime, time, timezone
 from typing import Annotated, Literal
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
-
 from bson import BSON, ObjectId
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from app.schemas.opportunity import OpportunityReport,Finding
+
+OBJECT_ID_LENGTH = 24
+
+MAX_URL_LENGTH = 2048
 
 SCHEMA_VERSION = 'analysis-v1'
 EmploymentType=Literal['internship','full_time','part_time','contract','unknown']
@@ -47,7 +49,7 @@ def account_id(value):
 
 
 def public_url(value):
-    if not isinstance(value, str) or len(value) > 2048:
+    if not isinstance(value, str) or len(value) > MAX_URL_LENGTH:
         raise ValueError('Expected a public source URL.')
     p = urlsplit(value)
     if p.scheme not in ('http', 'https') or not p.hostname or p.username or p.password:
@@ -284,24 +286,6 @@ class InterviewSkill(Contract):
     source_ids: list[Text] = Field(min_length=1, max_length=50)
 
 
-class GapResult(Contract):
-    skill_id: SkillId
-    name: Text
-    gap_type: Literal['job_skill', 'interview_preparation']
-    match_status: Literal['supported', 'partial', 'uncertain', 'confirmed_shortfall']
-    importance: Priority | None = None
-    cv_proficiency: Proficiency | None = None
-    required_proficiency: Proficiency | None = None
-    explanation: Note
-    recommendation: Note | None = None
-
-    @model_validator(mode='after')
-    def unknown_is_not_shortfall(self):
-        if self.match_status == 'confirmed_shortfall' and self.cv_proficiency is None:
-            raise ValueError('Unknown CV proficiency cannot confirm a shortfall.')
-        return self
-
-
 class Document(Contract):
     id: DomainId = Field(alias='_id')
     version: Version
@@ -462,9 +446,18 @@ class InterviewProcess(Contract):
     stages: list[InterviewStage]=Field(default_factory=list,max_length=8)
 
 
-from app.schemas.opportunity import OpportunityReport,Finding
-
 QuestionFocus=Literal['location','compensation','eligibility','dates','role_details','interviews','workplace','career_progression','conversion']
+
+
+def supported_round_count(count,text):
+    words=('one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen','twenty')
+    token=rf'(?:{count}|{words[count-1]})'
+    return bool(re.search(rf'\b{token}[-\s]+(?:interview\s+)?(?:rounds?|stages?)\b|\b(?:rounds?|stages?)\s*:\s*{token}\b',text,re.I))
+
+
+def context_for(goal):
+    return ResearchContext(**{k: getattr(goal, k, None) for k in ResearchContext.model_fields})
+
 
 class InterviewResearch(Document, ResearchContext):
     intelligence: OpportunityReport | None = None
@@ -520,7 +513,6 @@ class InterviewResearch(Document, ResearchContext):
         for stage in self.process.stages:
             if stage.name.casefold() not in stage.evidence.text.casefold() or (stage.assessment_type and stage.assessment_type.casefold() not in stage.evidence.text.casefold()):raise ValueError('Stage details must appear in supporting evidence.')
         if self.process.round_count is not None:
-            from app.domain.interview import supported_round_count
             if not supported_round_count(self.process.round_count,self.process.round_count_evidence.text):raise ValueError('Round count must be explicit in evidence.')
         if self.research_status!='succeeded' and (self.process.stages or self.process.round_count is not None):raise ValueError('Only successful research may publish an interview process.')
         for skill in self.skills:
@@ -542,56 +534,6 @@ class InterviewResearch(Document, ResearchContext):
         return self
 
 
-class ResearchVersion(Contract):
-    id: DomainId
-    version: Version
-
-
-class InputVersions(Contract):
-    cv_id: CvReference
-    cv_version: Version
-    extraction_version: Text
-    profile_version: Version
-    career_goal_id: DomainId
-    career_goal_version: Version
-    generation_version: Text
-    research: list[ResearchVersion] = Field(default_factory=list, max_length=20)
-
-    @model_validator(mode='after')
-    def unique_research(self):
-        if len({r.id for r in self.research}) != len(self.research):
-            raise ValueError('Duplicate research versions.')
-        return self
-
-
-class SkillGapAnalysis(Document):
-    user_id: AccountId
-    cv_id: CvReference
-    career_goal_id: DomainId
-    research_ids: list[DomainId] = Field(default_factory=list, max_length=20)
-    inputs: InputVersions
-    job_skill_gaps: list[GapResult] = Field(default_factory=list, max_length=200)
-    interview_prep_gaps: list[GapResult] = Field(default_factory=list, max_length=200)
-    analysis_status: Literal['succeeded', 'partial']
-    analysis_version: Text
-    summary: Note
-    generation: Generation
-
-    @model_validator(mode='after')
-    def referenced_inputs(self):
-        if self.cv_id != self.inputs.cv_id or self.career_goal_id != self.inputs.career_goal_id:
-            raise ValueError('Analysis IDs disagree with versioned inputs.')
-        if self.research_ids != [r.id for r in self.inputs.research]:
-            raise ValueError('Research IDs disagree with versioned inputs.')
-        for values, kind in ((self.job_skill_gaps, 'job_skill'), (self.interview_prep_gaps, 'interview_preparation')):
-            unique_skills(values)
-            if any(s.gap_type != kind for s in values):
-                raise ValueError('Gap is in the wrong result array.')
-        if not self.research_ids and (self.analysis_status != 'partial' or self.interview_prep_gaps):
-            raise ValueError('Unavailable research requires an explicitly partial analysis.')
-        return self
-
-
 def mongo_document(model: Document):
     def bson_dates(value):
         if isinstance(value, datetime):
@@ -604,20 +546,17 @@ def mongo_document(model: Document):
             return [bson_dates(item) for item in value]
         return value
     data = bson_dates(model.model_dump(by_alias=True, mode='python'))
-    data['_id'] = (model.id if isinstance(model, CvSnapshot) and len(model.id) != 24 else ObjectId(model.id))
+    data['_id'] = (model.id if isinstance(model, CvSnapshot) and len(model.id) != OBJECT_ID_LENGTH else ObjectId(model.id))
     for name in ('cv_id', 'career_goal_id', 'selected_career_goal_id', 'result_id', 'exploration_draft_id', 'source_review_id', 'source_cv_id'):
         if data.get(name):
-            data[name] = data[name] if name in ('cv_id', 'source_cv_id') and len(str(data[name])) != 24 else ObjectId(data[name])
+            data[name] = data[name] if name in ('cv_id', 'source_cv_id') and len(str(data[name])) != OBJECT_ID_LENGTH else ObjectId(data[name])
     if 'research_ids' in data:
         data['research_ids'] = [ObjectId(value) for value in data['research_ids']]
     if data.get('inputs'):
         for name in ('cv_id', 'career_goal_id'):
-            data['inputs'][name] = data['inputs'][name] if name == 'cv_id' and len(str(data['inputs'][name])) != 24 else ObjectId(data['inputs'][name])
+            data['inputs'][name] = data['inputs'][name] if name == 'cv_id' and len(str(data['inputs'][name])) != OBJECT_ID_LENGTH else ObjectId(data['inputs'][name])
         for ref in data['inputs']['research']:
             ref['id'] = ObjectId(ref['id'])
-    # Preserve the retired unique(user_id, create_key) index with one stable namespaced key.
-    if isinstance(model, CareerGoal) or data.get('record_type') in {'exploration_draft','requirement_review'}:
-        data['create_key']='canonical:'+str(model.id)
     # Mongo stores datetimes in UTC; ISO strings are reserved for API JSON.
     for name in ('created_at', 'updated_at', 'last_researched_at'):
         if data.get(name):

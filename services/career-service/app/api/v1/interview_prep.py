@@ -2,7 +2,7 @@
 from fastapi import APIRouter,Depends,Request
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
-from app.api.v1.goals import owner,identifier
+from app.api.v1.dependencies import owner, identifier
 from app.repositories.goals import GoalError
 from app.schemas.interview_prep import SuggestCommand
 from app.workflows import interview_prep as prep

@@ -16,7 +16,7 @@ from app.clients.extraction_schema import extraction_schema
 from app.clients.provider_errors import provider_failure, classified_provider_failure
 
 
-PROMPT_VERSION = 'cv-extraction-14'
+PROMPT_VERSION = 'cv-extraction-15'
 SCHEMA_VERSION = '7'
 REPAIR_INSTRUCTIONS = '''
 Repair the rejected extraction using the original source_blocks and validation feedback.
@@ -132,7 +132,7 @@ class Extractor:
             "Accept equivalent meaning, paraphrasing, shortened summaries and formatting differences. "
             "Reject invented or contradicted facts, changed names, numbers, dates, proficiency or durations, "
             "lost negation/conditions, or changing team/assisted work into independent personal work. "
-            "When uncertain, do not approve. Return only {\"supported\":[indexes of supported summaries]}; "
+            "When uncertain, do not approve. Return only the JSON object {\"supported\":[indexes of supported summaries]}; "
             "use the supplied zero-based indexes, once each, and no other fields.")
         ids = {ref['block_id'] for ref in refs}
         payload = {'model': self.model, 'temperature': 0, 'max_tokens': 12000,

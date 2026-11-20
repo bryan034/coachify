@@ -22,6 +22,18 @@ from elo_shared.model_budget import (ModelBudgetExceeded, ModelBudgetUnavailable
 from app.repositories.goals import GoalError,now
 from app.schemas.analysis import ResearchSource
 from app.ai.discovery_config import MAX_URLS_PER_QUERY, BRAVE_CONTEXT_TOKENS
+from app.clients.research import normalize_sources
+from app.schemas.discovery import DiscoverySource
+from http import HTTPStatus
+
+SENTENCE_LOOKBACK = 160
+EXCERPT_LEAD = 100
+MAX_ERROR_EXCERPT = 600
+MAX_JSON_DEPTH = 8
+MAX_ORGANIZATION_NAME = 160
+MAX_MODEL_NAME = 160
+
+MAX_REJECTION_BYTES = 16 * 1024
 
 
 # Pages kept per research search.
@@ -43,7 +55,7 @@ def interview_excerpt(value,terms=INTERVIEW_TERMS,budget=600):
     for match in terms.finditer(text):
         # Keep the sentence prefix when possible.
         boundary=max(text.rfind('. ',0,match.start()),text.rfind('! ',0,match.start()),text.rfind('? ',0,match.start()))
-        start=boundary+2 if boundary>=0 and match.start()-boundary<160 else max(0,match.start()-100)
+        start=boundary+2 if boundary>=0 and match.start()-boundary<SENTENCE_LOOKBACK else max(0,match.start()-EXCERPT_LEAD)
         starts.add(min(start,max(0,len(text)-budget)))
     start=max(sorted(starts),key=lambda start:len(terms.findall(text[start:start+budget])))
     return text[start:start+budget]
@@ -88,7 +100,7 @@ def search_country(location):
 def error_excerpt(text):
     """Recognise standalone provider failures, not interview discussion of API keys."""
     value=' '.join((text or '').casefold().split()).strip(" .\"'`")
-    if len(value)<=600 and value.startswith('{'):
+    if len(value)<=MAX_ERROR_EXCERPT and value.startswith('{'):
         try:
             error=json.loads(value)
             if isinstance(error,dict):
@@ -123,13 +135,13 @@ def context_results(payload, *, discovery=False):
 def discovery_employer(snippets):
     """Copy only explicit JobPosting employer data from Brave's structured snippets; missing or ambiguous data stays unknown."""
     def names(value,depth=0):
-        if depth>8:return []
+        if depth>MAX_JSON_DEPTH:return []
         if isinstance(value,list):return [name for item in value[:50] for name in names(item,depth+1)]
         if not isinstance(value,dict):return []
         result=[]
         organization=value.get('hiringOrganization')
         if isinstance(organization,dict):organization=organization.get('name')
-        if isinstance(organization,str) and 0<len(organization.strip())<=160:result.append(organization.strip())
+        if isinstance(organization,str) and 0<len(organization.strip())<=MAX_ORGANIZATION_NAME:result.append(organization.strip())
         for key in ('@graph','jobPosting','JobPosting'):
             result.extend(names(value.get(key),depth+1))
         return result
@@ -141,7 +153,7 @@ def discovery_employer(snippets):
 
 
 class SourceRateLimit(GoalError):
-    def __init__(self,retry_after,provider='brave'):
+    def __init__(self,retry_after,provider):
         self.provider=provider
         self.limit_scope='provider'
         try:delay=float(retry_after)
@@ -153,7 +165,7 @@ class SourceRateLimit(GoalError):
 class SearchAllowanceExceeded(SourceRateLimit):
     """The configured daily search allowance, not the provider, stopped this search."""
     def __init__(self,scope,retry_after):
-        super().__init__(retry_after)
+        super().__init__(retry_after,None)
         self.scope=scope
         self.limit_scope='user'
         GoalError.__init__(self,'Your account has reached its daily research search allowance. '
@@ -188,7 +200,7 @@ async def rejection_details(response):
     data=bytearray()
     async for chunk in response.aiter_bytes():
         data.extend(chunk)
-        if len(data)>16384:return ''
+        if len(data)>MAX_REJECTION_BYTES:return ''
     try:payload=json.loads(data)
     except (ValueError,UnicodeError):return ''
     if not isinstance(payload,dict):return ''
@@ -209,13 +221,13 @@ async def body(client,method,url,**kwargs):
         async with client.stream(method,url,timeout=kwargs.pop('timeout',15),follow_redirects=False,**kwargs) as response:
             if response.status_code in (401,403):
                 raise GoalError('Brave LLM Context API credentials or access need checking.',503)
-            if response.status_code==429:raise SourceRateLimit(response.headers.get('retry-after'))
-            if response.status_code!=200:
+            if response.status_code==HTTPStatus.TOO_MANY_REQUESTS:raise SourceRateLimit(response.headers.get('retry-after'),'brave')
+            if response.status_code!=HTTPStatus.OK:
                 status=response.status_code
-                if status==402:message='Brave API quota or billing access is exhausted (HTTP 402). Check the plan for this API key.'
-                elif status==429:message='Brave API rate limit reached (HTTP 429). Wait before retrying interview research.'
+                if status==HTTPStatus.PAYMENT_REQUIRED:message='Brave API quota or billing access is exhausted (HTTP 402). Check the plan for this API key.'
+                elif status==HTTPStatus.TOO_MANY_REQUESTS:message='Brave API rate limit reached (HTTP 429). Wait before retrying interview research.'
                 elif status in (400,422):message=f'Brave rejected the research request (HTTP {status}). Check the API integration and request parameters.'
-                elif status>=500:message=f'Brave API is temporarily unavailable (HTTP {status}). Retry shortly.'
+                elif status>=HTTPStatus.INTERNAL_SERVER_ERROR:message=f'Brave API is temporarily unavailable (HTTP {status}). Retry shortly.'
                 else:message=f'Brave research request failed (HTTP {status}). Check endpoint access.'
                 message+=await rejection_details(response)
                 raise GoalError(message,503)
@@ -309,7 +321,7 @@ class SourceAPIs:
     # Workflow channel identifier persisted in research records and public enums.
     provider='brave'
     def __init__(self,client,*,brave_key='',brave_mode='llm_context',metered=False,searches_per_account=None,max_urls=None,
-                 backend='brave',fallback=None,openrouter_key='',search_model=SEARCH_MODEL,max_tool_calls=3,search_timeout=15):
+                 backend,fallback=None,openrouter_key='',search_model=SEARCH_MODEL,max_tool_calls=3,search_timeout=15):
         self.client,self.brave_key,self.brave_mode=client,brave_key,'llm_context'
         # max_urls caps every workflow's URL count; a None allowance is unlimited.
         self.metered,self.searches_per_account,self.max_urls=metered,searches_per_account,max_urls
@@ -336,7 +348,7 @@ class SourceAPIs:
             if value is None or not low<=value<=high:raise ValueError(f'Invalid {name}. Use a whole number from {low} to {high}, or leave it blank.')
             return value
         model=os.getenv('CAREER_RESEARCH_MODEL','').strip() or SEARCH_MODEL
-        if len(model)>160:raise ValueError('Invalid CAREER_RESEARCH_MODEL.')
+        if len(model)>MAX_MODEL_NAME:raise ValueError('Invalid CAREER_RESEARCH_MODEL.')
         return cls(client,brave_key=os.getenv('CAREER_RESEARCH_API_KEY',os.getenv('BRAVE_API_KEY','')).strip(),metered=True,
             searches_per_account=setting('CAREER_RESEARCH_SEARCHES_PER_ACCOUNT_PER_DAY',0,100000),
             max_urls=setting('CAREER_RESEARCH_MAX_URLS_PER_SEARCH',1,MAX_URLS_LIMIT),
@@ -375,7 +387,7 @@ class SourceAPIs:
         except SearchBackendError as error:failure=error
         if not (self.fallback=='brave' and self.brave_key.strip()):
             if failure.reason=='no_sources':return []
-            if failure.reason=='rate_limited':raise SourceRateLimit(failure.retry_after)
+            if failure.reason=='rate_limited':raise SourceRateLimit(failure.retry_after,self.provider)
             raise failure
         # Only a fixed reason code is logged.
         log.warning('research_search_fallback from=openrouter to=brave reason=%s',failure.reason)
@@ -401,8 +413,8 @@ class SourceAPIs:
     async def collect_question_query(self,context,query):
         return await self.search(query,country='ALL')
 
-    async def collect_opportunity_query(self,context,query):
-        return await self.search(query,country=search_country(context.location),focus=query,max_sources=OPPORTUNITY_SOURCE_LIMIT,
+    async def collect_opportunity_query(self,context,query,max_sources=OPPORTUNITY_SOURCE_LIMIT):
+        return await self.search(query,country=search_country(context.location),focus=query,max_sources=min(max_sources,MAX_URLS_LIMIT),
             evidence_chars=OPPORTUNITY_EXCERPT_LIMIT,context_tokens=16384,threshold='lenient',snippets_per_url=12,snippets=60,search_count=50)
 
     async def collect_discovery_query(self,context,query):
@@ -465,11 +477,11 @@ class SourceAPIs:
             async with asyncio.timeout(self.search_timeout):
                 async with completion_response(self.sdk,payload,telemetry={'service':'career','stage':'research_search'}) as response:
                     status=response.status_code
-                    if status==429:raise SearchBackendError('rate_limited','OpenRouter search rate limit reached (HTTP 429).',response.headers.get('retry-after'))
-                    if status==402:raise SearchBackendError('quota','OpenRouter credits or model quota are exhausted (HTTP 402).')
+                    if status==HTTPStatus.TOO_MANY_REQUESTS:raise SearchBackendError('rate_limited','OpenRouter search rate limit reached (HTTP 429).',response.headers.get('retry-after'))
+                    if status==HTTPStatus.PAYMENT_REQUIRED:raise SearchBackendError('quota','OpenRouter credits or model quota are exhausted (HTTP 402).')
                     if status in (401,403):raise SearchBackendError('access','OpenRouter search credentials or access need checking.')
-                    if status>=500:raise SearchBackendError('unavailable',f'OpenRouter search is temporarily unavailable (HTTP {status}). Retry shortly.')
-                    if status!=200:raise SearchBackendError('unavailable',f'OpenRouter search failed (HTTP {status}).')
+                    if status>=HTTPStatus.INTERNAL_SERVER_ERROR:raise SearchBackendError('unavailable',f'OpenRouter search is temporarily unavailable (HTTP {status}). Retry shortly.')
+                    if status!=HTTPStatus.OK:raise SearchBackendError('unavailable',f'OpenRouter search failed (HTTP {status}).')
                     data=bytearray()
                     async for chunk in response.aiter_bytes():
                         data.extend(chunk)
@@ -494,11 +506,9 @@ class SourceAPIs:
             try:source=self.source('brave',value['url'],value.get('title') if isinstance(value.get('title'),str) else None,evidence)
             except (ValidationError,ValueError):continue
             # URL safety and canonicalisation apply before this can count as a result.
-            from app.clients.research import normalize_sources
             try:
                 normalized=normalize_sources([source])
                 if discovery:
-                    from app.schemas.discovery import DiscoverySource
                     normalized=[DiscoverySource(**item.model_dump(),company=value.get('company')) for item in normalized]
                 sources.extend(normalized)
             except GoalError:continue

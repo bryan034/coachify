@@ -11,6 +11,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from app.schemas.analysis import CareerGoal, mongo_document, goal_skill_groups
 from app.schemas.goals import GoalDraft
+from elo_shared.skills import MAPPING_VERSION
 
 
 class GoalError(Exception):
@@ -45,7 +46,7 @@ class GoalStore:
         data = self.goals.find_one({'_id': ObjectId(identifier), 'user_id': owner, 'record_type': 'exploration_draft'})
         if not data:
             raise GoalError('Exploration was not found.', 404)
-        for key in ('processing', 'receipts', 'start_hash', 'create_key'):
+        for key in ('processing', 'receipts', 'start_hash'):
             data.pop(key, None)
         return GoalDraft.model_validate(data)
 
@@ -58,7 +59,7 @@ class GoalStore:
                 raise GoalError('This request key was already used with different details.')
             return self.draft(identifier, owner)
         stamp = now()
-        data = GoalDraft(_id=identifier, user_id=owner, version=1, skill_mapping_version='skills-v1',
+        data = GoalDraft(_id=identifier, user_id=owner, version=1, skill_mapping_version=MAPPING_VERSION,
             created_at=stamp, updated_at=stamp, cv=cv)
         payload = mongo_document(data); payload.update(start_hash=digest, receipts=[])
         try:
@@ -109,22 +110,6 @@ class GoalStore:
                 'dependent_results_need_review': state.get('dependent_results_need_review', False),
                 'review_selection':state.get('selected_review') or ({'id':str(goal['source_review_id']),'version':goal['source_review_version']} if goal and goal.get('source_review_id') else None)}
 
-    def list(self, owner):
-        goals = list(self.goals.find({'user_id': owner, '_id': {'$type':'objectId'}, 'record_type': {'$nin': ['exploration_draft', 'requirement_review']}}).sort('created_at', -1).limit(50))
-        drafts = list(self.goals.find({'user_id': owner, 'record_type': 'exploration_draft'}).sort('updated_at', -1).limit(10))
-        return {'goals': [CareerGoal.model_validate({k:v for k,v in g.items() if k in CareerGoal.model_fields or k=='_id'}) for g in goals],
-                'explorations': [self.draft(str(d['_id']), owner) for d in drafts]}
-
-    def replay_confirmation(self, owner, key, data):
-        state=self.state.find_one({'_id':owner})
-        if not state: return None
-        receipt=next((r for r in state.get('receipts',[]) if r['key']==key),None)
-        if receipt:
-            if receipt['hash']!=fingerprint(data.model_dump(mode='json')):
-                raise GoalError('This request key was already used with different goal details.')
-            return self.current(owner)
-        return None
-
     def persist_target(self, goal):
         """Shared final persistence for JD, discovery and reviewed goal revisions."""
         payload=mongo_document(CareerGoal.model_validate(goal))
@@ -146,7 +131,7 @@ class GoalStore:
             payload=mongo_document(previous)
         return payload
 
-    def confirm(self, owner, key, data, prepared_goal=None, *, discovery_id=None):
+    def confirm(self, owner, key, data, goal, *, discovery_id=None):
         digest = fingerprint(data.model_dump(mode='json'))
         self.state.update_one({'_id': owner}, {'$setOnInsert': {'version': 0, 'goal_id': None, 'receipts': []}}, upsert=True)
         state = self.state.find_one({'_id': owner})
@@ -161,22 +146,6 @@ class GoalStore:
         if discovery_id:selection_query['active_discovery']=discovery_id
         if state['version'] != data.expected_selection_version:
             raise GoalError('Your selected goal changed. Reload before confirming.')
-        draft = self.draft(data.draft_id, owner) if data.draft_id else None
-        if draft and draft.version != data.expected_draft_version:
-            raise GoalError('The suggestions changed. Review the latest version.')
-        if draft and draft.next_question():
-            raise GoalError('Answer or skip each exploration question before confirming.')
-        stamp = now()
-        goal = prepared_goal if prepared_goal is not None else CareerGoal(_id=stable_id(owner, key, 'goal'), user_id=owner, version=1,
-            skill_mapping_version='skills-v1', created_at=stamp, updated_at=stamp,
-            target_type=data.target_type, field=data.field, role=data.role, company=data.company,
-            location=data.location, seniority_level=data.seniority_level, job_url=data.job_url,employment_type=data.employment_type,
-            interests=draft.interests if draft else [], preferences=draft.preferences if draft else [],
-            skills=[], requirements_source='career_exploration' if data.target_type == 'career_exploration' else 'url_jd' if data.job_url else 'pasted_jd',
-            generation_version='pending-skills', generation=draft.generation if draft else None, readiness='pending',
-            exploration_draft_id=draft.id if draft else None, exploration_draft_version=draft.version if draft else None,
-            source_cv_id=draft.cv.cv_id if draft else None, source_cv_version=draft.cv.version if draft else None,
-            source_extraction_version=draft.cv.extraction_version if draft else None, source_profile_version=draft.cv.profile_version if draft else None)
         # Metadata-equivalent confirmation is a no-op, not a new selection/version.
         previous = self.current(owner)['goal']
         fields = ('job_dates','discovery','target_type','field','role','employment_type','company','location','seniority_level','job_url','interests','preferences','source_cv_id','source_cv_version','source_extraction_version','source_profile_version','exploration_draft_id','exploration_draft_version','skills','non_skill_requirements','summary','responsibilities','readiness','requirements_need_review','skill_mapping_version')
@@ -187,8 +156,6 @@ class GoalStore:
             if not changed and not self.state.find_one({'_id':owner,'receipts':{'$elemMatch':receipt}}):
                 raise GoalError('Another goal was selected. Reload before retrying.')
             return self.current(owner)
-        if state.get('goal_id') and not data.replace_current:
-            raise GoalError('Confirm explicitly that you want to replace your selected goal.')
         payload = self.persist_target(goal)
         receipt = {'key': key, 'hash': digest}
         discovery_workspace={}
@@ -204,3 +171,7 @@ class GoalStore:
             if not replay:
                 raise GoalError('Another goal was selected. Reload before retrying.')
         return self.current(owner)
+
+    def goal_version(self, owner, identifier):
+        row = self.goals.find_one({'_id': ObjectId(identifier), 'user_id': owner}, {'version': 1})
+        return row['version'] if row else None

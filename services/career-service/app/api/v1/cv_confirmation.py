@@ -1,7 +1,8 @@
 """Career-owned acknowledgement endpoints for the CV clarification boundary."""
 from fastapi import APIRouter, Depends, Query, Request
 from starlette.concurrency import run_in_threadpool
-from app.api.v1.goals import owner, store, identifier
+from app.api.v1.dependencies import owner, identifier
+from app.api.v1.goals import store
 from app.confirmation.service import CvConfirmationService
 from app.schemas.cv_confirmation import ConfirmCvGoal, CvConfirmationView, CvConfirmedContext
 

@@ -22,7 +22,7 @@ def test_persist_announces_actual_research_outcome(statuses,status,event):
         events=[];updates=[];reports=[]
         def finish(context,token,record):reports.append(record);return record
         engine=OpportunityEngine.__new__(OpportunityEngine)
-        engine.job=AsyncMock(return_value=job);engine.attach=AsyncMock();engine.ai=NS()
+        engine.job=AsyncMock(return_value=job);engine.attach=AsyncMock();engine.ai=NS(settings=NS(provider='compatible'))
         engine.store=NS(rows=NS(update_one=lambda query,update:events.append(update['$addToSet']['activities'])),
                         research=NS(finish=finish),update=lambda *args,**kwargs:updates.append(kwargs))
         await engine.persist({})

@@ -6,7 +6,8 @@ from pathlib import Path
 import httpx
 import pytest
 from openai import AsyncOpenAI
-from app.ai.adapter import AIAdapter, AIError, Operation
+from app.ai.adapter import AIAdapter, Operation
+from app.ai.errors import AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.schemas.workspace import WorkspaceView
@@ -38,6 +39,7 @@ def test_sdk_model_switch_preserves_request_shape_and_does_not_own_http_client(m
     monkeypatch.setenv('CAREER_LLM_BASE_URL','https://compatible.example.test/v1')
     monkeypatch.setenv('CAREER_LLM_MODEL','synthetic-other-model')
     monkeypatch.setenv('CAREER_LLM_TOKEN_PARAMETER',parameter)
+    monkeypatch.setenv('AI_MAX_OUTPUT_TOKENS','8192')
     async def run():
         calls=[]
         def respond(request):
@@ -46,7 +48,7 @@ def test_sdk_model_switch_preserves_request_shape_and_does_not_own_http_client(m
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
             adapter=AIAdapter(AISettings.from_env(),http)
             assert isinstance(adapter.sdk,AsyncOpenAI) and adapter.sdk.max_retries==0
-            await adapter.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hello'}]),Operation('synthetic','1','chat'),current_revision=lambda:'1')
+            await adapter.generate(AIInput(stage='career_guidance',context='{}',conversation=[{'role':'user','content':'Hello'}]),Operation('synthetic','1','career_guidance'),current_revision=lambda:'1')
             payload=json.loads(calls[0].content)
             assert payload['model']=='synthetic-other-model' and parameter in payload
             assert str(calls[0].url)=='https://compatible.example.test/v1/chat/completions'
@@ -62,7 +64,7 @@ def test_malformed_sdk_envelopes_are_safe_terminal_errors(envelope):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(200,json=envelope))) as http:
             adapter=AIAdapter(AISettings(enabled=True,api_key='synthetic'),http)
             with pytest.raises(AIError) as caught:
-                await adapter.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hello'}]),Operation('synthetic','1','chat'),current_revision=lambda:'1')
+                await adapter.generate(AIInput(stage='career_guidance',context='{}',conversation=[{'role':'user','content':'Hello'}]),Operation('synthetic','1','career_guidance'),current_revision=lambda:'1')
             assert caught.value.code=='invalid_output'
             assert 'PRIVATE' not in str(caught.value)
     asyncio.run(run())
@@ -83,7 +85,7 @@ def test_sdk_streams_are_bounded_and_closed(status):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(status,stream=stream))) as http:
             adapter=AIAdapter(AISettings(enabled=True,api_key='synthetic'),http)
             with pytest.raises(AIError) as caught:
-                await adapter.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hello'}]),Operation('synthetic','1','chat'),current_revision=lambda:'1')
+                await adapter.generate(AIInput(stage='career_guidance',context='{}',conversation=[{'role':'user','content':'Hello'}]),Operation('synthetic','1','career_guidance'),current_revision=lambda:'1')
             assert caught.value.code==('output_limit' if status==200 else 'provider_configuration')
             assert stream.closed and stream.count<=(129 if status==200 else 17)
     asyncio.run(run())
@@ -97,7 +99,7 @@ def test_compressed_sdk_rejections_keep_safe_codes_without_double_decoding():
                 headers={'content-encoding':'gzip'},content=gzip.compress(raw)))) as http:
             adapter=AIAdapter(AISettings(enabled=True,api_key='synthetic'),http)
             with pytest.raises(AIError) as caught:
-                await adapter.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hello'}]),Operation('synthetic','1','chat'),current_revision=lambda:'1')
+                await adapter.generate(AIInput(stage='career_guidance',context='{}',conversation=[{'role':'user','content':'Hello'}]),Operation('synthetic','1','career_guidance'),current_revision=lambda:'1')
             assert caught.value.code=='model_unavailable'
             assert caught.value.__context__ is None
     asyncio.run(run())

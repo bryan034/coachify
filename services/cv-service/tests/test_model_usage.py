@@ -197,7 +197,7 @@ def test_async_cancellation_does_not_release_a_running_provider_thread(repositor
 
 def child_provider(directory, entered):
     from time import sleep
-    from app.repositories.model_usage import MemoryModelUsageStore
+    from tests.memory_repositories import MemoryModelUsageStore
     guard = ModelUsage(MemoryModelUsageStore(), directory, Settings())
     def hold():
         entered.set()

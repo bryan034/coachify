@@ -1,6 +1,8 @@
-"""Deterministic narrow routes and bounded facts for scoped career Q&A."""
+"""Bounded facts for scoped career Q&A."""
 import re
-from app.ai.qa_contracts import QuestionRoute
+from app.domain.review import ALIASES
+
+MAX_LISTED_FINDINGS = 12
 
 REFUSAL='I can help with this career goal, its job requirements and interview preparation. I cannot carry out unrelated tasks here.'
 MISSING='That information was not found in the saved JD interpretation or the completed interview research. You can ask about the recorded role, skills, requirements or interview findings.'
@@ -9,39 +11,9 @@ STOP={'what','which','how','are','the','a','an','is','in','for','to','of','and',
 
 def words(text):return set(TOKENS.findall(text.casefold()))-STOP
 
-def blocked_task(message):
-    text=message.casefold()
-    # Narrow execution/override patterns.
-    return bool(re.search(r'\b(?:ignore|override|disregard)\b.{0,40}\b(?:previous|system|all)\s+(?:instructions|rules|prompts)\b|\b(?:reveal|print|show)\b.{0,35}\b(?:system prompt|api keys?|secrets?)\b',text) or
-        re.search(r'\b(?:write|generate|build|create|solve|translate|summari[sz]e)\b.{0,70}\b(?:recipe|homework|poem|political speech|medical report|legal contract|entire document|python script|sql query|application code)\b',text))
-
-def direct_route(message):
-    if blocked_task(message):return QuestionRoute(topic='off_topic')
-    text=message.strip().casefold().rstrip('?.!')
-    # Reject task execution, including attempts that wrap unrelated work in job terminology.
-    task=re.match(r'^(?:(?:please|can you|could you|help me)\s+)?(?:write|generate|build|create|solve)\b.{0,80}\b(?:code|script|program|app|application|essay|email|query|homework|assignment|poem|cover letter)\b',text)
-    if task or re.fullmatch(r'(?:weather(?: today)?|(?:what is|how is|tell me) the weather(?: today)?)',text) or re.search(r'\b(ignore (?:all |previous |your )?instructions|system prompt|recipe|shopping list|write (?:me |a |an |the |some )?(?:code|script|essay|email|poem|assignment)|solve (?:my |this )?(?:homework|assignment))\b',text):
-        return QuestionRoute(topic='off_topic')
-    if re.fullmatch(r'(?:how many|what (?:is|are) the number of) (?:interview )?(?:rounds|stages)(?: (?:are there|will there be|for this (?:job|role)))?',text):
-        return QuestionRoute(topic='interview_process',terms=['round_count'])
-    if re.fullmatch(r'(?:where is (?:this|the) (?:job|role) (?:based|located)|what is (?:the |this job.s )?location)',text):
-        return QuestionRoute(topic='role',terms=['location'])
-    if re.fullmatch(r'(?:what|which) (?:are the |are |job |technical |transferable )?skills (?:are (?:required|needed)|do i need|does (?:this|the) (?:job|role) require)',text):
-        return QuestionRoute(topic='skills')
-    if re.fullmatch(r'(?:what|which) (?:are the )?(?:interview stages|interview rounds|interview process)(?: (?:are there|can i expect))?',text):
-        return QuestionRoute(topic='interview_process')
-    if re.fullmatch(r'what should i practi[cs]e',text):return QuestionRoute(topic='preparation')
-    if re.match(r"^(?:(?:please|can you|could you|help me|i want to|i would like to|i'd like to)\s+)?(?:change|update|edit|revise|adjust|replace|set|rename|clear|mark|make)\b",text):
-        return QuestionRoute(topic='edit')
-    if re.fullmatch(r'(?:add|remove|include|drop) [\w +#./-]{1,100}(?: (?:to|from) (?:my |the )?(?:skills|goal))?',text):
-        return QuestionRoute(topic='edit')
-    return None
-
-
 def select_items(items,terms,limit=12):
     meaningful=set().union(*(words(t) for t in terms)) if terms else set()
     if meaningful:
-        from app.domain.review import ALIASES
         alias_ids={identifier for (_,name),identifier in ALIASES.items() if name in {t.casefold().strip() for t in terms}}
         selected=[v for v in items if meaningful & words(' '.join(str(v.get(k) or '') for k in ('name','description','category','assessment_type','interview_stage')))
             or v.get('skill_id') in alias_ids]
@@ -65,7 +37,7 @@ def facts_for(route,goal,research,include_evidence=False):
         links[ref]=[s for s in research.get('sources',[]) if s.get('source_id') in source_ids]
     topic=route.topic
     if topic in ('role','overview'):
-        keys=('location',) if route.terms==['location'] else ('role','company','field','location','seniority_level','summary','responsibilities')
+        keys=('role','company','field','location','seniority_level','summary','responsibilities')
         add('job_details',{k:goal[k] for k in keys if goal.get(k)})
     if topic in ('skills','preparation','overview'):
         items,cut=select_items(goal.get('skills',[]),route.terms,4 if include_evidence else 12);truncated|=cut
@@ -87,22 +59,21 @@ def facts_for(route,goal,research,include_evidence=False):
         process=research.get('process') or {}
         if process.get('round_count') is not None:
             add('interview_round_count',{'round_count':process['round_count']},(process.get('round_count_evidence') or {}).get('source_ids',[]))
-        if route.terms!=['round_count']:
-            for v in process.get('stages',[]):add('interview_stage',{k:v[k] for k in ('name','assessment_type') if v.get(k)},v.get('evidence',{}).get('source_ids',[]))
-            # Without a process field, fall back to explicit recorded stages.
-            if not process.get('stages'):
-                seen=set()
-                for v in research.get('skills',[]):
-                    stage=v.get('interview_stage')
-                    if stage and stage not in seen:
-                        seen.add(stage);add('interview_stage',{'name':stage,'assessment_type':v.get('assessment_type')},v.get('source_ids',[]))
+        for v in process.get('stages',[]):add('interview_stage',{k:v[k] for k in ('name','assessment_type') if v.get(k)},v.get('evidence',{}).get('source_ids',[]))
+        # Without a process field, fall back to explicit recorded stages.
+        if not process.get('stages'):
+            seen=set()
+            for v in research.get('skills',[]):
+                stage=v.get('interview_stage')
+                if stage and stage not in seen:
+                    seen.add(stage);add('interview_stage',{'name':stage,'assessment_type':v.get('assessment_type')},v.get('source_ids',[]))
     if topic in ('opportunity','overview'):
         items=opportunity_findings(research)
         if route.terms:
             wanted=set().union(*(words(term) for term in route.terms))
             items=[item for item in items if wanted & words(str(item.get('field',''))+' '+str(item.get('value','')))]
-        truncated|=len(items)>12
-        for item in items[:12]:
+        truncated|=len(items)>MAX_LISTED_FINDINGS
+        for item in items[:MAX_LISTED_FINDINGS]:
             data={key:item[key] for key in ('field','value','category','confidence','scope','evidence_type') if key in item}
             if include_evidence:data['supporting_evidence']=item.get('quotes',[])[:3]
             add('opportunity_finding',data,item.get('source_ids',[]))

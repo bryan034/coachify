@@ -1,10 +1,10 @@
 """Small provider contracts, independent of persistence/API document metadata."""
-from app.schemas.analysis import EmploymentType
-
+from app.schemas.analysis import EmploymentType, Contract, Text, Evidence, Proficiency, Count, Priority, LearningItem
 from typing import Literal
 from pydantic import Field
-from app.schemas.analysis import Contract, Text, Evidence, Proficiency, Count, Priority
 from app.schemas.jd import ChatText, JDExtraction, ReviewSkill
+
+MAX_EDITED_SKILLS = 60
 
 
 class ExtractedJobDate(Contract):
@@ -15,8 +15,6 @@ class ExtractedJobDate(Contract):
     evidence: str = Field(min_length=1, max_length=600,
         description='An exact source excerpt that contains text verbatim, including its date wording.')
 
-
-from app.schemas.analysis import LearningItem
 
 class ExtractedSkill(Contract):
     learning_items: list[LearningItem] = Field(default_factory=list,max_length=12,description="Concrete things to learn, such as pytest unit tests. Keep stated items grounded in exact source evidence. Mark inferred preparation as inferred with a reason; never invent employer criteria.")
@@ -69,18 +67,13 @@ class ExtractedJD(Contract):
         return JDExtraction.model_validate(data)
 
 
-class JDAnswer(Contract):
-    reply: ChatText
-    edit_requested: bool = Field(default=False, strict=True)
-
-
 class SkillEdits(Contract):
     keep: list[Text] = Field(max_length=60)
     add: list[ExtractedSkill] = Field(max_length=60)
 
 
 def apply_edits(edits: SkillEdits, existing: list[ReviewSkill]):
-    if len(edits.keep) + len(edits.add) > 60:
+    if len(edits.keep) + len(edits.add) > MAX_EDITED_SKILLS:
         raise ValueError('Too many proposed skills.')
     lookup = {str(index): skill for index, skill in enumerate(existing)}
     if len(set(edits.keep)) != len(edits.keep) or any(key not in lookup for key in edits.keep):
