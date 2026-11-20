@@ -1,0 +1,295 @@
+{
+  "$defs": {
+    "BriefFact": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 240,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "citations": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 6,
+          "title": "Citations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "title": "BriefFact",
+      "type": "object"
+    },
+    "BriefPay": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "caveat": {
+          "anyOf": [
+            {
+              "maxLength": 240,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caveat"
+        },
+        "citations": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 6,
+          "title": "Citations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "title": "BriefPay",
+      "type": "object"
+    },
+    "BriefReport": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "citations": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Citations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "citations"
+      ],
+      "title": "BriefReport",
+      "type": "object"
+    },
+    "BriefSource": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "title": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "domain": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Domain",
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index",
+        "title",
+        "domain",
+        "url"
+      ],
+      "title": "BriefSource",
+      "type": "object"
+    },
+    "BriefTopic": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 40,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "tone": {
+          "enum": [
+            "positive",
+            "mixed",
+            "negative"
+          ],
+          "title": "Tone",
+          "type": "string"
+        },
+        "takeaway": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Takeaway",
+          "type": "string"
+        },
+        "estimated": {
+          "title": "Estimated",
+          "type": "boolean"
+        },
+        "conflicting": {
+          "default": false,
+          "title": "Conflicting",
+          "type": "boolean"
+        },
+        "reports": {
+          "items": {
+            "$ref": "#/$defs/BriefReport"
+          },
+          "maxItems": 8,
+          "title": "Reports",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "tone",
+        "takeaway",
+        "estimated"
+      ],
+      "title": "BriefTopic",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "researchedAt": {
+      "format": "date-time",
+      "title": "Researchedat",
+      "type": "string"
+    },
+    "sourceCount": {
+      "minimum": 0,
+      "title": "Sourcecount",
+      "type": "integer"
+    },
+    "summary": {
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "notFound": {
+      "items": {
+        "maxLength": 240,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Notfound",
+      "type": "array"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/BriefSource"
+      },
+      "maxItems": 60,
+      "title": "Sources",
+      "type": "array"
+    },
+    "facts": {
+      "items": {
+        "$ref": "#/$defs/BriefFact"
+      },
+      "maxItems": 4,
+      "title": "Facts",
+      "type": "array"
+    },
+    "duties": {
+      "items": {
+        "maxLength": 240,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 6,
+      "title": "Duties",
+      "type": "array"
+    },
+    "topics": {
+      "items": {
+        "$ref": "#/$defs/BriefTopic"
+      },
+      "maxItems": 8,
+      "title": "Topics",
+      "type": "array"
+    },
+    "pay": {
+      "items": {
+        "$ref": "#/$defs/BriefPay"
+      },
+      "maxItems": 3,
+      "title": "Pay",
+      "type": "array"
+    }
+  },
+  "required": [
+    "researchedAt",
+    "sourceCount",
+    "summary"
+  ],
+  "title": "RoleBrief",
+  "type": "object"
+}

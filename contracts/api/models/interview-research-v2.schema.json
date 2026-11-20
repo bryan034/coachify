@@ -1,0 +1,359 @@
+{
+  "$defs": {
+    "BriefAskedAbout": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "citations": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Citations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "citations"
+      ],
+      "title": "BriefAskedAbout",
+      "type": "object"
+    },
+    "BriefCandidateReports": {
+      "additionalProperties": false,
+      "properties": {
+        "askedAbout": {
+          "items": {
+            "$ref": "#/$defs/BriefAskedAbout"
+          },
+          "maxItems": 8,
+          "title": "Askedabout",
+          "type": "array"
+        },
+        "situational": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BriefCited"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BriefCited"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reports": {
+          "items": {
+            "$ref": "#/$defs/BriefReport"
+          },
+          "maxItems": 12,
+          "title": "Reports",
+          "type": "array"
+        }
+      },
+      "title": "BriefCandidateReports",
+      "type": "object"
+    },
+    "BriefCited": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "citations": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Citations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "citations"
+      ],
+      "title": "BriefCited",
+      "type": "object"
+    },
+    "BriefDifficulty": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "enum": [
+            "easy",
+            "average",
+            "difficult"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "estimated": {
+          "title": "Estimated",
+          "type": "boolean"
+        },
+        "reason": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "level",
+        "estimated",
+        "reason"
+      ],
+      "title": "BriefDifficulty",
+      "type": "object"
+    },
+    "BriefQuestion": {
+      "additionalProperties": false,
+      "properties": {
+        "question": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Question",
+          "type": "string"
+        },
+        "prep": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Prep",
+          "type": "string"
+        },
+        "estimated": {
+          "title": "Estimated",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "question",
+        "prep",
+        "estimated"
+      ],
+      "title": "BriefQuestion",
+      "type": "object"
+    },
+    "BriefReport": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "citations": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Citations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "citations"
+      ],
+      "title": "BriefReport",
+      "type": "object"
+    },
+    "BriefSource": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "title": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "domain": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Domain",
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index",
+        "title",
+        "domain",
+        "url"
+      ],
+      "title": "BriefSource",
+      "type": "object"
+    },
+    "BriefStep": {
+      "additionalProperties": false,
+      "properties": {
+        "step": {
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Step",
+          "type": "integer"
+        },
+        "title": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 240,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "When"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "maxLength": 240,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "citations": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 6,
+          "title": "Citations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step",
+        "title"
+      ],
+      "title": "BriefStep",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "researchedAt": {
+      "format": "date-time",
+      "title": "Researchedat",
+      "type": "string"
+    },
+    "sourceCount": {
+      "minimum": 0,
+      "title": "Sourcecount",
+      "type": "integer"
+    },
+    "summary": {
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "notFound": {
+      "items": {
+        "maxLength": 240,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Notfound",
+      "type": "array"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/BriefSource"
+      },
+      "maxItems": 60,
+      "title": "Sources",
+      "type": "array"
+    },
+    "process": {
+      "items": {
+        "$ref": "#/$defs/BriefStep"
+      },
+      "maxItems": 6,
+      "title": "Process",
+      "type": "array"
+    },
+    "difficulty": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BriefDifficulty"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "questions": {
+      "items": {
+        "$ref": "#/$defs/BriefQuestion"
+      },
+      "maxItems": 8,
+      "title": "Questions",
+      "type": "array"
+    },
+    "candidateReports": {
+      "$ref": "#/$defs/BriefCandidateReports"
+    }
+  },
+  "required": [
+    "researchedAt",
+    "sourceCount",
+    "summary"
+  ],
+  "title": "InterviewBrief",
+  "type": "object"
+}

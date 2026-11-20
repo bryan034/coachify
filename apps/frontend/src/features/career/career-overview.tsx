@@ -7,7 +7,7 @@ import {useProfile} from '@/features/profile/profile-provider';
 import {careerApi,refreshWorkspace,type CareerWorkspace,type ReviewSkill} from '@/lib/api/career';
 import {useCareerSession} from './career-session';
 import {CareerGoal,pendingExtraction} from './career-goal';
-import {OpportunityIntelligence,type RoleCardInput} from './opportunity-intelligence';
+import {OpportunityIntelligence} from './opportunity-intelligence';
 import {CvGoalConfirmationCard} from './cv-goal-confirmation';
 import {sourceLink} from './source-links';
 import {OTHER_SKILLS,groupSkills,type SkillGroupMap} from '@/lib/skill-groups';
@@ -259,11 +259,7 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
   const {level,target}=goalSkillLevel(skill,skill.item_id?outcomes?.[skill.item_id]:undefined,profileLevels);
   return {key:`${talking!.key}:${talking!.mode}`,name:skill.name,canonicalId:skill.canonical_skill_id,level,target,meaning:skill.competence_target?.explanation,tasks:(skill.learning_items??[]).map(item=>({name:item.name,reason:item.reason}))};
  },[talking,goal.skills,outcomes,profileLevels]);
- const roleCards:RoleCardInput[]=[
-  {card_id:'eligibility',title:'Eligibility and commitment',icon:'check',items:goal.non_skill_requirements.map(item=>({ref:`req:${item.requirement_id}`,text:item.description,note:originLabel(item),urls:item.source_urls}))},
-  {card_id:'work',title:'What you would work on',icon:'code',items:[...(goal.summary?[{ref:'summary',text:goal.summary}]:[]),...goal.responsibilities.map((text,index)=>({ref:`resp:${index}`,text}))].map((item,index)=>index===0&&goal.job_url?{...item,urls:[goal.job_url]}:item)},
- ];
- const research=(section:'interview'|'role')=><OpportunityIntelligence key={`${goal._id}:${section}`} section={section} goalId={goal._id} version={goal.version} selectionVersion={workspace.current.selection_version} roleCards={section==='role'?roleCards:undefined}/>;
+ const research=(section:'interview'|'role')=><OpportunityIntelligence key={`${goal._id}:${section}`} section={section} goalId={goal._id} version={goal.version} selectionVersion={workspace.current.selection_version} goal={section==='role'?{requirements:goal.non_skill_requirements.map(item=>item.description),duties:goal.responsibilities}:undefined}/>;
  return <section className={`page on ws-page goal-overview career-briefing${view==='role'?' is-wide':''}`}>
   <section className="ws-hero ws-goal" id="target" aria-label="Your target role">
    <div>

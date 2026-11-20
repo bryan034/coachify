@@ -2,6 +2,7 @@ import {careerFixture,test} from './career-fixture';
 import {mockEmptyConversation} from '../fixtures/cv-ui';
 import {policy,emptyDeclarations} from '../fixtures/cv';
 import {expect} from '@playwright/test';
+import {interviewBrief,roleBrief} from '../fixtures/research-brief';
 
 test('saved briefing accordions, guided refinement, replacement and CV handoff on desktop and mobile',async({page},testInfo)=>{
  await mockEmptyConversation(page);
@@ -29,8 +30,8 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  };
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/interview-prep'))return route.fulfill({json:{status:'ready',suggestions:null}});
-  if(path.endsWith('/role-summary'))return route.fulfill({json:{status:'ready',summary:null}});
+  if(path.endsWith('/v2/interview-research'))return route.fulfill({json:{status:'ready',brief:interviewBrief}});
+  if(path.endsWith('/v2/role-research'))return route.fulfill({json:{status:researching?'researching':'ready',brief:researching?null:roleBrief}});
   if(path.endsWith('/context/assessment'))return route.fulfill({json:careerFixture(route.request().url(),{status:'no_cv',cv_uploaded:false,skills_evaluated:false})});
   if(path.endsWith('/workspace/jd')){extractions++;currentRole='Data Engineer';return route.fulfill({json:careerFixture(route.request().url(),state())});}
   if(path.endsWith('/workspace/messages')){edits++;return route.fulfill({json:careerFixture(route.request().url(),{reply:edits===1?'Which part would you like to change: your role, skills or location?':'Your goal has been updated.',edit_status:'clarifying'})});}
@@ -50,11 +51,10 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await expect(page.getByRole('textbox',{name:'Job description'})).toHaveCount(0);
  await expect(page.getByRole('complementary',{name:'Your starting point'})).toHaveCount(0);
  await page.getByRole('navigation',{name:'Career goal pages'}).getByRole('link',{name:'About the role'}).click();
- await page.getByText('Eligibility and commitment',{exact:true}).click();
- await expect(page.getByText('Degree in a related discipline',{exact:false}).first()).toBeVisible();
+ await expect(page.getByRole('region',{name:'Who can apply'})).toContainText('Degree in a related discipline');
  researching=false;
  await page.getByRole('navigation',{name:'Career goal pages'}).getByRole('link',{name:'Interview preparation'}).click();
- await expect(page.locator('#interview-preparation')).toContainText('Technical interview');
+ await expect(page.locator('#interview-preparation')).toContainText(interviewBrief.summary);
  await page.screenshot({path:test.info().outputPath('goal-overview-desktop.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -88,51 +88,6 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await expect(page.getByLabel('CV document',{exact:true})).toBeEnabled();
 });
 
-test('research tabs keep partial results, citations and refresh on mobile',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
- await page.route('**/api/v1/profile**',route=>{
-  const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});
-  if(path.endsWith('/auth/session'))return route.fulfill({json:careerFixture(route.request().url(),{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'})});
-  return route.fulfill({json:careerFixture(route.request().url(),{version:1,onboarding_complete:true,occupational_status:'employed',education:{}})});
- });
- const goal={_id:'0'.repeat(24),version:1,target_type:'specific_job',role:'Software Engineering Intern',field:'Software',company:'Example',location:'Singapore',employment_type:'internship',seniority_level:null,job_url:null,skills:[],non_skill_requirements:[],responsibilities:[],summary:'Build software with the engineering team.'};
- const base={status:'completed',findings:[],missing_fields:[],warnings:[],error_code:null,researched_at:'2026-10-26T00:00:00Z',expires_at:null,searches:1,model_calls:1,latency_ms:100,estimated_cost_usd:null};
- const claim={finding_id:'f0000000000000001',field:'compensation',value:'SGD 1500 per month',confidence:'low',evidence_type:'candidate_reported',source_ids:['s1'],quotes:['An intern reports SGD 1500 per month.'],scope:'related_role',conflict_group:'salary',last_verified_at:'2026-10-26T00:00:00Z'};
- const source={source_id:'s1',url:'https://example.test/report',title:'Public intern report',platform:'other',published_date:null,retrieved_at:'2026-10-26T00:00:00Z'};
- let refreshed='';
- await page.route('**/api/v1/career/**',route=>{
-  const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/interview-prep'))return route.fulfill({json:{status:'ready',suggestions:null}});
-  if(path.endsWith('/role-summary'))return route.fulfill({json:{status:'ready',summary:null}});
-  if(path.endsWith('/context/assessment'))return route.fulfill({json:careerFixture(route.request().url(),{status:'evaluated',cv_uploaded:true,skills_evaluated:true})});
-  if(path.endsWith('/opportunity-research')){
-   if(route.request().method()==='POST')refreshed=route.request().postDataJSON().category;
-   return route.fulfill({json:careerFixture(route.request().url(),{available:true,status:'partial',finished:true,job_id:'job',career_target_id:goal._id,research:null,sources:[source],summary:{overview_refs:[],key_takeaway_refs:[claim.finding_id],consideration_refs:[]},categories:{interview_intelligence:{...base,status:'failed',error_code:'source_unavailable'},internship_insights:{...base,findings:[claim],missing_fields:['benefits','mentorship'],warnings:['Conflicting reports are preserved separately; figures are not averaged.']},career_progression:{...base,findings:[{...claim,finding_id:'f0000000000000002',field:'conversion_salary',value:'SGD 5000 monthly base salary, 2025'}]},conversion_outcomes:{...base,missing_fields:['conversion_rate','historical_cohort']},company_intelligence:{...base,missing_fields:['team_culture']}}})});
-  }
-  return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',review:{review_id:'1'.repeat(24),version:1,target_type:'specific_job',extraction:goal,requirements_need_review:false},current:{selection_version:1,goal},research:null,coverage:[],error:null,retry_after:null})});
- });
- await page.goto('/career-goal');
- await expect(page.getByRole('complementary',{name:'Your starting point'})).toHaveCount(0);
- const tabs=page.getByRole('navigation',{name:'Career goal pages'});
- await tabs.getByRole('link',{name:'Interview preparation'}).click();
- await expect(page).toHaveURL(/\/career-goal\/interview$/);
- await expect(page.getByText('Part of this research could not finish. Other results are preserved; refresh to retry.')).toHaveCount(0);
- await tabs.getByRole('link',{name:'About the role'}).click();
- const salary=page.locator('.role-item').filter({has:page.getByRole('heading',{name:'Salary',exact:true})});
- await expect(salary).toContainText('SGD 1500 per month');await expect(salary).not.toContainText('low confidence');
- await expect(salary.getByRole('link',{name:'Source 1: Public intern report'})).toHaveAttribute('href','#a-src-1');
- await expect(page.locator('.research-sources').getByRole('link',{name:'Public intern report ↗'})).toHaveAttribute('href','https://example.test/report');
- await expect(page.locator('.role-item').filter({has:page.getByRole('heading',{name:'Full-time salary'})})).toContainText('SGD 5000 monthly base salary, 2025');
- await expect(page.getByRole('region',{name:'Not found yet',exact:true})).toContainText('Conversion rate');
- await expect(page.getByRole('note')).toContainText('may be inaccurate or out of date');
- await page.getByRole('button',{name:'Refresh research'}).click();
- await expect.poll(()=>refreshed).toBe(null);
- await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.screenshot({path:test.info().outputPath('opportunity-intelligence-mobile.png'),fullPage:true});
-});
-
-
 test('the grouped skill list supports keyboard disclosure, long lists, confirmed layout and small screens',async({page})=>{
  await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
@@ -144,8 +99,7 @@ test('the grouped skill list supports keyboard disclosure, long lists, confirmed
  const longTitle='Ability to learn quickly, investigate failure modes, and iterate based on evidence and user feedback';
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/interview-prep'))return route.fulfill({json:{status:'ready',suggestions:null}});
-  if(path.endsWith('/role-summary'))return route.fulfill({json:{status:'ready',summary:null}});
+  if(path.includes('/v2/'))return route.fulfill({json:{status:'missing',brief:null}});
   if(path.endsWith('/context/assessment'))return route.fulfill({json:{status:'not_evaluated',cv_uploaded:true,skills_evaluated:false}});
   if(path.endsWith('/cv-confirmation'))return route.fulfill({json:{goal_id:'111111111111111111111111',goal_version:1,selection_version:1,confirmed:true,context:{id:'111111111111111111111111',version:1,selection_version:1,confirmed:true},reason:null}});
   const goal={_id:'111111111111111111111111',version:1,role:'Product Manager',field:'Product',target_type:'specific_job',skills:Array.from({length:count},(_,i)=>({item_id:`skill-${i}`,name:i===0?longTitle:`Product skill ${i}`,category:i%2?'AI':'Product Management',priority:i<6?'required':'preferred',origin:'employer',context:'Investigate product outcomes using evidence.',evidence:'Learn from user feedback.'}))};

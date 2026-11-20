@@ -105,37 +105,25 @@ Refine goal and Set a new goal): **Skills needed** (`/career-goal`), **Interview
   Partial, Gap or Unknown status. Expanding a skill shows why it matters, its importance
   source, the competence bar and the "What you need" learning items. Job-description quotes
   are not shown in skill cards. Long lists start with ten skills.
-- Interview preparation is always shown, never inside a disclosure: the Stages, Timeline and
-  Difficulty tiles, then one always-open card per researched round with questions to expect,
-  how to prepare and sources (with no round data, those slots cover the whole process).
-  Key terms in findings and AI-made items arrive as `**…**` and render as bold; the tiles
-  are already bold, so they show plain text.
-- About the role always shows eligibility, work and every role topic (salary, benefits,
-  projects, mentorship, hours, progression, conversion and culture), as bullets, not
-  extracted paragraphs. Sourced cards are condensed by an AI digest
-  (`/goals/{id}/role-summary`) into a short headline and one to three cited bullets (key terms in bold) marked "Summarised by AI from
-  the sources"; until then, or if it fails, each item is split into one bullet per sentence.
-  Confidence and conflict flags sit beside their bullet; sources are listed once per card.
-- Every field the sources leave empty is written by the AI once research settles
-  (`/interview-prep` for interview slots and tiles, the `generated` cards of `/role-summary`
-  for role topics). Each such field carries a small orange warning icon, explained by a legend
-  under the accuracy warning ("made by an AI model based on the context it was provided, and
-  not found in any sources"). The legend replaced the grey research-outcome banners. A field
-  reads "Not filled yet" only while generating fails. The keyword-only "Interview prep" guide
-  card was removed on 11 November 2026.
-- Both research tabs carry the accuracy warning. The per-finding quote disclosure and the
-  per-category refresh buttons were removed; refresh covers the tab's research.
-- Research tabs restyled from the 19 November 2026 design canvas. Each tab is one card: a
-  header line (research date, number of cited sources, the accuracy warning and, when AI filled
-  anything, what the **Estimated** chip means) beside **Refresh research**. Sources are cited as
-  numbered pills that jump to one Sources list at the foot of the card, numbered in reading
-  order. AI-made fields carry an amber **Estimated** chip in place of the orange icon and
-  legend. Interview preparation shows a dark process timeline (rounds in order, with the
-  timeline), Difficulty (on an Easy / Average / Difficult scale when the wording says which) and
-  Stages tiles, then **Stage by stage**: each round's format, questions, preparation and
-  candidate quotes. About the role shows an at-a-glance strip of AI headlines (salary,
-  conversion rate, role after the internship, intake), then one labelled row per group (The role,
-  Pay and benefits, Day to day, After the internship, Team and culture) and **Not found yet**.
+- Interview preparation and About the role (`opportunity-intelligence.tsx`, components in
+  `research-brief.tsx`, styles in `research-brief.css`) follow the 21 November 2026 design canvas.
+  Once research settles each tab reads its version 2 brief (`/goals/{id}/v2/role-research` or
+  `/v2/interview-research`), generating it when missing, and only renders it: the frontend never
+  rewrites or re-sorts the text. The header shows "Researched <date> from N sources", one AI
+  disclaimer and **Refresh research**; the summary sentence leads the tab.
+- About the role: a four-fact strip, **What you would do** (four duties, "Show N more"),
+  **What it is like** (one takeaway and a Positive / Mixed / Negative pill per topic; reports and
+  their citations behind "Show N reports"), **Pay and what comes after**, **Not found yet** and
+  **Sources**. Until a brief exists, or when research is unavailable, it shows the saved goal's
+  requirements (**Who can apply**) and duties instead.
+- Interview preparation: a process stepper, a difficulty bar, **Practise these** (one accordion
+  pairing each question with how to prepare; the first is open), **What candidates reported**
+  (asked-about chips, situational example, tone and "Show all N reports"), **Not found yet** and
+  **Sources**.
+- Items without a source carry an amber **Estimated** tag; topics where sources disagree carry
+  **Conflicting reports**. A section with no data is hidden and named under Not found yet.
+- Sources are listed 1..N as the backend numbered them, five at first ("Show all N sources").
+  A citation chip expands the list if needed, scrolls to its source and briefly highlights it.
 
 As soon as **Extract career goal** is pressed, Career Goal (`career-goal.tsx`) replaces the form
 with the shared "Skills needed" processing screen (`ProcessingCard`) while the goal is extracted;

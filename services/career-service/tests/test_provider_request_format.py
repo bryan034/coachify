@@ -14,6 +14,8 @@ CONTEXTS = {
     'goal_summary': {'goal': {'reference': 'g1'}, 'categories': {'skills': {'reference': 'c1', 'findings': [{'reference': 'f1'}]}}},
     'interview_prep': {'gaps': [{'round_number': 1, 'field': 'interview_questions'}]},
     'role_summary': {'cards': [{'card_id': 'card-1', 'items': [{'ref': 'r1'}]}], 'missing': [{'card_id': 'card-2'}]},
+    'role_brief': {'sources': [{'key': 'S1', 'title': 'Intern reviews', 'site': 'Glassdoor'}]},
+    'interview_brief': {'sources': [{'key': 'S1', 'title': 'Interview questions', 'site': 'Glassdoor'}]},
     'opportunity_triage': {'topics': {'compensation': 'Intern pay.'},
         'pages': [{'ref': 0, 'url': 'https://example.test/pay', 'title': 'Pay', 'description': 'Interns earn.'}]},
 }
