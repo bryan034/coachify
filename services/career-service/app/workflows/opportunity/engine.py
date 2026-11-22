@@ -21,8 +21,8 @@ from app.ai.errors import AIError
 from app.ai.contracts import AIInput
 from app.ai.recovery import recover_responses,validation_feedback
 from app.ai.waiting import quota_progress
-from app.ai.metrics import usage_observer
-from app.ai.opportunity_contracts import structure_input,triage_input
+from app.ai.metrics import COUNTERS,usage_observer
+from app.ai.opportunity_contracts import MAX_TRIAGE_PAGES,structure_input,triage_input
 from app.workflows.model_waits import resume_obsolete_model_waits
 from app.clients.search_sources import SourceRateLimit
 from app.repositories.goals import GoalError,now,fingerprint
@@ -30,8 +30,8 @@ from app.schemas.analysis import ResearchContext,InterviewResearch,Generation
 from app.schemas.opportunity import CATEGORIES,FIELDS,SUMMARY_UNAVAILABLE,CategoryResult,Finding,OpportunityReport,Summary
 from .store import OpportunityStore
 from .sources import pool,retain_useful,category_sources,choose_reads
-from .queries import ACTIVITIES,planned_queries,topic_map
-from .topics import CANDIDATES_PER_SEARCH,TOPIC_CATEGORIES,TOPICS,category_topics,owner,policy,settled
+from .queries import ACTIVITIES,planned_queries,topic_queries,topic_map
+from .topics import CANDIDATES_PER_SEARCH,GROUP_CANDIDATES,GROUPS,TOPIC_CATEGORIES,TOPIC_GROUP,TOPICS,category_topics,gap_rank,owner,policy,settled
 from app.domain.review import MAPPING_VERSION
 from .domain import whitespace,summary_input,dedupe_findings,supported_claims,validated_skill_levels,weighted_skills
 from pymongo.errors import PyMongoError
@@ -97,7 +97,7 @@ class State(TypedDict,total=False):
 class OpportunityEngine:
     def __init__(self,app,db,settings,ai):
         self.app=app;self.settings=settings;self.ai=ai;self.store=OpportunityStore(db,settings);self.db=self.store.db
-        self.tasks={};self.stopping=False;self.slots=asyncio.Semaphore(settings.concurrency)
+        self.tasks={};self.triage_locks={};self.stopping=False;self.slots=asyncio.Semaphore(settings.concurrency)
         source=app.state.research_client
         self.source=source.for_opportunity() if callable(getattr(source,'for_opportunity',None)) else source
         # 'provider' is the persisted channel id; 'backend' names the search service.
@@ -147,68 +147,145 @@ class OpportunityEngine:
         finally:
             usage_observer.reset(observer);quota_progress.reset(waiting);validation_feedback.reset(feedback);recover_responses.reset(recovery)
             increments={f'metrics.{stage}.model_calls':attempts,f'metrics.{stage}.latency_ms':int((time.monotonic()-started)*1000)}
-            for name in ('prompt_tokens','completion_tokens','total_tokens'):
-                count=sum(v.get(name,0) for v in usage)
-                if count:increments[f'metrics.{stage}.{name}']=count
-            await asyncio.shield(thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$inc':increments}))
+            await self.record(job,stage,usage,increments)
             logger.info('node=%s latency_ms=%s',stage,int((time.monotonic()-started)*1000))
+
+    async def record(self,job,stage,usage,increments):
+        for name in COUNTERS:
+            count=sum(v.get(name,0) for v in usage)
+            if count:increments[f'metrics.{stage}.{name}']=count
+        await asyncio.shield(thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$inc':increments}))
 
     async def plan(self,state):
         job=await self.job(state)
         await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':'checking_sources'}})
         if all(v['status'] in ('completed','not_applicable') for v in job['categories'].values()):return {}
-        planned=topic_map(job.get('queries'))
-        if planned and job.get('queries_planned'):return {}
-        plan=await self.generate(job,'opportunity_plan',{'opportunity':job['public'],'recruitment_year':now().year,'previous_queries':topic_map(job.get('history'))})
-        queries=planned_queries(plan,self.settings.topic_searches,job['public'])
-        if job.get('prefetched'):
-            # Successful paid prefetch queries stay first.
-            queries={topic:list(dict.fromkeys([*topic_map(job.get('history')).get(topic,[]),*queries[topic]]))[:self.settings.topic_searches] for topic in TOPICS}
-        await thread(self.store.update,job['_id'],job['worker_token'],queries=queries,queries_planned=True)
+        if job.get('queries_planned') and job.get('group_queries'):return {}
+        plan=await self.generate(job,'opportunity_plan',{'opportunity':job['public'],'recruitment_year':now().year,'previous_queries':job.get('group_history',{})})
+        await thread(self.store.update,job['_id'],job['worker_token'],group_queries=planned_queries(plan,job['public']),
+            queries=topic_queries(job['public'],self.settings.topic_searches),queries_planned=True)
         return {}
 
-    async def search_topic(self,job_id,topic):
-        """Run a topic's next planned search within its search allowances; returns the new candidate pages."""
+    async def collect(self,job,query,limit):
+        usage=[];observer=usage_observer.set(usage.append);sources=None
+        try:
+            for attempt in range(self.settings.retries+1):
+                try:
+                    async with self.slots:
+                        async with asyncio.timeout(self.settings.timeout_seconds):
+                            with budget_owner(job['owner']):
+                                sources=await self.source.collect_opportunity_query(ResearchContext.model_validate(job['context']),query,max_sources=limit)
+                    break
+                except (GoalError,TimeoutError) as error:
+                    if not transient(error) or attempt==self.settings.retries:raise
+                    await asyncio.sleep(.5*2**attempt)
+        finally:
+            usage_observer.reset(observer)
+            await self.record(job,'research_search',usage,{'metrics.research_search.searches':1})
+        return pool([s.model_dump(mode='json') for s in sources or []])
+
+    def next_query(self,job,topic):
+        history=topic_map(job.get('history')).get(topic,[])
+        queries=topic_map(job.get('queries')).get(topic) or topic_queries(job['public'],self.settings.topic_searches)[topic]
+        if len(history)>=min(self.settings.topic_searches,len(queries)) or len(topic_map(job.get('read')).get(topic,[]))>=policy(topic).max_urls:return None
+        return queries[len(history)]
+
+    async def search_group(self,job_id,group):
+        job=await self.job({'job_id':job_id})
+        if job.get('group_history',{}).get(group):return
+        query=(job.get('group_queries') or {}).get(group) or planned_queries(None,job['public']).get(group)
+        if not query or not await thread(self.store.reserve_search,job['_id'],job['worker_token'],self.settings.run_searches):return
+        await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':ACTIVITIES[owner(GROUPS[group][0])]}})
+        fresh=await self.collect(job,query,GROUP_CANDIDATES)
+        evidence=topic_map(job.get('evidence'))
+        await thread(self.store.update,job['_id'],job['worker_token'],**{f'group_history.{group}':[query]},
+            **{f'evidence.{topic}':[s.model_dump(mode='json') for s in pool([*evidence.get(topic,[]),*[s.model_dump(mode='json') for s in fresh]])] for topic in GROUPS[group]})
+
+    async def search_topic(self,job_id,topic,query):
         job=await self.job({'job_id':job_id})
         history=topic_map(job.get('history')).get(topic,[])
-        queries=topic_map(job.get('queries')).get(topic) or planned_queries(None,self.settings.topic_searches,job['public'])[topic]
         found=pool(topic_map(job.get('evidence')).get(topic,[]))
-        read=topic_map(job.get('read')).get(topic,[])
-        if len(history)>=min(self.settings.topic_searches,len(queries)) or len(read)>=policy(topic).max_urls:return []
-        if not await thread(self.store.reserve_search,job['_id'],job['worker_token'],self.settings.run_searches):return []
-        query=queries[len(history)]
         await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':ACTIVITIES[owner(topic)]}})
-        sources=None
-        for attempt in range(self.settings.retries+1):
-            try:
-                async with self.slots:
-                    async with asyncio.timeout(self.settings.timeout_seconds):
-                        with budget_owner(job['owner']):
-                            sources=await self.source.collect_opportunity_query(ResearchContext.model_validate(job['context']),query,
-                                max_sources=CANDIDATES_PER_SEARCH)
-                break
-            except (GoalError,TimeoutError) as error:
-                if not transient(error) or attempt==self.settings.retries:raise
-                await asyncio.sleep(.5*2**attempt)
         known={s.source_id for s in found}
-        fresh=[s for s in pool([s.model_dump(mode='json') for s in sources or []]) if s.source_id not in known]
+        fresh=[s for s in await self.collect(job,query,CANDIDATES_PER_SEARCH) if s.source_id not in known]
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'history.{topic}':[*history,query],
             f'evidence.{topic}':[s.model_dump(mode='json') for s in [*found,*fresh]]})
         return fresh
 
+    def gap_share(self,job,category):
+        requested=job.get('requested') or list(CATEGORIES)
+        weights={c:len(category_topics(c)) for c in requested}
+        total=sum(weights.values())
+        remaining=job.get('gap_budget',max(0,self.settings.run_searches-len(job.get('group_history',{}))))
+        shares={c:remaining*w//max(1,total) for c,w in weights.items()}
+        order=sorted(requested,key=lambda c:remaining*weights[c]%max(1,total),reverse=True)
+        for c in order[:remaining-sum(shares.values())]:shares[c]+=1
+        return f'gap_searches.{category}',shares.get(category,0)
+
+    async def search_gaps(self,job,topics,findings,share=None):
+        planned=[]
+        for topic in sorted(topics,key=lambda t:gap_rank(t,findings)):
+            query=self.next_query(job,topic)
+            if not query:continue
+            if not await thread(self.store.reserve_search,job['_id'],job['worker_token'],self.settings.run_searches,share,
+                {c:self.gap_share(job,c)[1] for c in job.get('requested') or CATEGORIES} if share is None else None):break
+            planned.append((topic,query))
+        if planned:
+            async with asyncio.TaskGroup() as group:
+                for topic,query in planned:group.create_task(self.search_topic(job['_id'],topic,query))
+
     async def search_topics(self,state):
-        """Every requested topic's first search runs concurrently before any category evaluates."""
         job=await self.job(state)
         requested=[c for c,v in job['categories'].items() if v['status'] in ('pending','running')]
-        history=topic_map(job.get('history'))
-        topics=[t for c in requested for t in category_topics(c) if not history.get(t)]
-        async def first(topic):
-            try:await self.search_topic(job['_id'],topic)
+        topics=[t for t in TOPICS if any(t in category_topics(c) for c in requested)]
+        async def first(group):
+            try:await self.search_group(job['_id'],group)
             except (GoalError,TimeoutError,SourceRateLimit,ValueError) as error:
-                # The owning category retries the search and reports its outcome.
-                logger.warning('topic=%s first_search_failed exception_type=%s',topic,type(error).__name__)
-        await asyncio.gather(*(first(t) for t in topics))
+                # A failed group search leaves its topics to their own gap searches.
+                logger.warning('group=%s group_search_failed exception_type=%s',group,type(error).__name__)
+        await asyncio.gather(*(first(g) for g in dict.fromkeys(TOPIC_GROUP[t] for t in topics)))
+        latest=await self.job(state)
+        if 'gap_budget' not in latest:
+            await thread(self.store.update,latest['_id'],latest['worker_token'],gap_budget=max(0,self.settings.run_searches-latest.get('searches_used',0)))
+        await self.triage_run(state,requested,topics)
         return {}
+
+    async def triage_run(self,state,requested,topics):
+        job=await self.job(state);evidence=topic_map(job.get('evidence'))
+        done=set(job.get('run_triaged',[]))
+        unseen=[s for s in pool([s for t in topics for s in evidence.get(t,[])]) if s.evidence and s.source_id not in done]
+        flags={}
+        for start in range(0,len(unseen),MAX_TRIAGE_PAGES):
+            batch=unseen[start:start+MAX_TRIAGE_PAGES]
+            result=await self.triage(job,topics,batch)
+            if result is None:continue
+            for sid,values in result.items():flags.setdefault(sid,set()).update(values)
+            done.update(s.source_id for s in batch)
+        if not flags and len(done)==len(job.get('run_triaged',[])):return
+        by_id={s.source_id:s for s in unseen};added={}
+        for sid,values in flags.items():
+            for topic in values:
+                if sid not in {s.source_id for s in pool(evidence.get(topic,[]))}:added.setdefault(topic,[]).append(by_id[sid].model_dump(mode='json'))
+        updates={'run_triaged':sorted(done),**{f'evidence.{t}':[*evidence.get(t,[]),*values] for t,values in added.items()}}
+        for category in requested:
+            merged={sid:set(values) for sid,values in job.get('flags',{}).get(category,{}).items()}
+            for sid,values in flags.items():merged.setdefault(sid,set()).update(values)
+            updates[f'flags.{category}']={sid:sorted(values) for sid,values in merged.items()}
+            updates[f'triaged.{category}']=sorted(set(job.get('triaged',{}).get(category,[]))|done)
+        await thread(self.store.update,job['_id'],job['worker_token'],**updates)
+
+    async def claim(self,job,category,sources):
+        mine=[]
+        for source in sources:
+            key=f'claimed.{source.source_id}'
+            result=await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token'],'$or':[{key:{'$exists':False}},{key:category}]},{'$set':{key:category}})
+            if result.matched_count:mine.append(source)
+        return mine
+
+    async def release(self,job,category,sources):
+        for source in sources:
+            key=f'claimed.{source.source_id}'
+            await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token'],key:category},{'$unset':{key:''}})
 
     def fanout(self,state):return [Send('research_category',{'job_id':state['job_id'],'category':category}) for category in CATEGORIES]
 
@@ -224,19 +301,28 @@ class OpportunityEngine:
         return [Finding.model_validate(e['finding']) for e in entries],pool([s for e in entries for s in e['sources']])
 
     async def triage(self,job,topics,candidates):
-        """Map each candidate page to the needed topics its title, URL, date and preview suggest it answers."""
-        context=triage_input(job['public'],topics,candidates)
-        def validate(output):
-            problems=[{'field':f'pages.{i}','issue':'unknown_page_or_topic'} for i,page in enumerate(output.pages)
-                if page.ref>=len(candidates) or not set(page.topics)<=set(topics)]
-            if problems:raise AIError('invalid_output',True,reason='provenance',fields=('pages',),violations=problems)
-        try:output=await self.generate(job,'opportunity_triage',context,validate)
-        except AIError as error:
-            if error.code not in ('invalid_output','incomplete_output'):raise
-            return None
-        flags={}
-        for page in output.pages:flags.setdefault(candidates[page.ref].source_id,set()).update(page.topics)
-        return flags
+        lock=self.triage_locks.setdefault(job['_id'],asyncio.Lock())
+        async with lock:
+            latest=await self.job({'job_id':job['_id']})
+            labels=dict(latest.get('triage_labels',{}))
+            unseen=[s for s in candidates if s.source_id not in labels]
+            for start in range(0,len(unseen),MAX_TRIAGE_PAGES):
+                batch=unseen[start:start+MAX_TRIAGE_PAGES]
+                context=triage_input(job['public'],TOPICS,batch)
+                def validate(output):
+                    problems=[{'field':f'pages.{i}','issue':'unknown_page_or_topic'} for i,page in enumerate(output.pages)
+                        if page.ref>=len(batch) or not set(page.topics)<=set(TOPICS)]
+                    if problems:raise AIError('invalid_output',True,reason='provenance',fields=('pages',),violations=problems)
+                try:output=await self.generate(job,'opportunity_triage',context,validate)
+                except AIError as error:
+                    if error.code not in ('invalid_output','incomplete_output'):raise
+                    return None
+                flags={s.source_id:set() for s in batch}
+                for page in output.pages:flags[batch[page.ref].source_id].update(page.topics)
+                labels.update({sid:sorted(values) for sid,values in flags.items()})
+                await thread(self.store.update,job['_id'],job['worker_token'],
+                    **{f'triage_labels.{sid}':labels[sid] for sid in flags})
+            return {s.source_id:set(labels[s.source_id])&set(topics) for s in candidates if set(labels[s.source_id])&set(topics)}
 
     async def share(self,job,category,findings,sources):
         """Hand findings for another category's topics to that category, with only their cited passages."""
@@ -251,7 +337,9 @@ class OpportunityEngine:
 
     async def branch(self,state):
         category=state['category'];job=await self.job(state);old=CategoryResult.model_validate(job['categories'][category])
-        if old.status not in ('pending','running'):return {'results':{category:old.model_dump(mode='json')}}
+        if old.status not in ('pending','running'):
+            await thread(self.store.update,job['_id'],job['worker_token'],**{f'gap_complete.{category}':True})
+            return {'results':{category:old.model_dump(mode='json')}}
         started=time.monotonic();stamp=now();own=category_topics(category)
         fields=[*FIELDS[category],*[t for t in TOPICS if t not in FIELDS[category]]]
         evaluated=set(job.get('evaluated',{}).get(category,[]))
@@ -262,7 +350,8 @@ class OpportunityEngine:
         evidence=self.category_evidence(job,category)
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}.status':'running'})
         try:
-            rounds=0 if job.get('evaluation_complete',{}).get(category) else self.settings.topic_searches
+            # Round 0 reads the grouped search's pages; each later round runs one gap search per unsettled topic.
+            rounds=0 if job.get('evaluation_complete',{}).get(category) else self.settings.topic_searches+1
             for index in range(rounds):
                 job=await self.job(state);read=topic_map(job.get('read'))
                 others,other_sources=self.shared(job,category)
@@ -273,10 +362,10 @@ class OpportunityEngine:
                     await thread(self.store.update,job['_id'],job['worker_token'],**{f'evaluation_complete.{category}':True})
                     break
                 history=topic_map(job.get('history'))
-                searchable=[t for t in due if len(history.get(t,[]))<=index]
+                searchable=[t for t in due if index and len(history.get(t,[]))<index]
                 if searchable:
-                    async with asyncio.TaskGroup() as group:
-                        for topic in searchable:group.create_task(self.search_topic(job['_id'],topic))
+                    # The first gap round keeps each category within its share of the run's remaining searches.
+                    await self.search_gaps(job,searchable,[*findings,*others],self.gap_share(job,category) if index==1 else None)
                     job=await self.job(state);evidence=self.category_evidence(job,category)
                 found={t:pool(topic_map(job.get('evidence')).get(t,[])) for t in due}
                 unseen=pool([s.model_dump(mode='json') for t in due for s in found[t] if s.source_id not in triaged and s.evidence])
@@ -289,28 +378,33 @@ class OpportunityEngine:
                     triaged.update(s.source_id for s in unseen)
                     await thread(self.store.update,job['_id'],job['worker_token'],**{f'triaged.{category}':sorted(triaged),
                         f'flags.{category}':{sid:sorted(values) for sid,values in flags.items()}})
-                picks,reads=choose_reads(due,found,flags,read)
-                fresh=[s for s in picks if s.source_id not in evaluated]
+                picks,reads=choose_reads(due,found,flags,read,grouped=not index)
+                fresh=await self.claim(job,category,[s for s in picks if s.source_id not in evaluated])
                 if fresh:
-                    # Keep useful passages within the model evidence allowance.
-                    selected=select_evidence(fresh,self.settings.evidence_tokens)
-                    def validate(output):
-                        if any(ref<0 or ref>=len(selected) for ref in output.relevant_refs):
-                            raise AIError('invalid_output',True,reason='provenance',fields=('relevant_refs',),violations=[{'field':'relevant_refs','issue':'source_index_out_of_range'}])
-                        return supported_claims(output,category,selected,job['public'])
-                    context=structure_input(job['public'],category,selected,findings,fields)
-                    if context['evidence']:
-                        model_calls+=1
-                        try:
-                            output=await self.generate(job,'opportunity_structure',context,validate)
-                            relevant_ids.update(selected[ref].source_id for ref in output.relevant_refs)
-                            current,discarded=supported_claims(output,category,selected,job['public']);rejected+=discarded
-                            findings=dedupe_findings(category,[*findings,*[f for f in current if f.field in FIELDS[category]]])
-                            await self.share(job,category,[f for f in current if f.field not in FIELDS[category]],selected)
-                        except AIError as error:
-                            # Record an unusable round and try the next search.
-                            if error.code not in ('invalid_output','incomplete_output'):raise
-                            round_error=error.code
+                    keep_claims=False
+                    try:
+                        selected=select_evidence(fresh,self.settings.evidence_tokens)
+                        def validate(output):
+                            if any(ref<0 or ref>=len(selected) for ref in output.relevant_refs):
+                                raise AIError('invalid_output',True,reason='provenance',fields=('relevant_refs',),violations=[{'field':'relevant_refs','issue':'source_index_out_of_range'}])
+                            return supported_claims(output,category,selected,job['public'])
+                        context=structure_input(job['public'],category,selected,findings,fields)
+                        if context['evidence']:
+                            model_calls+=1
+                            try:
+                                output=await self.generate(job,'opportunity_structure',context,validate)
+                                relevant_ids.update(selected[ref].source_id for ref in output.relevant_refs)
+                                current,discarded=supported_claims(output,category,selected,job['public']);rejected+=discarded
+                                findings=dedupe_findings(category,[*findings,*[f for f in current if f.field in FIELDS[category]]])
+                                await self.share(job,category,current,selected)
+                                keep_claims=True
+                            except AIError as error:
+                                # Record an unusable round and try the next search.
+                                if error.code=='rate_limited':keep_claims=True
+                                if error.code not in ('invalid_output','incomplete_output'):raise
+                                round_error=error.code
+                    finally:
+                        if not keep_claims:await asyncio.shield(self.release(job,category,fresh))
                     evaluated.update(s.source_id for s in fresh)
                 complete=index+1>=rounds
                 # Findings, triage and read cursors commit together before any next call.
@@ -320,6 +414,7 @@ class OpportunityEngine:
                     f'flags.{category}':{sid:sorted(values) for sid,values in flags.items()},
                     **{f'read.{t}':sorted({*read.get(t,[]),*ids}) for t,ids in reads.items() if ids},
                     f'evaluation_complete.{category}':complete,f'relevant_sources.{category}':list(relevant_ids)})
+                if index==1:await thread(self.store.update,job['_id'],job['worker_token'],**{f'gap_complete.{category}':True})
                 if complete:break
         except* (AIError,SourceRateLimit,GoalError,TimeoutError,ValueError) as group:
             error=group.exceptions[0]
@@ -339,6 +434,7 @@ class OpportunityEngine:
             else:
                 error_code='source_timeout' if isinstance(error,TimeoutError) else 'source_unavailable'
                 logger.warning('category=%s error_code=%s exception_type=%s',category,error_code,type(error).__name__)
+        await thread(self.store.update,job['_id'],job['worker_token'],**{f'gap_complete.{category}':True})
         # Every round failed validation and nothing was kept: report the round error.
         if round_error and not findings and not error_code and not pending:error_code=round_error
         evidence=self.category_evidence(await self.job(state),category)
@@ -353,10 +449,11 @@ class OpportunityEngine:
         if any(f.confidence in ('low','insufficient_evidence') for f in findings):warnings.append('Some findings have limited confidence; inspect their sources before relying on them.')
         if any(f.scope!='exact' for f in findings):warnings.append('Some reports concern related roles, locations or employment types.')
         if any(f.conflict_group for f in findings):warnings.append('Conflicting reports are preserved separately; figures are not averaged.')
-        history=topic_map((await self.job(state)).get('history'))
+        latest=await self.job(state);history=topic_map(latest.get('history'))
+        grouped=len({TOPIC_GROUP[t] for t in own if latest.get('group_history',{}).get(TOPIC_GROUP[t])})
         result=CategoryResult(status=status,outcome=outcome,source_ids=[s.source_id for s in retained],findings=findings,missing_fields=missing,warnings=warnings,error_code=error_code,
             researched_at=stamp,expires_at=stamp+timedelta(hours=self.settings.incomplete_hours if missing or error_code else self.settings.freshness_hours),
-            searches=min(50,sum(len(history.get(t,[])) for t in own)),model_calls=min(20,old.model_calls+model_calls),latency_ms=int((time.monotonic()-started)*1000))
+            searches=min(50,grouped+sum(len(history.get(t,[])) for t in own)),model_calls=min(20,old.model_calls+model_calls),latency_ms=int((time.monotonic()-started)*1000))
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}':result.model_dump(mode='json')})
         logger.info('category=%s status=%s searches=%s model_calls=%s latency_ms=%s',category,status,result.searches,result.model_calls,result.latency_ms)
         return {'results':{category:result.model_dump(mode='json')}}
@@ -519,6 +616,7 @@ class OpportunityEngine:
         finally:
             if cache and cache.get('token'):await thread(self.store.research.fail,context,cache['token'],'partial')
             await thread(self.store.release,identifier,token)
+            self.triage_locks.pop(identifier,None)
 
     async def attach(self,job):
         if not job.get('research_id'):return

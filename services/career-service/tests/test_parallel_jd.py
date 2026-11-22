@@ -16,12 +16,12 @@ from app.domain.questions import REFUSAL
 from app.schemas.analysis import ResearchSource
 from app.workflows.jd_prefetch import matches
 from app.schemas.opportunity import CATEGORIES, SUMMARY_UNAVAILABLE
-from app.workflows.opportunity.topics import TOPICS,category_topics,owner
-from tests.test_opportunity import opportunity_flow,research,RUN_SEARCHES
+from app.workflows.opportunity.topics import GROUPS,category_topics,owner
+from tests.test_opportunity import opportunity_flow,query_group,query_topic,refresh_searches,research,RUN_SEARCHES
 from tests.test_workspace import flow,headers,BASE,ingest,wait,OWNER
 
 
-FIRST_PASS=len(TOPICS)
+FIRST_PASS=len(GROUPS)
 SOURCE='Example is hiring a Data Analyst Intern in Singapore for an internship. SQL is required. Analyse data and build reports.'
 
 
@@ -49,7 +49,8 @@ def test_public_research_starts_before_full_extraction_and_is_not_repeated(oppor
         if len(search.calls)<=FIRST_PASS:assert not release.is_set(), 'The first retrieval should overlap extraction.'
         if len(search.calls)>FIRST_PASS and changed_location:assert context.location=='London'
         assert context.role=='Data Analyst Intern' and context.location in ('Singapore','London')
-        category=owner(next(t for t in TOPICS if query.endswith(t))).split('_')[0]
+        group=query_group(query)
+        category=owner(GROUPS[group][0] if group else query_topic(query)).split('_')[0]
         category={'career':'progression','conversion':'conversion','interview':'interview','internship':'internship','company':'company'}[category]
         text={'interview':'Example candidates report a technical interview.',
             'internship':'Example interns report SGD 1500 per month.',
@@ -82,8 +83,8 @@ def test_public_research_starts_before_full_extraction_and_is_not_repeated(oppor
     _,result,_=research(opportunity_flow)
     assert result['status']=='completed' and len(search.calls)==(FIRST_PASS+RUN_SEARCHES if changed_location else RUN_SEARCHES)
     job=client.app.state.opportunities.store.latest(OWNER,completed['result']['current']['goal']['_id'])
-    assert set(job['history'])==set(TOPICS) and sum(len(values) for values in job['history'].values())==RUN_SEARCHES
-    if changed_location:assert {values[0] for values in job['history'].values()}<=set(search.calls[FIRST_PASS:])
+    assert set(job['group_history'])==set(GROUPS) and FIRST_PASS+sum(len(values) for values in job['history'].values())==RUN_SEARCHES
+    if changed_location:assert {values[0] for values in job['group_history'].values()}<=set(search.calls[FIRST_PASS:])
     else:assert len(set(search.calls))==len(search.calls)
     assert 'research_complete' in job['activities']
     serialized=json.dumps(list(db.research_contexts.find({})),default=str)
@@ -222,7 +223,7 @@ def test_structuring_quota_resumes_automatically_without_opening_chat_early(oppo
     _,result,_=research(opportunity_flow)
     current=wait(opportunity_flow,'ready')
     assert current['phase']=='ready' and result['status']=='completed'
-    assert len(attempts)==3 and len(search.calls)==RUN_SEARCHES==len(set(search.calls))
+    assert len(attempts)>=2 and len(search.calls)==RUN_SEARCHES==len(set(search.calls))
     assert current['error_code'] is None
 
 
@@ -239,12 +240,12 @@ def test_structuring_provider_failure_preserves_other_categories_and_can_retry(o
     _,result,_=research(opportunity_flow)
     assert result['categories']['interview_intelligence']['status']=='failed'
     assert all(c['findings'] for k,c in result['categories'].items() if k!='interview_intelligence')
-    before=len(search.calls)
-    assert before==FIRST_PASS+sum(len(category_topics(c)) for c in CATEGORIES if c!='interview_intelligence')
+    before=len(search.calls);interview=set(category_topics('interview_intelligence'))
+    assert before==RUN_SEARCHES and not {query_topic(q) for q in search.calls}&interview
     assert client.post(BASE+'/retry',headers=headers()).status_code==202
     current=wait(opportunity_flow,'ready')
-    assert current['phase']=='ready' and len(attempts)==3
-    assert len(search.calls)-before==2*len(category_topics('interview_intelligence'))
+    assert current['phase']=='ready' and len(attempts)>=2
+    assert len(search.calls)-before==refresh_searches('interview_intelligence')
 
 
 def test_a_failed_category_does_not_publish_the_combined_response(opportunity_flow):
@@ -271,7 +272,8 @@ def test_structuring_configuration_failure_keeps_goal_and_other_findings(opportu
     assert result['categories']['interview_intelligence']['error_code']=='provider_configuration'
     assert all(c['findings'] for k,c in result['categories'].items() if k!='interview_intelligence')
     assert len(attempts)==1
-    assert len(opportunity_flow[4].calls)==FIRST_PASS+sum(len(category_topics(c)) for c in CATEGORIES if c!='interview_intelligence')
+    calls=opportunity_flow[4].calls
+    assert len(calls)==RUN_SEARCHES and not {query_topic(q) for q in calls}&set(category_topics('interview_intelligence'))
 
 
 def test_retry_recovers_failed_cached_category_instead_of_reusing_failure(opportunity_flow):
@@ -283,7 +285,7 @@ def test_retry_recovers_failed_cached_category_instead_of_reusing_failure(opport
     assert client.post(BASE+'/retry',headers=headers()).status_code==202
     current=wait(opportunity_flow,'ready')
     assert saved_research(opportunity_flow,current)['intelligence']['status']=='completed'
-    assert len(search.calls)-before==2*len(category_topics('internship_insights')), 'Retry must reuse successful cached categories.'
+    assert len(search.calls)-before==refresh_searches('internship_insights'), 'Retry must reuse successful cached categories.'
 
 
 def test_old_cached_missing_overview_is_built_without_another_model_call_or_retrieval(opportunity_flow):

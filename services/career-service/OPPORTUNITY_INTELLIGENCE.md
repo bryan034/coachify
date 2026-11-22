@@ -35,9 +35,9 @@ flowchart TD
   H --> I[Owner / current-goal checked publication]
 ```
 
-Research is planned and searched per topic (each About-the-role and interview field);
-see [Per-topic research](#per-topic-research--20-november-2026). Every requested topic's
-first search runs before the category branches; each branch structures its topics' pages
+Research first runs one search per group of related topics, then targeted searches for topics
+still not backed; see [Grouped research](#grouped-research--22-november-2026). Every requested
+group's search runs before the category branches; each branch structures its topics' pages
 through the configured model and searches again only for topics not yet backed. Branches
 return separate category values at fan-in. No-company targets still research all five areas using general role queries; findings
 are marked general context with low confidence, never employer-specific claims.
@@ -94,7 +94,16 @@ up to 8,000 characters per URL across categories; no full webpages are stored.
 
 Python assembles overview references from retained finding IDs. The frontend resolves
 these to their saved values for overview, takeaways, considerations and the completed
-research chat. No later model call judges or rewrites that wording. Conflicting salary
+research chat. Both research tabs display saved finding values directly, with bold terms,
+source-ID citations, context, uncertainty and partial results. Interview preparation displays
+`interview_intelligence` fields and reported round labels. About the role displays findings
+from the other four categories, plus the saved goal's extracted requirements and duties.
+Neither tab requests `/v2/role-research`, `/v2/interview-research`, `/role-summary` or
+`/interview-prep`; no model call condenses the findings for display, and there are no display-summary
+word limits, style retries or truncation. The only presentation model pass shortens round titles
+that exceed three words, as described below. Existing saved reports need
+no migration or regeneration. The brief-generation APIs remain available but unused by the web app.
+No later model call judges or rewrites finding wording for these tabs. Conflicting salary
 reports remain separate and are never averaged. High confidence/official labels
 are constrained by authoritative source metadata; related full-time reports do not
 become exact internship evidence. These are source-backed reports, not guarantees
@@ -188,8 +197,8 @@ and recreate the service yourself; no credentials go into the frontend.
 | Setting | Default | Meaning |
 |---|---:|---|
 | `OPPORTUNITY_ENABLED` | true | Enable when primary, the model and LLM Context are available |
-| `OPPORTUNITY_TOPIC_SEARCHES` | 2 | Maximum searches per topic (1–4); the second runs only when the topic is not yet backed |
-| `OPPORTUNITY_RUN_SEARCHES` | 40 | Maximum searches per research run (1–200), including early JD searches |
+| `OPPORTUNITY_TOPIC_SEARCHES` | 2 | Maximum gap searches per topic after the grouped search (1–4); each runs only while the topic is not yet backed |
+| `OPPORTUNITY_RUN_SEARCHES` | 25 | Maximum searches per research run (1–200), including grouped and early JD searches |
 | `OPPORTUNITY_CONCURRENCY` | 3 | Concurrent Brave requests across branches |
 | `OPPORTUNITY_TIMEOUT_SECONDS` | 30 | Total deadline for each Brave attempt |
 | `OPPORTUNITY_RETRIES` | 1 | Bounded transient retries with exponential backoff / 429 delay |
@@ -213,7 +222,9 @@ billing-price feed is configured. Provider quotas remain independently enforced.
 Run Career's `python -m pytest` independently with synthetic providers. Set
 `MONGODB_TEST_URI` to disposable MongoDB for real cache, graph, idempotency, ownership,
 partial-failure, expiry and restart tests. Frontend component/browser checks exercise
-five sections, source/confidence labels, progress and targeted refresh. The optional
+five sections, source/confidence labels, progress, the interview round overview and
+separately padded round cards. Both research tabs expose no generation/refresh action and
+make no research writes when loaded or reloaded. The optional
 `OPPORTUNITY_LIVE_TEST=1` provider smoke test consumes real configured API requests;
 it is skipped in normal runs and must never use private applicant data.
 
@@ -383,9 +394,9 @@ judging stage. Historical reports remain readable under their original wording.
 
 ### Planner output recovery
 
-Planning and category structuring each allow up to 4,096 output tokens (lowered by
+Planning allows up to 1,024 output tokens and category structuring up to 4,096 (lowered by
 `AI_MAX_OUTPUT_TOKENS` when set), independently of the 60-second default model deadline.
-The planner returns one named array of one or two short query strings per topic, with no wrapper.
+The planner returns one short query string per search group, with no wrapper.
 Local research supplies the schema in the prompt and native decoding format.
 Python retains schema/provenance validation; no malformed or truncated response
 becomes a successful report. Repairs distinguish incomplete JSON from schema
@@ -424,7 +435,16 @@ A round is kept only when its selected passage names it (or states its number wi
 "round", "stage" or "interview"); an unsupported round is dropped and the finding is kept.
 Other categories cannot carry rounds, and their decoding schema omits the fields. The same
 fact in two rounds stays two findings. Prompt version `opportunity-structured-findings-v4`.
-Saved reports without rounds remain valid and display as process-wide facts until refreshed.
+Interview preparation groups findings by the saved `round_number`, in reported order,
+into an independently padded card headed by the reported round name. The reported-round
+count and a linked round overview appear above the other interview sections. Cards keep
+their reported order with space between them. Neither research tab exposes a start or
+refresh action; both read the saved results. Each card shows its original expectations,
+reported questions and preparation topics with their citations and uncertainty. Missing
+round-specific expectations or preparation are labelled, without generating replacements.
+Findings without round metadata remain in general sections rather than being assigned to
+an inferred round. Saved reports without rounds remain valid and display as process-wide
+facts until refreshed. The descriptions and preparation remain unchanged. Display titles follow the rule below.
 
 ## Source merging and the quality recheck — 11 November 2026
 
@@ -435,6 +455,58 @@ category's own saved sources only (`category_sources`), so a page also cited by 
 category cannot have this category's quoted text merged away. The word-for-word quote and number
 checks themselves are unchanged. Reports already saved with a `validation_failed` category keep
 their surviving findings until research is refreshed.
+
+## Grouped research — 22 November 2026
+
+Research now starts with one search per group of related topics instead of one per topic, then
+searches for individual topics only where the grouped pages did not back them. Topic read, stop and
+keep rules from [Per-topic research](#per-topic-research--20-november-2026) are unchanged.
+
+| Group | Topics |
+|---|---|
+| `interview_process` | `recruitment_stages`, `round_format`, `application_timeline`, `difficulty` |
+| `interview_content` | `interview_questions`, `preparation_topics`, `candidate_experience` |
+| `pay` | `compensation`, `benefits`, `conversion_salary` |
+| `intern_experience` | `projects`, `mentorship`, `work_life_balance` |
+| `conversion` | `full_time_role`, `conversion_rate`, `historical_cohort`, `offer_acceptance` |
+| `career` | `career_path` |
+| `culture` | `company_culture`, `team_culture`, `management` |
+
+1. **Plan.** `opportunity_plan` writes one role-specific query per group (up to 1,024 output
+   tokens). A plain employer + role query per group fills any gap. Gap searches use plain employer +
+   role + topic wording: first the topic's own terms, then wording aimed at review sites and forums.
+2. **Grouped search.** Each requested group searches once and returns up to 10 results, which become
+   candidates for every topic in the group. JD prefetch runs the same grouped searches.
+3. **Run-wide triage.** One `opportunity_triage` call (one per 60 pages) labels every new grouped
+   result against all requested topics. A page flagged for a topic outside its group also becomes a
+   candidate for that topic. Categories triage only pages this call did not cover, for example after
+   unusable triage output. Targeted gap searches also reuse these run-wide page labels; concurrent
+   categories serialize triage for the same run. Rejected pages retain an empty label list.
+4. **First read.** Each category reads its topics' flagged pages, at most one search's page
+   allowance per topic (2 factual, 4 review). This leaves room for gap searches.
+5. **Read once.** A page is extracted by the first category to claim it in the run. That category's
+   extraction covers every topic, and findings for other categories' topics are shared as before. A
+   failed extraction releases its claims. Quota-paused extractions retain their claims until
+   resumption so their inputs and validation-repair budget stay unchanged. Findings shared by
+   multiple categories reach each category, and grounded interview rounds survive cross-category
+   extraction.
+6. **Gap searches.** Each later round runs one search per topic that is still not backed and still
+   has reads left, up to `OPPORTUNITY_TOPIC_SEARCHES` (default 2). Within a category, factual topics
+   with no finding reserve searches first, then other factual topics, then review topics. In the first
+   gap round each category may use only its share of the searches left after the grouped pass, in
+   proportion to its topics, using integer shares whose sum fits the remaining allowance. Later
+   rounds protect other categories' unused first-round shares until those categories finish or release
+   them. Failed grouped searches count against the allowance too. A run never
+   exceeds `OPPORTUNITY_RUN_SEARCHES` (default 25).
+7. **Usage.** Job metrics record prompt, completion, total, cached and reasoning tokens per model
+   stage. Search calls are recorded under `research_search`, with a search count and, for OpenRouter
+   web search, the search model's token usage. Adopted JD prefetch carries its planner and search
+   usage into these job metrics.
+
+Cached reports from per-topic research remain valid and are reused until they expire. Jobs still
+running from before this change continue from their saved per-topic state and run any grouped
+searches they lack.
+
 
 ## Per-topic research — 20 November 2026
 
@@ -476,3 +548,23 @@ never sent to the structuring model or saved in a report. Career does not fetch 
 itself. A category may cite up to 40 pages and record up to 50 searches; a report holds up to 100
 pages. The cache policy is `opportunity-intelligence-topic-findings-v7`, so earlier reports are not
 reused for new research.
+
+
+## Short interview round titles
+
+`OpportunityView.round_titles` maps reported round numbers to display titles of 1–3 words.
+The original `round_name`, description, evidence, quotes and source IDs remain unchanged in
+immutable research. Short names pass through with no model or cache write. After research
+finishes, only overlong names enter a single `interview_round_titles` batch; its input contains
+public round names and numbers only. The provider schema and server checks enforce the word
+limit and exact requested round identities. There are no semantic correction/rewrite retries.
+
+The result is stored separately in existing `research_contexts` rows of kind `round_titles`,
+keyed by the public names and format version. Atomic insertion claims one attempt across
+concurrent readers and service processes; later reads reuse it, including for existing saved
+reports and explicitly linked historical research. Authentication and goal ownership are
+checked before title preparation. No new endpoint, configuration or collection is introduced.
+The request is bounded to 20 seconds; concurrent readers wait at most the claim's 25-second
+window. Failures, invalid titles and interrupted attempts use `Round N` without issuing another
+pass for the same batch. A storage outage skips the model rather than making an uncached call.
+Shortening tasks continue after a page request disconnects so another page can reuse the result.

@@ -77,3 +77,29 @@ it('validates compact research polling and lazy evidence separately from reports
  expect(validCareerResponse(path+'/findings/f1/evidence',{finding_id:'f1',quotes:['Synthetic quote'],sources:[]})).toBe(true);
  expect(validCareerResponse(path+'/findings/f1/evidence',{finding_id:'f1',quotes:{text:'PRIVATE malformed'},sources:[]})).toBe(false);
 });
+
+
+it('accepts the full research source catalogue and validates round labels before display',()=>{
+ const path='/goals/goal/opportunity-research';
+ const finding={finding_id:'f0000000000000001',field:'interview_questions',value:'Explain a transaction.',confidence:'medium',
+  evidence_type:'candidate_reported',source_ids:['s1'],scope:'exact',conflict_group:null,last_verified_at:'2026-11-21T08:00:00Z',round_number:2,round_name:'Technical interview'};
+ const value={available:true,job_id:'job',career_target_id:'goal',status:'completed',error_code:null,
+  sources:Array.from({length:100},(_,i)=>({source_id:`s${i+1}`,platform:'other',url:`https://example.test/${i+1}`,title:'Report'})),
+  categories:{interview_intelligence:{status:'completed',findings:[finding],missing_fields:[],warnings:[],error_code:null}}};
+ expect(validCareerResponse(path,value)).toBe(true);
+ finding.round_number=11;
+ expect(validCareerResponse(path,value)).toBe(false);
+ finding.round_number=2;
+ value.sources[0].url='javascript:alert(1)';
+ expect(validCareerResponse(path,value)).toBe(false);
+});
+
+it('accepts only one-to-three-word round display titles keyed by reported round number',()=>{
+ const path='/goals/goal/opportunity-research';
+ const value={available:true,job_id:'job',career_target_id:'goal',status:'completed',error_code:null,categories:{},round_titles:{'2':'Technical interview'}};
+ expect(validCareerResponse(path,value)).toBe(true);
+ value.round_titles['2']='A long interview round title';
+ expect(validCareerResponse(path,value)).toBe(false);
+ expect(validCareerResponse(path,{...value,round_titles:{'11':'Interview'}})).toBe(false);
+ expect(validCareerResponse(path,{...value,round_titles:{'2':''}})).toBe(false);
+});

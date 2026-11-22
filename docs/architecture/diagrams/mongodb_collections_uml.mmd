@@ -164,15 +164,15 @@ note for interview_prep_suggestions "Private, owner-scoped AI fills for intervie
 
 note for role_summaries "Private, owner-scoped AI digest of the About the role cards plus AI-made cards for topics no source covered, replaced per goal version and research revision. Digest bullets cite card items; generated cards are labelled AI-made. Never shared and never stored in interview_research."
 
-note for research_briefs "Private, owner-scoped version 2 briefs for the About the role and Interview preparation tabs, replaced per goal version, research revision and format. Word limits are enforced server-side; uncited items are marked estimated. Never shared and never stored in interview_research."
+note for research_briefs "Private, owner-scoped version 2 briefs retained for the existing API; the web app renders interview_research findings directly for both research tabs and never requests these briefs. Replaced per goal version, research revision and format. Never shared and never stored in interview_research."
 
-note for interview_research "Immutable public-context revisions; shared seven-day reuse. Private career_state links constrain user reads. Operational research_contexts holds leases/cache pointers. Brave API adapters acquire evidence. Operational LangGraph checkpoints expire after 24h inactivity; current goals persist. Unavailable acquisition preserves saved goals/research."
+note for interview_research "Immutable public-context revisions; shared seven-day reuse. Private career_state links constrain user reads. Operational research_contexts holds leases/cache pointers and kind=round_titles one-attempt short-title results; original round names and immutable research remain intact. Brave API adapters acquire evidence. Operational LangGraph checkpoints expire after 24h inactivity; current goals persist. Unavailable acquisition preserves saved goals/research."
 
 
 %% career_state.workspace.edit_draft holds a private structured pending edit and latest question (24h workspace expiry); chat_receipts holds bounded idempotency metadata. No raw JD/chat transcript or new collection is added.
 
 %% Opportunity Intelligence reuses these collections: no duplicate targets/opportunities collection.
-%% research_contexts also holds owner/goal/run-scoped durable jobs, command receipts, per-topic queries/history/evidence, per-category progress, a per-run search counter and public cache leases.
+%% research_contexts also holds owner/goal/run-scoped durable jobs, command receipts, per-group queries/history, per-topic gap queries/history/evidence, run-wide triage labels and page claims, per-category gap allocations/completion and progress, a per-run search counter and public cache leases.
 %% Opportunity jobs pin goal_version; stale revisions cannot publish current research links.
 %% Public report fingerprints include material structured opportunity context; raw JD/CV/chat remain excluded.
 

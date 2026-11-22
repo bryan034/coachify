@@ -144,9 +144,9 @@ attachment's limitations. Choosing a direction automatically makes it current.
 
 ## Opportunity Intelligence — J12/J13
 
-- `GET /api/v1/career/goals/{id}/opportunity-research` — Owner-scoped category status/results; optional `research_id` pins an immutable linked version.
+- `GET /api/v1/career/goals/{id}/opportunity-research` — Owner-scoped category status/results; optional `research_id` pins an immutable linked version. Both research tabs display the saved category finding values directly, preserving citations, context and uncertainty. Interview preparation groups saved round findings into cards with what to expect, reported questions and how to prepare; unassigned findings stay general. Neither tab requests a rewritten brief. Short display `round_titles` are returned separately: only names over three words receive one cached title-only model pass, leaving all saved findings intact. About the role also displays the saved goal requirements and duties verbatim.
 - `POST /api/v1/career/goals/{id}/opportunity-research` — Start/reuse/refresh with expected goal/selection versions and UUID idempotency; optional category refresh.
-- `GET /api/v1/career/goals/{id}/v2/role-research` and `GET .../v2/interview-research` — Saved version 2 brief for the About the role or Interview preparation tab, for the current goal version and research revision (`ready`, `missing` or `researching`). The web app uses these.
+- `GET /api/v1/career/goals/{id}/v2/role-research` and `GET .../v2/interview-research` — Saved version 2 brief for the About the role or Interview preparation tab, for the current goal version and research revision (`ready`, `missing` or `researching`). Neither brief is used by the web app; both research tabs read opportunity findings directly.
 - `POST /api/v1/career/goals/{id}/v2/role-research` and `POST .../v2/interview-research` — Generate the brief with `expected_version` and optional `refresh`; 409 while research is still running. The model returns short structured data (camelCase: `summary`, role `facts`/`duties`/`topics`/`pay`, interview `process`/`difficulty`/`questions`/`candidateReports`, `notFound`, `sources`) under word limits stated in the prompt and checked by the server: a breach is retried once, then truncated at a word boundary; hedging filler and takeaways copying report wording are treated the same way. Citations name catalogue keys the server resolves; sources are renumbered 1..N in first-cited reading order with no gaps, and unsupported items are marked estimated. Schemas: `contracts/api/models/role-research-v2.schema.json`, `interview-research-v2.schema.json`.
 - The version 1 endpoints below remain for compatibility and are no longer used by the web app.
 - `GET /api/v1/career/goals/{id}/interview-prep` — Saved AI suggestions for interview slots (questions to expect, how to prepare) that the latest interview research left empty, for the current goal version and research revision. `status` is `ready`, `missing` or `researching`.
@@ -157,9 +157,9 @@ attachment's limitations. Choosing a direction automatically makes it current.
 The configured path starts after goal validation. The model plans role-tailored queries, five LangGraph
 branches retrieve Brave LLM Context and use the model to structure cited findings,
 then Python builds overview references from saved findings. Each category saves progress independently;
-failed categories retain other results. The overview has expandable Interview Intelligence,
-Internship Insights, Career Progression, Historical Conversion Rates and Company and Team Culture with sources/confidence/context, dates,
-missing information and targeted refresh. No-company targets research all five categories as explicitly general role context.
+failed categories retain other results. The research tabs display Interview Intelligence,
+Internship Insights, Career Progression, Historical Conversion Rates and Company and Team Culture with sources/confidence/context, dates
+and missing information. These pages only read saved results and have no research-start or refresh buttons. No-company targets research all five categories as explicitly general role context.
 
 Durable jobs and category cache use existing `research_contexts`; typed immutable reports
 extend `interview_research`. Worker leases, checkpoint/restart recovery and receipt/version

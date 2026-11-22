@@ -5655,6 +5655,19 @@
             "maxItems": 100,
             "title": "Sources"
           },
+          "round_titles": {
+            "patternProperties": {
+              "^(?:[1-9]|10)$": {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^\\S+(?: \\S+){0,2}$"
+              }
+            },
+            "type": "object",
+            "maxProperties": 10,
+            "title": "Round Titles"
+          },
           "summary": {
             "$ref": "#/components/schemas/Summary"
           },

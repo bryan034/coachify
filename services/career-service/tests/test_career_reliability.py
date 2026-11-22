@@ -14,7 +14,8 @@ from app.ai.recovery import recover_responses
 from app.ai.opportunity_contracts import structure_input
 from app.schemas.analysis import ResearchSource
 from app.workflows.opportunity.engine import OpportunityEngine
-from app.workflows.opportunity.topics import TOPICS
+from app.ai.adapter import STAGE_OUTPUT_TOKENS
+from app.workflows.opportunity.topics import GROUPS,TOPICS
 
 
 @pytest.mark.parametrize('stage', ['opportunity_plan', 'opportunity_structure'])
@@ -23,12 +24,12 @@ def test_research_output_has_room_and_json_object_schema_is_explicit(stage, ceil
     settings=AISettings(max_output_tokens=ceiling,response_mode='json_object')
     context=structure_input({},'internship_insights',[ResearchSource(source_id='synthetic',platform='other',url='https://example.test/intern',evidence='Example interns report mentorship.')]) if stage=='opportunity_structure' else {}
     payload=AIAdapter(settings,None)._payload(AIInput(stage=stage,context=json.dumps(context)))
-    assert payload['max_tokens']==min(4096,ceiling)
+    assert payload['max_tokens']==min(STAGE_OUTPUT_TOKENS[stage],ceiling)
     assert payload['response_format']=={'type':'json_object'}
     assert 'JSON schema:' in payload['messages'][0]['content']
     if stage=='opportunity_plan':
-        assert all(topic in payload['messages'][0]['content'] for topic in TOPICS)
-        assert 'query STRINGS' in payload['messages'][0]['content']
+        assert all(name in payload['messages'][0]['content'] for name in [*GROUPS,*TOPICS])
+        assert 'ONE short search query STRING' in payload['messages'][0]['content']
 
 
 def test_model_deadline_defaults_to_sixty_seconds(monkeypatch):
@@ -68,8 +69,8 @@ def test_research_repairs_log_safe_schema_fields_and_retain_truncation_reason(ca
         def handler(request):
             requests.append(json.loads(request.content))
             # Truncation followed by a complete but incorrectly typed category.
-            content={topic:['Example public interview query'] for topic in TOPICS}
-            content['management']={'PRIVATE_EXTRA_FIELD':'PRIVATE_MODEL_TEXT'}
+            content={group:'Example public interview query' for group in GROUPS}
+            content['culture']={'PRIVATE_EXTRA_FIELD':'PRIVATE_MODEL_TEXT'}
             return httpx.Response(200,json={'choices':[{'finish_reason':'length' if len(requests)==1 else 'stop',
                 'message':{'content':json.dumps(content)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -80,9 +81,9 @@ def test_research_repairs_log_safe_schema_fields_and_retain_truncation_reason(ca
             with pytest.raises(AIError) as caught:
                 await engine.generate({'_id':'synthetic','owner':'synthetic','goal_id':'synthetic','worker_token':'synthetic'},'opportunity_plan',{})
         assert caught.value.reason=='schema_validation'
-        assert caught.value.violations==({'field':'management','issue':'list_type'},)
+        assert caught.value.violations==({'field':'culture','issue':'string_type'},)
         assert 'incomplete_json' in requests[1]['messages'][0]['content']
-        assert 'management' in caplog.text and 'list_type' in caplog.text
+        assert 'culture' in caplog.text and 'string_type' in caplog.text
         assert 'PRIVATE' not in caplog.text
         assert len(updates)==2
     asyncio.run(run())

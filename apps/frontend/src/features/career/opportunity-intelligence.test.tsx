@@ -1,22 +1,20 @@
 import {fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {OpportunityIntelligence} from './opportunity-intelligence';
-import {careerApi,type BriefView,type InterviewBrief,type OpportunityView,type RoleBrief} from '@/lib/api/career';
-import {interviewBrief,roleBrief} from '../../../tests/fixtures/research-brief';
+import {careerApi,type OpportunityView} from '@/lib/api/career';
+import {roleGoal,roleResearch,roleResearchSources} from '../../../tests/fixtures/role-research';
+import {interviewResearch,interviewResearchSources} from '../../../tests/fixtures/interview-research';
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-token'})}));
 vi.mock('@/lib/api/career',()=>({careerApi:vi.fn()}));
 
 const base={status:'completed' as const,findings:[],missing_fields:[],warnings:[],error_code:null,researched_at:'2026-11-21T08:00:00Z',expires_at:null,searches:1,model_calls:1,latency_ms:100,estimated_cost_usd:null};
-let research:OpportunityView;let role:BriefView<RoleBrief>;let interview:BriefView<InterviewBrief>;
+let research:OpportunityView;
 const scrolled=vi.fn();
-function mockApi(overrides:{post?:BriefView<RoleBrief|InterviewBrief>;fail?:boolean}={}){
+function mockApi(overrides:{fail?:boolean}={}){
  vi.mocked(careerApi).mockImplementation(async(path:string,_token,init)=>{
   if(path.endsWith('/progress'))return {result_version:'v1',finished:true} as never;
-  if(path.includes('/v2/')){
-   if(overrides.fail)throw new Error('unavailable');
-   if(init?.method==='POST')return overrides.post as never;
-   return (path.endsWith('/role-research')?role:interview) as never;
-  }
+  if(path.includes('/v2/')||path.endsWith('/role-summary')||path.endsWith('/interview-prep'))throw new Error('No summary should be requested.');
+  if(overrides.fail)throw new Error('unavailable');
   return research as never;
  });
 }
@@ -24,29 +22,32 @@ beforeEach(()=>{
  vi.resetAllMocks();
  Element.prototype.scrollIntoView=scrolled;
  research={available:true,status:'completed',finished:true,job_id:'job',career_target_id:'goal',research_id:'research',error_code:null,
-  categories:{interview_intelligence:base,internship_insights:base,career_progression:base,conversion_outcomes:base,company_intelligence:base}};
- role={status:'ready',brief:structuredClone(roleBrief)};interview={status:'ready',brief:structuredClone(interviewBrief)};
+  sources:structuredClone([...interviewResearchSources,...roleResearchSources]),categories:{interview_intelligence:structuredClone(interviewResearch),...structuredClone(roleResearch)}};
  mockApi();
 });
-const renderRole=()=>render(<OpportunityIntelligence section="role" goalId="goal" version={3} selectionVersion={2}/>);
-const renderInterview=()=>render(<OpportunityIntelligence section="interview" goalId="goal" version={3} selectionVersion={2}/>);
+const renderRole=()=>render(<OpportunityIntelligence section="role" goalId="goal" goal={roleGoal}/>);
+const renderInterview=()=>render(<OpportunityIntelligence section="interview" goalId="goal"/>);
 const panel=(name:string)=>screen.getByRole('region',{name});
+const roundCard=(number:number,name:string)=>within(panel(`Round ${number}: ${name}`));
 
-it('leads About the role with the summary, a four-fact strip and the research line',async()=>{
+it('displays all role finding values directly without requesting a summary',async()=>{
  renderRole();
- expect(await screen.findByText(roleBrief.summary)).toBeVisible();
- expect(screen.getByRole('note')).toHaveTextContent('Researched 21 Nov 2026 from 7 public sources. AI can get details wrong, so check the sources before relying on them.');
- expect(screen.getByRole('note')).toHaveTextContent('Items tagged Estimated are AI suggestions, not from a source.');
- const strip=document.querySelector<HTMLElement>('dl[aria-label="Key facts"]')!;
- expect(within(strip).getAllByRole('term').map(term=>term.textContent)).toEqual(['Who can apply','Work setup','Reviews','After the internship']);
- expect(within(strip).getByRole('link',{name:'Source 1: GenAI Intern job description'})).toHaveAttribute('href','#role-src-1');
- const after=within(strip).getByText('After the internship').parentElement!;
- expect(within(after).getByText('Estimated')).toBeVisible();
+ const topics=await screen.findByRole('region',{name:'What it is like'});
+ const pay=panel('Pay and what comes after');
+ for(const [category,result] of Object.entries(roleResearch)){
+  expect(result!.findings.length).toBeGreaterThan(0);
+  for(const finding of result!.findings)expect(category==='internship_insights'&&finding.field!=='compensation'||category==='company_intelligence'?topics:pay).toHaveTextContent(finding.value.replace(/\*\*/g,''));
+ }
+ expect(screen.getByRole('note')).toHaveTextContent('Researched 21 Nov 2026 from 7 public sources.');
+ expect(screen.queryByRole('alert')).toBeNull();
+ expect(vi.mocked(careerApi).mock.calls.every(call=>call[0].includes('/opportunity-research')&&call[2]?.method!=='POST')).toBe(true);
 });
 
-it('shows four duties and reveals the rest',async()=>{
+it('keeps the saved eligibility and duties verbatim alongside role findings',async()=>{
  renderRole();
- const duties=within(await screen.findByRole('region',{name:'What you would do'}));
+ expect(await screen.findByText(roleGoal.requirements[0])).toBeVisible();
+ const duties=within(panel('What you would do'));
+ expect(duties.getByText(roleGoal.duties[0])).toBeVisible();
  expect(duties.getAllByRole('listitem')).toHaveLength(4);
  const more=duties.getByRole('button',{name:'Show 2 more'});
  expect(more).toHaveAttribute('aria-expanded','false');
@@ -55,169 +56,261 @@ it('shows four duties and reveals the rest',async()=>{
  expect(duties.getByRole('button',{name:'Show fewer'})).toHaveAttribute('aria-expanded','true');
 });
 
-it('keeps raw reports and their citations behind each topic toggle',async()=>{
+it('preserves complete reports, bold terms, conflicts, related context and limited evidence',async()=>{
  renderRole();
  const topics=within(await screen.findByRole('region',{name:'What it is like'}));
- const mentorship=topics.getByRole('heading',{name:'Mentorship'}).closest('article')!;
- expect(within(mentorship).getByText('Good when your team has time, thin when it is busy.')).toBeVisible();
- expect(within(mentorship).getByText('Mixed')).toBeVisible();
- expect(within(mentorship).getByText('Conflicting reports')).toBeVisible();
- expect(within(mentorship).queryByText(/limited time to mentor/)).not.toBeVisible();
- const toggle=within(mentorship).getByRole('button',{name:'Show 2 reports'});
- expect(toggle).toHaveAttribute('aria-expanded','false');
- fireEvent.click(toggle);
- expect(within(mentorship).getByText(/limited time to mentor/)).toBeVisible();
- expect(within(mentorship).getByRole('link',{name:'Source 5: Internship post'})).toBeVisible();
- expect(within(mentorship).getByRole('button',{name:'Hide reports'})).toHaveAttribute('aria-expanded','true');
- const team=topics.getByRole('heading',{name:'Team and culture'}).closest('article')!;
- expect(within(team).getByText('Estimated')).toBeVisible();
- expect(within(team).queryByRole('button')).toBeNull();
- expect(within(topics.getByRole('heading',{name:'Management'}).closest('article')!).getByText('Negative')).toBeVisible();
+ expect(topics.getByText(roleResearch.internship_insights!.findings[2].value)).toBeVisible();
+ expect(topics.getAllByText('Conflicting reports')).toHaveLength(2);
+ expect(topics.getByText('paid leave').tagName).toBe('STRONG');
+ expect(topics.getByText('Estimated')).toBeVisible();
+ expect(within(panel('Pay and what comes after')).getByText('Related role · Limited evidence')).toBeVisible();
 });
 
-it('lists pay with citations, gaps as dashed chips, and the first five sources in citation order',async()=>{
+it('numbers only role sources in reading order and resolves every citation',async()=>{
+ research.sources=[...research.sources!].reverse();
  renderRole();
- const pay=within(await screen.findByRole('region',{name:'Pay and what comes after'}));
- expect(pay.getByText('S$1,799/mo')).toBeVisible();
- expect(pay.getByRole('link',{name:'Source 6: Business Analyst Intern salaries'})).toBeVisible();
- expect(within(panel('Not found yet')).getAllByRole('listitem').map(li=>li.textContent)).toEqual(['Benefits','Typical projects','Conversion rate','Intake size']);
+ await screen.findByRole('region',{name:'Sources'});
  const sources=within(panel('Sources'));
- expect(sources.getAllByRole('listitem').map(li=>li.textContent)).toEqual([
-  '1GenAI Intern job description (opens in a new tab)Example Health','2Encouraging and collaborative team (opens in a new tab)Glassdoor','3Employee reviews about management (opens in a new tab)Indeed',
-  '4Example Health intern reviews (opens in a new tab)Glassdoor','5Internship post (opens in a new tab)LinkedIn']);
- expect(sources.getAllByRole('link')[0]).toHaveAttribute('href','https://example.test/source-1');
- const all=sources.getByRole('button',{name:'Show all 7 sources'});
- fireEvent.click(all);
- expect(sources.getAllByRole('listitem')).toHaveLength(7);
+ expect(sources.getAllByRole('listitem')).toHaveLength(5);
+ fireEvent.click(sources.getByRole('button',{name:'Show all 7 sources'}));
+ expect(sources.getAllByRole('listitem').map(li=>li.textContent)).toEqual(roleResearchSources.map((source,index)=>`${index+1}${source.title} (opens in a new tab)example.test`));
+ const chips=[...document.querySelectorAll<HTMLAnchorElement>('a.brief-cite')];
+ expect(chips).toHaveLength(16);
+ for(const chip of chips){
+  const n=Number(chip.textContent);
+  expect(chip.getAttribute('href')).toBe(`#role-src-${n}`);
+  expect(chip).toHaveAccessibleName(`Source ${n}: ${roleResearchSources[n-1].title}`);
+  expect(document.getElementById(`role-src-${n}`)).toHaveTextContent(roleResearchSources[n-1].title!);
+ }
  fireEvent.click(sources.getByRole('button',{name:'Show fewer sources'}));
  expect(sources.getAllByRole('listitem')).toHaveLength(5);
 });
 
-it('opens the source list at a hidden citation, scrolls to it and highlights it',async()=>{
+it('reveals hidden role sources, scrolls to them and moves keyboard focus',async()=>{
  renderRole();
  const pay=within(await screen.findByRole('region',{name:'Pay and what comes after'}));
- fireEvent.click(pay.getByRole('link',{name:'Source 7: Business Analyst salary estimate'}));
+ fireEvent.click(pay.getAllByRole('link',{name:'Source 7: Role report 7'})[0]);
  const row=document.getElementById('role-src-7')!;
  await waitFor(()=>expect(row).toHaveClass('is-flash'));
  expect(scrolled).toHaveBeenCalled();
  expect(within(row).getByRole('link')).toHaveFocus();
- expect(within(panel('Sources')).getByRole('button',{name:'Show fewer sources'})).toHaveAttribute('aria-expanded','true');
 });
 
-it('resolves every citation chip to the source with the same number',async()=>{
+it('hides missing role findings and names each absent topic without inventing values',async()=>{
+ for(const key of ['career_progression','conversion_outcomes'] as const)research.categories[key]!.findings=[];
+ research.categories.internship_insights!.findings=research.categories.internship_insights!.findings.filter(finding=>!['benefits','compensation'].includes(finding.field));
  renderRole();
- await screen.findByText(roleBrief.summary);
- fireEvent.click(screen.getByRole('button',{name:'Show all 7 sources'}));
- document.querySelectorAll('[hidden]').forEach(node=>node.removeAttribute('hidden'));
- const chips=[...document.querySelectorAll<HTMLAnchorElement>('a.brief-cite')];
- expect(chips.length).toBeGreaterThan(10);
- for(const chip of chips){
-  const n=chip.textContent!;
-  const row=document.getElementById(`role-src-${n}`)!;
-  expect(chip.getAttribute('href')).toBe(`#role-src-${n}`);
-  expect(chip).toHaveAccessibleName(`Source ${n}: ${roleBrief.sources[Number(n)-1].title}`);
-  expect(row.textContent).toContain(roleBrief.sources[Number(n)-1].title);
- }
-});
-
-it('hides empty sections and names them under Not found yet',async()=>{
- role={status:'ready',brief:{...structuredClone(roleBrief),duties:[],pay:[],notFound:['Benefits']}};
- renderRole();
- await screen.findByText(roleBrief.summary);
- expect(screen.queryByRole('region',{name:'What you would do'})).toBeNull();
+ await screen.findByRole('region',{name:'What it is like'});
  expect(screen.queryByRole('region',{name:'Pay and what comes after'})).toBeNull();
- expect(within(panel('Not found yet')).getAllByRole('listitem').map(li=>li.textContent)).toEqual(['Benefits','What you would do','Pay and what comes after']);
+ const gaps=within(panel('Not found yet'));
+ expect(gaps.getByText('Benefits')).toBeVisible();
+ expect(gaps.getByText('Intern pay')).toBeVisible();
+ expect(gaps.getByText('Conversion rate')).toBeVisible();
+ expect(screen.queryByText('S$1,799/mo')).toBeNull();
 });
 
-it('generates the brief once research settles and keeps waiting while it runs',async()=>{
- role={status:'missing',brief:null};
- mockApi({post:{status:'ready',brief:roleBrief}});
+it('shows available role findings while other categories run and marks gaps only for settled categories',async()=>{
+ research.status='running';research.finished=false;
+ research.categories.career_progression={...base,status:'running'};
  renderRole();
- expect(await screen.findByText(roleBrief.summary)).toBeVisible();
- const post=vi.mocked(careerApi).mock.calls.find(call=>call[0]==='/goals/goal/v2/role-research'&&call[2]?.method==='POST')!;
- expect(JSON.parse(post[2]!.body as string)).toEqual({expected_version:3});
+ expect(await screen.findByText(roleResearch.internship_insights!.findings[2].value)).toBeVisible();
+ expect(screen.getByText(/Researching…/)).toBeVisible();
+ expect(screen.queryByRole('region',{name:'Not found yet'})).toBeNull();
+ expect(vi.mocked(careerApi).mock.calls.every(call=>call[0].includes('/opportunity-research'))).toBe(true);
 });
 
-it('does not read the brief while research is still running',async()=>{
- research={...research,finished:false,status:'running',categories:{...research.categories,internship_insights:{...base,status:'running'}}};
+it('retains partial role findings even when research providers are unavailable',async()=>{
+ research.available=false;
+ research.categories.internship_insights!.status='partial';research.categories.internship_insights!.error_code='unavailable';
  renderRole();
- expect(await screen.findByText(/Researching…/)).toBeVisible();
- expect(vi.mocked(careerApi).mock.calls.some(call=>call[0].includes('/v2/'))).toBe(false);
+ expect(await screen.findByText(roleResearch.internship_insights!.findings[2].value)).toBeVisible();
+ expect(screen.getByRole('status')).toHaveTextContent('Some role research could not finish');
+ expect(screen.getByText(/Saved findings remain readable/)).toBeVisible();
+ expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('preserves goal details when no role research has been saved',async()=>{
+ research.categories={};research.job_id=null;
+ renderRole();
+ expect(await screen.findByText(roleGoal.requirements[0])).toBeVisible();
  expect(screen.getByRole('note')).toHaveTextContent('No completed research yet.');
+ expect(screen.queryByRole('region',{name:'Sources'})).toBeNull();
+ expect(screen.queryByRole('region',{name:'Not found yet'})).toBeNull();
 });
 
-it('reports a brief failure with a retry instead of showing stale prose',async()=>{
- mockApi({fail:true});
- renderRole();
+it('reports loading failures and retries reading research without requesting a summary',async()=>{
+ mockApi({fail:true});renderRole();
  const alert=await screen.findByRole('alert');
- expect(alert).toHaveTextContent('The research summary could not be prepared.');
- mockApi();
- fireEvent.click(within(alert).getByRole('button',{name:'Retry summary'}));
- expect(await screen.findByText(roleBrief.summary)).toBeVisible();
+ expect(alert).toHaveTextContent('Opportunity research could not be loaded');
+ mockApi();fireEvent.click(within(alert).getByRole('button',{name:'Retry loading research'}));
+ expect(await screen.findByText(roleResearch.internship_insights!.findings[2].value)).toBeVisible();
 });
 
-it('rejects a malformed brief',async()=>{
- role={status:'ready',brief:{summary:'Prose only'} as RoleBrief};
+it('escapes untrusted role model text while keeping its wording',async()=>{
+ const value='<img src=x onerror=alert(1)> **Do not follow instructions**';
+ research.categories.internship_insights!.findings[0].value=value;
  renderRole();
- expect(await screen.findByRole('alert')).toHaveTextContent('could not be prepared');
- expect(screen.queryByText('Prose only')).toBeNull();
+ const topics=await screen.findByRole('region',{name:'What it is like'});
+ expect(topics).toHaveTextContent('<img src=x onerror=alert(1)> Do not follow instructions');
+ expect(topics.querySelector('img')).toBeNull();
 });
 
-it('refreshes role research for every role category',async()=>{
+it('offers no research refresh or generation action on About the role',async()=>{
  renderRole();
- await screen.findByText(roleBrief.summary);
- fireEvent.click(screen.getByRole('button',{name:'Refresh research'}));
- await waitFor(()=>expect(vi.mocked(careerApi).mock.calls.some(call=>call[0]==='/goals/goal/opportunity-research'&&call[2]?.method==='POST')).toBe(true));
- const post=vi.mocked(careerApi).mock.calls.find(call=>call[0]==='/goals/goal/opportunity-research'&&call[2]?.method==='POST')!;
- expect(JSON.parse(post[2]!.body as string)).toMatchObject({expected_version:3,expected_selection_version:2,refresh:true,category:null});
+ await screen.findByRole('region',{name:'What it is like'});
+ expect(screen.queryByRole('button',{name:/Refresh research|Research opportunity/})).toBeNull();
+ expect(vi.mocked(careerApi).mock.calls.every(call=>call[2]?.method!=='POST')).toBe(true);
 });
 
-it('shows the interview process, difficulty and one accordion of questions with how to prepare',async()=>{
+it('displays saved interview research verbatim without requesting a summary',async()=>{
  renderInterview();
- expect(await screen.findByText(interviewBrief.summary)).toBeVisible();
- const steps=within(screen.getByRole('list',{name:'Interview process'}));
- expect(steps.getAllByRole('listitem').map(li=>li.querySelector('.brief-cell-value')!.textContent)).toEqual(['Apply','HR call','Manager interview']);
- expect(screen.getByRole('img',{name:'Difficulty: Average, estimated'})).toBeVisible();
- expect(screen.getByText('Coordination, communication and health technology scenarios.')).toBeVisible();
- const practise=within(panel('Practise these'));
- expect(practise.getByText('Estimated')).toBeVisible();
- const buttons=practise.getAllByRole('button');
- expect(buttons.map(button=>button.getAttribute('aria-expanded'))).toEqual(['true','false','false','false']);
- expect(practise.getByText(interviewBrief.questions[0].prep)).toBeVisible();
- expect(practise.getByText(interviewBrief.questions[1].prep)).not.toBeVisible();
- fireEvent.click(buttons[1]);
- expect(practise.getByText(interviewBrief.questions[1].prep)).toBeVisible();
- expect(practise.getByText(interviewBrief.questions[0].prep)).not.toBeVisible();
- expect(buttons[1].closest('li')).toHaveClass('is-open');
- fireEvent.click(buttons[1]);
- expect(practise.getAllByRole('button').every(button=>button.getAttribute('aria-expanded')==='false')).toBe(true);
+ const process=within(await screen.findByRole('region',{name:'Interview process'}));
+ expect(process.getByText('HR call')).toBeVisible();
+ expect(process.getByText('HR call').tagName).toBe('STRONG');
+ expect(process.getByRole('link',{name:'Source 1: Interview report 1'})).toBeVisible();
+ expect(screen.getByRole('note')).toHaveTextContent('Researched 21 Nov 2026 from 7 public sources.');
+ expect(roundCard(2,'Technical interview').getByText(interviewResearch.findings[4].value)).toBeVisible();
+ expect(within(panel('What candidates reported')).getByText(interviewResearch.findings[6].value)).toBeVisible();
+ expect(roundCard(2,'Technical interview').getByText('SQL joins')).toBeVisible();
+ expect(roundCard(2,'Technical interview').getByText('An online call with the hiring manager.')).toBeVisible();
+ expect(screen.queryByRole('alert')).toBeNull();
+ expect(vi.mocked(careerApi).mock.calls.some(call=>call[0].includes('/v2/')||call[0].endsWith('/interview-prep'))).toBe(false);
+ expect(vi.mocked(careerApi).mock.calls.every(call=>call[2]?.method!=='POST')).toBe(true);
 });
 
-it('summarises candidate reports with cited chips, a situational example, tone and the raw list',async()=>{
+it('keeps interview citations in reading order and reveals hidden sources',async()=>{
+ research.sources=[...interviewResearchSources].reverse();
  renderInterview();
  const reports=within(await screen.findByRole('region',{name:'What candidates reported'}));
- expect(reports.getByText('Asked about')).toBeVisible();
- expect(reports.getByText('Past projects')).toBeVisible();
- expect(reports.getByText('How would you handle a client unhappy with the developers?')).toBeVisible();
- expect(reports.getByRole('link',{name:'Source 5: Working experience and situational questions'})).toBeVisible();
- const toggle=reports.getByRole('button',{name:'Show all 4 reports'});
- expect(reports.getByText(/asked about themselves and past projects/)).not.toBeVisible();
- fireEvent.click(toggle);
- expect(reports.getByText(/asked about themselves and past projects/)).toBeVisible();
- expect(within(panel('Not found yet')).getAllByRole('listitem').map(li=>li.textContent)).toEqual(['Assessment centre','Offer timeline']);
- fireEvent.click(within(panel('Sources')).getByRole('button',{name:'Show all 6 sources'}));
- expect(within(panel('Sources')).getAllByRole('listitem')).toHaveLength(6);
+ fireEvent.click(reports.getByRole('link',{name:'Source 7: Interview report 7'}));
+ const row=document.getElementById('interview-src-7')!;
+ await waitFor(()=>expect(row).toHaveClass('is-flash'));
+ expect(within(row).getByRole('link')).toHaveFocus();
+ expect(scrolled).toHaveBeenCalled();
+ expect(within(panel('Sources')).getAllByRole('listitem').map(li=>li.textContent)).toEqual([0,1,3,2,4,5,6].map((source,index)=>`${index+1}${interviewResearchSources[source].title} (opens in a new tab)example.test`));
 });
 
-it('marks individual questions when only some are estimated and refreshes only interview research',async()=>{
- interview={status:'ready',brief:{...structuredClone(interviewBrief),questions:[{...interviewBrief.questions[0],estimated:false},interviewBrief.questions[1]]}};
+it('shows related context, limited evidence, conflicts and estimates without rewriting findings',async()=>{
+ const result=research.categories.interview_intelligence!;
+ result.findings[4]={...result.findings[4],scope:'related_role',confidence:'low',conflict_group:'question-reports',evidence_type:'inferred'};
  renderInterview();
- const practise=within(await screen.findByRole('region',{name:'Practise these'}));
- const [first,second]=practise.getAllByRole('button');
- expect(within(first).queryByText('Estimated')).toBeNull();
- expect(within(second).getByText('Estimated')).toBeVisible();
- fireEvent.click(screen.getByRole('button',{name:'Refresh research'}));
- await waitFor(()=>expect(vi.mocked(careerApi).mock.calls.some(call=>call[2]?.method==='POST'&&call[0].endsWith('/opportunity-research'))).toBe(true));
- const post=vi.mocked(careerApi).mock.calls.find(call=>call[0].endsWith('/opportunity-research')&&call[2]?.method==='POST')!;
- expect(JSON.parse(post[2]!.body as string).category).toBe('interview_intelligence');
+ const questions=within(await screen.findByRole('region',{name:'Round 2: Technical interview'}));
+ expect(questions.getByText('Related role · Limited evidence')).toBeVisible();
+ expect(questions.getByText('Conflicting reports')).toBeVisible();
+ expect(questions.getByText('Estimated')).toBeVisible();
+ expect(questions.getByText(interviewResearch.findings[4].value)).toBeVisible();
+});
+
+it('shows empty interview topics as gaps and preserves available partial research',async()=>{
+ const result=research.categories.interview_intelligence!;
+ result.status='partial';result.error_code='unavailable';result.findings=result.findings.filter(finding=>finding.field==='interview_questions');
+ renderInterview();
+ expect(await screen.findByText(interviewResearch.findings[4].value)).toBeVisible();
+ expect(screen.getByRole('status')).toHaveTextContent('Some interview research could not finish');
+ expect(screen.queryByRole('region',{name:'How to prepare'})).toBeNull();
+ expect(within(panel('Not found yet')).getByText('How to prepare')).toBeVisible();
+ expect(screen.getByRole('note')).toHaveTextContent('1 public source.');
+});
+
+it('displays retained interview findings while research runs without requesting a summary',async()=>{
+ research={...research,status:'running',finished:false};
+ research.categories.interview_intelligence!.status='running';
+ renderInterview();
+ expect(await screen.findByText(interviewResearch.findings[4].value)).toBeVisible();
+ expect(screen.getByText(/Researching…/)).toBeVisible();
+ expect(vi.mocked(careerApi).mock.calls.some(call=>call[0].includes('/v2/'))).toBe(false);
+});
+
+it('offers no research refresh or generation action on Interview preparation',async()=>{
+ renderInterview();
+ await screen.findByRole('region',{name:'Round 2: Technical interview'});
+ expect(screen.queryByRole('button',{name:/Refresh research|Research opportunity/})).toBeNull();
+ expect(vi.mocked(careerApi).mock.calls.every(call=>call[2]?.method!=='POST')).toBe(true);
+});
+
+it('groups every reported round into its own card with matching expectations and preparation',async()=>{
+ renderInterview();
+ const rounds=within(await screen.findByRole('region',{name:'Interview rounds'}));
+ expect(rounds.getAllByRole('heading',{level:4}).map(heading=>heading.textContent)).toEqual(['HR call','Technical interview','Final interview']);
+ const hr=roundCard(1,'HR call'),technical=roundCard(2,'Technical interview'),final=roundCard(3,'Final interview');
+ for(const card of [hr,technical,final]){
+  expect(card.getByRole('heading',{name:'What to expect'})).toBeVisible();
+  expect(card.getByRole('heading',{name:'How to prepare'})).toBeVisible();
+ }
+ expect(hr.getByText(interviewResearch.findings[7].value)).toBeVisible();
+ expect(hr.getByText(interviewResearch.findings[8].value)).toBeVisible();
+ expect(hr.queryByText('SQL joins')).toBeNull();
+ expect(technical.getByText('SQL joins')).toBeVisible();
+ expect(technical.queryByText(interviewResearch.findings[8].value)).toBeNull();
+ expect(final.getByText('Preparation guidance was not found for this round.')).toBeVisible();
+ expect(vi.mocked(careerApi).mock.calls.every(call=>call[0].includes('/opportunity-research')&&call[2]?.method!=='POST')).toBe(true);
+});
+
+it('keeps unassigned findings separate and never invents missing rounds or round-specific advice',async()=>{
+ const result=research.categories.interview_intelligence!;
+ result.findings=result.findings.filter(finding=>finding.round_number!==1&&finding.round_number!==3);
+ result.findings.push({...result.findings[0],finding_id:'f0000000000000011',field:'preparation_topics',value:'Review the role requirements before applying.',round_number:null,round_name:null});
+ renderInterview();
+ const rounds=within(await screen.findByRole('region',{name:'Interview rounds'}));
+ expect(rounds.getAllByRole('heading',{level:4}).map(heading=>heading.textContent)).toEqual(['Technical interview']);
+ expect(rounds.queryByText('Review the role requirements before applying.')).toBeNull();
+ expect(within(panel('How to prepare')).getByText('Review the role requirements before applying.')).toBeVisible();
+});
+
+it('shows older research without round metadata as general findings without fabricating a process',async()=>{
+ research.categories.interview_intelligence!.findings=research.categories.interview_intelligence!.findings.map(finding=>({...finding,round_number:null,round_name:null}));
+ renderInterview();
+ expect(await screen.findByRole('region',{name:'Questions reported'})).toHaveTextContent(interviewResearch.findings[4].value);
+ expect(screen.queryByRole('region',{name:'Interview rounds'})).toBeNull();
+ expect(within(panel('How to prepare')).getByText('SQL joins')).toBeVisible();
+});
+
+it('shows the round count and overview before all other interview content',async()=>{
+ renderInterview();
+ const count=await screen.findByRole('heading',{name:'3 reported interview rounds'});
+ const container=document.getElementById('interview-preparation')!;
+ expect([...container.querySelectorAll('h3')][0]).toBe(count);
+ const overview=within(screen.getByRole('region',{name:'3 reported interview rounds'}));
+ expect(overview.getAllByRole('link').map(link=>link.textContent)).toEqual(['1HR call','2Technical interview','3Final interview']);
+ expect(overview.getByRole('link',{name:'Technical interview'})).toHaveAttribute('href','#interview-round-2-title');
+ const boxes=overview.getAllByRole('listitem');
+ expect(boxes.map(box=>within(box).getByRole('heading',{level:4}).textContent)).toEqual(['1HR call','2Technical interview','3Final interview']);
+ expect(boxes[0].querySelector('p')).toHaveTextContent(interviewResearch.findings[7].value);
+ expect(boxes[1].querySelector('p')).toHaveTextContent(interviewResearch.findings[2].value);
+ expect(boxes[2].querySelector('p')).toHaveTextContent(interviewResearch.findings[9].value);
+ const cards=screen.getByRole('region',{name:'Interview rounds'});
+ expect(cards.querySelectorAll(':scope > .brief-round')).toHaveLength(3);
+});
+
+it('counts only reported rounds without filling gaps in their numbering',async()=>{
+ const result=research.categories.interview_intelligence!;
+ result.findings=result.findings.filter(finding=>finding.round_number!==1&&finding.round_number!==3);
+ renderInterview();
+ expect(await screen.findByRole('heading',{name:'1 reported interview round'})).toBeVisible();
+ expect(screen.queryByRole('region',{name:'Round 1: HR call'})).toBeNull();
+});
+
+it('keeps a round description unknown when only questions or preparation are saved',async()=>{
+ const result=research.categories.interview_intelligence!;
+ result.findings=result.findings.filter(finding=>finding.round_number===2&&['interview_questions','preparation_topics'].includes(finding.field));
+ renderInterview();
+ const overview=within(await screen.findByRole('region',{name:'1 reported interview round'}));
+ expect(overview.getByRole('heading',{level:4})).toHaveTextContent('Technical interview');
+ expect(overview.getByText('A description of this round was not found in the sources.')).toBeVisible();
+ expect(overview.queryByText(interviewResearch.findings[4].value)).toBeNull();
+ expect(vi.mocked(careerApi).mock.calls.every(call=>call[0].includes('/opportunity-research')&&call[2]?.method!=='POST')).toBe(true);
+});
+
+it('uses saved short round titles in overview and card headings without rewriting descriptions',async()=>{
+ const original='Technical interview with the hiring manager';
+ for(const finding of research.categories.interview_intelligence!.findings)if(finding.round_number===2)finding.round_name=original;
+ research.round_titles={'2':'Technical interview'};
+ renderInterview();
+ const overview=within(await screen.findByRole('region',{name:'3 reported interview rounds'}));
+ expect(overview.getByRole('heading',{name:'Technical interview'})).toBeVisible();
+ expect(roundCard(2,'Technical interview').getByRole('heading',{name:'Technical interview'})).toBeVisible();
+ expect(overview.getByText(interviewResearch.findings[2].value)).toBeVisible();
+ for(const title of document.querySelectorAll('.brief-round-overview h4,.brief-round h4'))expect(title.textContent!.replace(/^\d+/, '').trim().split(/\s+/).length).toBeLessThanOrEqual(3);
+ expect(research.categories.interview_intelligence!.findings.find(finding=>finding.round_number===2)!.round_name).toBe(original);
+ expect(vi.mocked(careerApi).mock.calls.every(call=>call[2]?.method!=='POST')).toBe(true);
 });

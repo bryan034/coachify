@@ -9,6 +9,7 @@ from app.schemas.analysis import ResearchSource
 from app.schemas.opportunity import CATEGORIES
 from app.workflows.opportunity.domain import validate_claims,supported_claims
 from tests.test_workspace import ingest,headers,BASE,wait
+from app.ai.opportunity_config import OpportunitySettings
 from tests.test_opportunity import opportunity_flow,research
 from tests.api_views import goal_content
 
@@ -163,9 +164,10 @@ def test_structured_wording_is_saved_without_another_model_pass(opportunity_flow
         return result
     primary.generate=generate;ingest(flow);_,result,_=research(flow)
     assert result['categories']['interview_intelligence']['findings'][0]['value']==text
-    assert calls.count('opportunity_structure')==2*len(CATEGORIES)
+    assert len(CATEGORIES)<=calls.count('opportunity_structure')<=(OpportunitySettings().topic_searches+1)*len(CATEGORIES)
     job=flow[1].research_contexts.find_one({'kind':'opportunity_job'})
-    assert set(job['metrics'])=={'opportunity_plan','opportunity_triage','opportunity_structure','opportunity_skill_levels'}
+    assert set(job['metrics'])=={'opportunity_plan','research_search','opportunity_triage','opportunity_structure','opportunity_skill_levels'}
+    assert job['metrics']['research_search']['searches']==job['searches_used']
 
 
 def test_empty_retrieval_is_completed_with_category_not_found_notice(opportunity_flow):
@@ -292,4 +294,4 @@ def test_only_valid_source_references_reach_saved_structured_findings(opportunit
     primary.generate=generate;ingest(flow);_,result,_=research(flow)
     assert result['status']=='completed'
     ids={source['source_id'] for source in result['sources']}
-    assert all(len(c['findings'])==1 and set(c['findings'][0]['source_ids'])<=ids for c in result['categories'].values())
+    assert all(c['findings'] and all(set(f['source_ids'])<=ids for f in c['findings']) for c in result['categories'].values())

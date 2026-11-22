@@ -259,7 +259,7 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
   const {level,target}=goalSkillLevel(skill,skill.item_id?outcomes?.[skill.item_id]:undefined,profileLevels);
   return {key:`${talking!.key}:${talking!.mode}`,name:skill.name,canonicalId:skill.canonical_skill_id,level,target,meaning:skill.competence_target?.explanation,tasks:(skill.learning_items??[]).map(item=>({name:item.name,reason:item.reason}))};
  },[talking,goal.skills,outcomes,profileLevels]);
- const research=(section:'interview'|'role')=><OpportunityIntelligence key={`${goal._id}:${section}`} section={section} goalId={goal._id} version={goal.version} selectionVersion={workspace.current.selection_version} goal={section==='role'?{requirements:goal.non_skill_requirements.map(item=>item.description),duties:goal.responsibilities}:undefined}/>;
+ const research=(section:'interview'|'role')=><OpportunityIntelligence key={`${goal._id}:${section}`} section={section} goalId={goal._id} goal={section==='role'?{requirements:goal.non_skill_requirements.map(item=>item.description),duties:goal.responsibilities}:undefined}/>;
  return <section className={`page on ws-page goal-overview career-briefing${view==='role'?' is-wide':''}`}>
   <section className="ws-hero ws-goal" id="target" aria-label="Your target role">
    <div>

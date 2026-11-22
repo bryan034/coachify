@@ -106,23 +106,39 @@ Refine goal and Set a new goal): **Skills needed** (`/career-goal`), **Interview
   source, the competence bar and the "What you need" learning items. Job-description quotes
   are not shown in skill cards. Long lists start with ten skills.
 - Interview preparation and About the role (`opportunity-intelligence.tsx`, components in
-  `research-brief.tsx`, styles in `research-brief.css`) follow the 21 November 2026 design canvas.
-  Once research settles each tab reads its version 2 brief (`/goals/{id}/v2/role-research` or
-  `/v2/interview-research`), generating it when missing, and only renders it: the frontend never
-  rewrites or re-sorts the text. The header shows "Researched <date> from N sources", one AI
-  disclaimer and **Refresh research**; the summary sentence leads the tab.
-- About the role: a four-fact strip, **What you would do** (four duties, "Show N more"),
-  **What it is like** (one takeaway and a Positive / Mixed / Negative pill per topic; reports and
-  their citations behind "Show N reports"), **Pay and what comes after**, **Not found yet** and
-  **Sources**. Until a brief exists, or when research is unavailable, it shows the saved goal's
-  requirements (**Who can apply**) and duties instead.
-- Interview preparation: a process stepper, a difficulty bar, **Practise these** (one accordion
-  pairing each question with how to prepare; the first is open), **What candidates reported**
-  (asked-about chips, situational example, tone and "Show all N reports"), **Not found yet** and
-  **Sources**.
-- Items without a source carry an amber **Estimated** tag; topics where sources disagree carry
-  **Conflicting reports**. A section with no data is hidden and named under Not found yet.
-- Sources are listed 1..N as the backend numbered them, five at first ("Show all N sources").
+  `research-brief.tsx`, styles in `research-brief.css`) share outlined panels and numbered citations.
+  Both tabs render saved category findings from `/goals/{id}/opportunity-research` directly,
+  including available findings while research runs. Neither requests a separate brief or summary
+  or condenses the findings for display. The backend may shorten overlong round names once as described below. Both headers show "Researched <date> from N sources",
+  and one AI disclaimer. Neither tab has a research-start or refresh action. Existing saved findings work without regeneration.
+- About the role (`role-research.tsx`): **Who can apply** and **What you would do** show the saved
+  goal's extracted requirements and duties verbatim (four duties initially, "Show N more").
+  **What it is like** displays the original findings for projects, benefits, mentorship, intern
+  hours, company/team culture, management and company hours. **Pay and what comes after** displays
+  original intern pay, full-time opportunities, career progression, full-time pay, conversion rates,
+  historical cohorts and offer acceptance. There are no generated takeaways, sentiment labels or
+  invented missing values. Available findings, citations and uncertainty remain visible during
+  research or provider failures; settled missing topics appear under **Not found yet**.
+- Interview preparation (`interview-research.tsx`): the reported round count and a numbered,
+  linked overview appear first. Each overview box has the reported round name as its heading
+  and the saved round-format or stage finding as its description; missing descriptions stay labelled. **Interview rounds** shows one independently padded card per saved
+  `round_number`, separated by space, in reported order and headed by its reported name. Each card groups that round's
+  **What to expect**, **Questions reported** and **How to prepare** findings. Missing round-specific
+  expectations or preparation are labelled; no additional model call invents them. Unassigned
+  findings remain in general process, timeline, difficulty, format, question, preparation and
+  candidate-experience sections. Older reports without round metadata stay general until refreshed.
+  Display names are 1–3 words. The API returns `round_titles` separately from the original
+  `round_name`: names already within the limit pass through; overlong names get one cached,
+  title-only backend model pass after research finishes. Descriptions, expectations and preparation
+  keep their exact saved wording, bold terms, citations and uncertainty. Invalid or unavailable title
+  output falls back to a short round label without another model pass. No display-summary word
+  limits or truncation apply to the findings. Partial results remain visible. Missing sections appear under
+  **Not found yet** once the category settles.
+- Inferred findings carry an amber **Estimated** tag; findings where sources disagree carry
+  **Conflicting reports**. A settled section with no data is hidden and named under Not found yet.
+- Sources are listed 1..N in first-cited reading order, five at first ("Show all N sources").
+  Citation numbers are assigned from each tab's saved source IDs without changing findings.
+  `research-findings.tsx` shares the safe bold-text rendering, provenance labels and citation mapping.
   A citation chip expands the list if needed, scrolls to its source and briefly highlights it.
 
 As soon as **Extract career goal** is pressed, Career Goal (`career-goal.tsx`) replaces the form

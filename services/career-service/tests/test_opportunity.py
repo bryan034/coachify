@@ -22,7 +22,7 @@ from app.schemas.opportunity import CATEGORIES,Summary,OpportunityReport,Categor
 from app.schemas.analysis import ResearchSource,ResearchContext
 from app.repositories.goals import GoalError,now
 from app.workflows.opportunity.domain import validate_claims,public_opportunity
-from app.workflows.opportunity.topics import CANDIDATES_PER_SEARCH,TOPICS,category_topics,owner,policy
+from app.workflows.opportunity.topics import ALTERNATE,CANDIDATES_PER_SEARCH,GROUP_CANDIDATES,GROUP_TERMS,GROUPS,TERMS,TOPIC_GROUP,TOPICS,category_topics,owner,policy
 from app.ai.opportunity_config import OpportunitySettings
 
 RUN_SEARCHES=OpportunitySettings().run_searches
@@ -55,18 +55,29 @@ class ContextModel:
         self.calls.append(request);data=json.loads(request.context)
         if request.stage=='opportunity_plan':
             public=data.get('opportunity',data);base=' '.join(str(public.get(k) or '') for k in ('company','role','location'))
-            output=QueryPlan(**{k:[f'{base} {k}',f'{base} additional {k}'] for k in TOPICS})
+            output=QueryPlan(**{g:f'{base} {g} group' for g in GROUPS})
         else:raise AssertionError(request.stage)
         if kwargs.get('validate_output'):kwargs['validate_output'](output)
         return SimpleNamespace(data=output)
+
+def query_topic(query):
+    matches=[t for t in TOPICS if query.endswith(' '+t) or query.endswith(' '+TERMS[t]) or (t in ALTERNATE and query.endswith(' '+ALTERNATE[t]))]
+    return max(matches,key=lambda t:len(t),default=None)
+
+def query_group(query):
+    return next((g for g in GROUPS if query.endswith(f' {g} group') or query.endswith(' '+GROUP_TERMS[g])),None)
+
+def refresh_searches(category):
+    own=category_topics(category)
+    return len({TOPIC_GROUP[t] for t in own})+2*len(own)
 
 class Search:
     brave_mode='llm_context';provider='brave';backend='brave'
     def __init__(self):self.calls=[];self.fail=None;self.empty=False;self.active=0;self.maximum=0
     async def collect_opportunity_query(self,context,query,max_sources=5):
         self.calls.append(query);self.active+=1;self.maximum=max(self.maximum,self.active)
-        topic=next((t for t in TOPICS if query.endswith(t)),None)
-        category=owner(topic) if topic else next((c for c in CATEGORIES if c in query),'company_intelligence')
+        group=query_group(query);topic=None if group else query_topic(query)
+        category=owner(topic) if topic else owner(GROUPS[group][0]) if group else next((c for c in CATEGORIES if c in query),'company_intelligence')
         tagged=f'{query} {category}'
         try:
             await asyncio.sleep(.03)
@@ -74,7 +85,9 @@ class Search:
             if self.empty:return []
             text='Example candidates report a technical interview.' if 'interview_' in tagged else 'Example interns report SGD 1500 per month.' if 'internship_' in tagged else 'Example interns converted to full-time in 2025 at a conversion rate of 50%.' if 'conversion_outcomes' in tagged else 'Example graduate analysts receive SGD 5000 monthly.' if 'career_progression' in tagged else 'Example teams report a collaborative company culture.'
             slug='-'.join(query.split()[-2:])
-            return [ResearchSource(source_id=slug,platform='other',url='https://example.test/'+slug,title='Example public report',evidence=text,reliability='anecdotal')]
+            # The page URL names the topics it covers, which the synthetic triage reads.
+            covers='+'.join(GROUPS[group]) if group else topic or 'general'
+            return [ResearchSource(source_id=slug,platform='other',url=f'https://example.test/{covers}/{slug}',title='Example public report',evidence=text,reliability='anecdotal')]
         finally:self.active-=1
 
 @pytest.fixture
@@ -109,8 +122,10 @@ def test_parallel_categories_persist_cited_summary_and_legacy_chat_compatibility
     assert result['available'] and result['availability_issues']==[]
     assert set(result['categories'])==set(CATEGORIES)
     assert all(v['findings'] for v in result['categories'].values())
-    assert flow[4].maximum>=2 and len(flow[4].calls)==RUN_SEARCHES==len(set(flow[4].calls))
-    assert {next(t for t in TOPICS if q.endswith(t)) for q in flow[4].calls}==set(TOPICS)
+    calls=flow[4].calls
+    assert flow[4].maximum>=2 and len(calls)==RUN_SEARCHES==len(set(calls))
+    assert {query_group(q) for q in calls[:len(GROUPS)]}==set(GROUPS)
+    assert all(query_topic(q) for q in calls[len(GROUPS):])
     assert workspace['phase']=='ready' and workspace['research_id']
     assert 'process' not in saved_research(flow,workspace) and 'skills' not in saved_research(flow,workspace)
     assert workspace['current']['goal']['employment_type']=='internship'
@@ -120,11 +135,13 @@ def test_parallel_categories_persist_cited_summary_and_legacy_chat_compatibility
     body={'expected_version':workspace['current']['goal']['version'],'expected_selection_version':workspace['current']['selection_version'],'refresh':True,'category':'company_intelligence'}
     key=str(uuid4());assert flow[0].post(path,headers=headers(key),json=body).status_code==202
     _,refreshed,_=research(flow)
-    # Only the refreshed category's own topics search again, twice each.
-    assert len(flow[4].calls)==RUN_SEARCHES+2*len(category_topics('company_intelligence'))
+    # Only the refreshed category's group searches again, then each of its own topics twice.
+    own=category_topics('company_intelligence');refresh=flow[4].calls[RUN_SEARCHES:]
+    assert query_group(refresh[0])=='culture' and len(refresh)==refresh_searches('company_intelligence')
+    assert {query_topic(q) for q in refresh[1:]}==set(own)
     assert refreshed['categories']['internship_insights']['findings']==result['categories']['internship_insights']['findings']
     assert flow[0].post(path,headers=headers(key),json=body).status_code==202
-    assert len(flow[4].calls)==RUN_SEARCHES+2*len(category_topics('company_intelligence'))
+    assert len(flow[4].calls)==RUN_SEARCHES+refresh_searches('company_intelligence')
     assert flow[0].post(path,headers=headers(key),json={**body,'category':'internship_insights'}).status_code==409
 
 
@@ -163,8 +180,10 @@ def test_invalid_claim_repairs_are_bounded_and_no_unvalidated_facts_persist(oppo
     _,result,_=research(flow)
     assert result['status']=='failed'
     assert all(not c['findings'] for c in result['categories'].values())
-    # Five categories, two search rounds each, one repair per round.
-    assert len([v for v in flow[2].calls if v.stage=='opportunity_structure'])==20
+    # Each round with evidence makes one call and one repair.
+    rounds=[json.loads(v.context)['category'] for v in flow[2].calls if v.stage=='opportunity_structure']
+    assert set(rounds)==set(CATEGORIES)
+    assert all(rounds.count(c)%2==0 and rounds.count(c)<=2*(OpportunitySettings().topic_searches+1) for c in CATEGORIES)
 
 
 def test_quota_resume_does_not_repeat_paid_retrieval(opportunity_flow):
@@ -197,28 +216,36 @@ def test_expired_category_refresh_does_not_repeat_fresh_categories(opportunity_f
     identifier=workspace['research_id']
     flow[1].interview_research.update_one({'_id':ObjectId(identifier)},{'$set':{'intelligence.categories.company_intelligence.expires_at':now()-timedelta(seconds=1)}})
     ingest(flow,'SQL is required. Equivalent new source.');_,second,_=research(flow)
-    assert len(flow[4].calls)==RUN_SEARCHES+2*len(category_topics('company_intelligence'))
+    assert len(flow[4].calls)==RUN_SEARCHES+refresh_searches('company_intelligence')
     assert second['categories']['internship_insights']['findings']==first['categories']['internship_insights']['findings']
 
 
 def test_durable_restart_reuses_completed_searches(opportunity_flow):
     from app.workflows.opportunity.engine import OpportunityEngine
-    flow=opportunity_flow;client=flow[0];flow[2].wait=True;ingest(flow)
+    flow=opportunity_flow;client=flow[0];flow[2].wait=True;search=flow[4];collect=search.collect_opportunity_query;gate=asyncio.Event()
+    async def held(context,query,**kwargs):
+        if not query_group(query):await gate.wait()
+        return await collect(context,query,**kwargs)
+    search.collect_opportunity_query=held;ingest(flow)
     for _ in range(100):
         job=flow[1].research_contexts.find_one({'kind':'opportunity_job'}) or {}
-        if len(job.get('history',{}))==len(TOPICS):break
+        if len(job.get('group_history',{}))==len(GROUPS) and job.get('run_triaged'):break
         time.sleep(.02)
-    assert len(job.get('history',{}))==len(TOPICS)
+    assert len(job.get('group_history',{}))==len(GROUPS)
     previous=client.app.state.opportunities
     client.portal.call(previous.close)
     flow[2].wait=False
     async def restart():
+        gate.set()
         value=OpportunityEngine(client.app,flow[1],previous.settings,previous.ai)
         client.app.state.opportunities=value
         value.launch(job['_id'])
     client.portal.call(restart)
     _,result,_=research(flow)
-    assert result['status']=='completed' and len(flow[4].calls)==RUN_SEARCHES==len(set(flow[4].calls))
+    # Gap searches cancelled by the shutdown keep their reservations, so the run may finish under its allowance.
+    calls=flow[4].calls
+    assert result['status']=='completed' and len(calls)==len(set(calls))<=RUN_SEARCHES
+    assert sorted(query_group(q) for q in calls if query_group(q))==sorted(GROUPS)
 
 
 def test_employee_pay_is_qualified_for_an_internship_and_conflicts_stay_separate():
@@ -281,7 +308,7 @@ def test_second_search_evidence_reaches_reasoner_without_discarding_first_findin
     paused=set()
     async def collect(context,query,**kwargs):
         values=await original_search(context,query,**kwargs)
-        if 'additional' in query:
+        if not query_group(query):
             return [values[0].model_copy(update={'evidence':values[0].evidence+' A followup report adds detail.'})]
         return values
     async def generate(request,operation,**kwargs):
@@ -297,12 +324,12 @@ def test_second_search_evidence_reaches_reasoner_without_discarding_first_findin
     ingest(flow);_,result,_=research(flow)
     assert len(search.calls)==RUN_SEARCHES==len(set(search.calls))
     evaluations=[json.loads(call.context) for call in primary.calls if call.stage=='opportunity_structure']
-    assert len(evaluations)==(15 if quota_followup else 10)
-    assert len([data for data in evaluations if 'followup' not in data['evidence'][0]['text']])==5
-    for category in result['categories'].values():
-        assert len(category['findings'])==2
+    assert len(paused)==(len(CATEGORIES) if quota_followup else 0)
+    first=[data['category'] for data in evaluations if 'followup' not in data['evidence'][0]['text']]
+    assert len(first)==len(set(first))
+    for key,category in result['categories'].items():
         assert any('followup' in f['value'] for f in category['findings'])
-        assert any('followup' not in f['value'] for f in category['findings'])
+        assert key not in first or any('followup' not in f['value'] for f in category['findings'])
 
 
 def test_workspace_reports_quota_wait_instead_of_research_unavailable(opportunity_flow):
@@ -348,7 +375,8 @@ def test_quota_pause_does_not_reset_the_invalid_response_repair_budget(opportuni
     primary.generate=generate;ingest(flow)
     _,result,_=research(flow)
     assert result['finished'] and result['status']=='failed'
-    assert set(attempts.values())=={5}
+    # A pause after the first invalid response keeps the round to one call and one repair.
+    assert all(count%2==1 for count in attempts.values()) and set(attempts)==set(CATEGORIES)
     assert all(v['error_code']=='invalid_output' for v in result['categories'].values())
 
 
@@ -372,13 +400,13 @@ def test_topics_read_and_keep_sources_within_their_policy(opportunity_flow):
     ingest(flow);_,result,_=research(flow)
     assert result['status']=='completed' and len(search.calls)==RUN_SEARCHES
     job=flow[1].research_contexts.find_one({'kind':'opportunity_job'})
-    assert all(len(job['evidence'][t])<=CANDIDATES_PER_SEARCH*2 for t in TOPICS if t in job['evidence'])
-    assert all(len(ids)<=policy(t).max_urls for t,ids in job['read'].items())
-    # One search reads at most its per-search allowance; the run allowance can skip a few second searches.
-    assert all(policy(t).urls_per_search<=len(ids)<=min(2*policy(t).urls_per_search,policy(t).max_urls) for t,ids in job['read'].items())
-    assert sum(len(ids)==2*policy(t).urls_per_search for t,ids in job['read'].items())>=len(TOPICS)-2
+    # The grouped round reads one search's allowance per topic, so unsettled topics still run gap searches.
+    assert {query_topic(q) for q in search.calls[len(GROUPS):]}<=set(job['history'])
+    assert all(len(job['evidence'][t])<=GROUP_CANDIDATES+CANDIDATES_PER_SEARCH*2 for t in TOPICS if t in job['evidence'])
+    assert all(policy(t).urls_per_search<=len(ids)<=policy(t).max_urls for t,ids in job['read'].items())
+    assert set(job['read'])=={t for c in CATEGORIES for t in category_topics(c)}
     for key,category in result['categories'].items():
         cited={f['field']:set() for f in category['findings']}
         for f in category['findings']:cited[f['field']].update(f['source_ids'])
         assert all(len(ids)<=policy(field).keep for field,ids in cited.items())
-        assert category['searches']<=2*len(category_topics(key))
+        assert category['searches']<=len({TOPIC_GROUP[t] for t in category_topics(key)})+2*len(category_topics(key))
