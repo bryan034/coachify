@@ -96,16 +96,39 @@
 .brief-round-overview h3{margin:0;font-size:24px;font-weight:600;letter-spacing:-.02em}
 .brief-round-link{display:flex;align-items:center;gap:12px;color:var(--ink);font-size:17px;font-weight:600;text-decoration:none}
 .brief-round-link:hover{color:var(--forest)}
-.brief-rounds{display:flex;flex-direction:column;gap:24px}
-.brief-round{gap:20px;padding:40px;background:var(--white);border-radius:20px}
-.brief-round-heading{display:flex;flex-direction:column;gap:8px}
-.brief-round h4{scroll-margin-top:100px}
-.brief-round h4{margin:0;font-size:20px;font-weight:600;line-height:1.35}
-.brief-round-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:24px}
+.brief-rounds{display:flex;flex-direction:column;gap:16px}
+.brief-round{gap:0;padding:0;background:var(--white);border-radius:16px;overflow:hidden}
+.brief-round-heading{display:flex;align-items:center;gap:14px;padding:22px 24px 18px}
+.brief-round-number{flex:none;padding:7px 9px;border-radius:6px;background:var(--mint-mist);color:var(--forest-ink);font-size:12px}
+.brief-round h4{scroll-margin-top:100px;margin:0;font-size:20px;font-weight:600;line-height:1.35}
+.brief-round-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:20px 24px;padding:0 24px 20px}
 .brief-round-columns>div{min-width:0;display:flex;flex-direction:column;gap:10px}
-.brief-round h5,.brief-round h6{margin:0;font-size:15px;font-weight:600}
-.brief-round h6{margin-top:10px;color:var(--slate);font-size:13px}
-.brief-round .brief-round-finding p{font-size:15px}
+.brief-round h5{margin:0;font-size:12px;font-weight:500;color:var(--slate)}
+.brief-round .brief-round-finding{display:flex;flex-direction:column;gap:6px;min-width:0}
+.brief-round .brief-round-finding p{font-size:14px;line-height:1.55}
+.brief-round .brief-card-label{font-size:12px;line-height:1.5}
+.brief .brief-round-preview,.brief .brief-round-detail-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:14px}
+.brief-round-details{border-top:1px solid var(--line)}
+.brief-round-details summary{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:48px;padding:12px 24px;list-style:none;color:var(--forest-ink);font-size:13px;cursor:pointer}
+.brief-round-details summary::-webkit-details-marker{display:none}
+.brief-round-details summary:hover{background:var(--cloud)}
+.brief-round-details summary:focus-visible{outline:2px solid var(--forest);outline-offset:-4px}
+.brief-round-toggle::before{content:'+';font-size:20px;line-height:1}
+.brief-round-details[open] .brief-round-toggle::before{content:'−'}
+.brief-round-detail-content{display:flex;flex-direction:column;gap:20px;padding:4px 24px 22px}
+.brief-round-detail-content>div{display:flex;flex-direction:column;gap:12px;padding-top:16px;border-top:1px solid var(--line)}
+.brief-round-detail-content h5{color:var(--ink);font-weight:600}
+.brief-round-preparation{display:flex;align-items:baseline;gap:14px;padding:14px 24px;background:var(--cloud)}
+.brief-round-preparation h5{flex:none;color:var(--ink)}
+.brief-round-preparation .brief-round-finding p{font-size:13px}
+@media(max-width:540px){
+ .brief-round-heading{padding:20px 18px 18px;align-items:flex-start;gap:10px}
+ .brief-round h4{font-size:18px}
+ .brief-round-columns{padding:0 18px 18px}
+ .brief-round-details summary{padding:12px 18px}
+ .brief-round-detail-content{padding:4px 18px 20px}
+ .brief-round-preparation{padding:14px 18px;flex-direction:column;gap:8px}
+}
 
 .brief-reports{display:flex;flex-direction:column;gap:14px}
 .brief .brief-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}

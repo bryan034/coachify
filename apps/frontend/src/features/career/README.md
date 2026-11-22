@@ -122,8 +122,10 @@ Refine goal and Set a new goal): **Skills needed** (`/career-goal`), **Interview
 - Interview preparation (`interview-research.tsx`): the reported round count and a numbered,
   linked overview appear first. Each overview box has the reported round name as its heading
   and the saved round-format or stage finding as its description; missing descriptions stay labelled. **Interview rounds** shows one independently padded card per saved
-  `round_number`, separated by space, in reported order and headed by its reported name. Each card groups that round's
-  **What to expect**, **Questions reported** and **How to prepare** findings. Missing round-specific
+  `round_number`, separated by space, in reported order and headed by its reported name. Each compact card previews one finding for **What to expect**, **Questions reported** and **How to prepare**.
+  **More about this round** expands all saved format, task, difficulty, question and preparation findings.
+  The API's derived `round_previews` selects finding IDs, preferring exact scope and stronger evidence;
+  it preserves full text and all qualifiers. Older API responses fall back to the first finding per group. Missing round-specific
   expectations or preparation are labelled; no additional model call invents them. Unassigned
   findings remain in general process, timeline, difficulty, format, question, preparation and
   candidate-experience sections. Older reports without round metadata stay general until refreshed.

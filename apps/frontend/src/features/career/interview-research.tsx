@@ -1,5 +1,5 @@
 "use client";
-import type {IntelligenceFinding,IntelligenceResult,ResearchSource} from '@/lib/api/career';
+import type {IntelligenceFinding,IntelligenceResult,ResearchSource,OpportunityView} from '@/lib/api/career';
 import {CitationProvider,SectionPanel,SourceList} from './research-brief';
 import {FindingCard,FindingText,findingSources,type FindingSource} from './research-findings';
 
@@ -37,7 +37,7 @@ export function interviewSources(result:IntelligenceResult|undefined,available:R
  return findingSources(orderedFindings(result?.findings||[]),available);
 }
 
-export function InterviewResearch({result,sources,roundTitles}:{result:IntelligenceResult;sources:FindingSource[];roundTitles?:Record<string,string>}){
+export function InterviewResearch({result,sources,roundTitles,roundPreviews}:{result:IntelligenceResult;sources:FindingSource[];roundTitles?:Record<string,string>;roundPreviews?:OpportunityView['round_previews']}){
  const numbers=new Map(sources.map(source=>[source.source_id,source.index]));
  const grouped=rounds(result.findings,roundTitles);
  const missing=sections.filter(([field])=>!result.findings.some(finding=>finding.field===field)).map(([,title])=>title);
@@ -60,21 +60,36 @@ export function InterviewResearch({result,sources,roundTitles}:{result:Intellige
   {generalSections(overview)}
   {grouped.length>0&&<section className="brief-rounds" aria-labelledby="interview-rounds-title">
    <h3 id="interview-rounds-title" className="brief-sr">Interview rounds</h3>
-   {grouped.map(round=><section key={round.number} className="brief-card brief-round" aria-label={round.title}>
-    <div className="brief-round-heading">{round.name!==`Round ${round.number}`&&<span className="brief-card-label">Round {round.number}</span>}<h4 id={`interview-round-${round.number}-title`}>{round.name}</h4></div>
-    <div className="brief-round-columns">
-     <div>
-      <h5>What to expect</h5>
-      {round.expectations.length>0&&<ul className="brief-evidence">{round.expectations.map(finding=><FindingCard key={finding.finding_id} finding={finding} numbers={numbers} showRound={false} className="brief-round-finding"/>)}</ul>}
-      {round.questions.length>0&&<><h6>Questions reported</h6><ul className="brief-evidence">{round.questions.map(finding=><FindingCard key={finding.finding_id} finding={finding} numbers={numbers} showRound={false} className="brief-round-finding"/>)}</ul></>}
-      {!round.expectations.length&&!round.questions.length&&<p className="brief-card-label">{running?'Research for this round is still in progress.':'Round-specific expectations were not found in the sources.'}</p>}
+   {grouped.map(round=>{
+    const preview=roundPreviews?.[String(round.number)];
+    const select=(values:IntelligenceFinding[],id:string|null|undefined)=>values.find(finding=>finding.finding_id===id)||values[0];
+    const expectation=select(round.expectations,preview?.expectation_id);
+    const question=select(round.questions,preview?.question_id);
+    const preparation=select(round.preparation,preview?.preparation_id);
+    const all=[...round.expectations,...round.questions,...round.preparation];
+    return <section key={round.number} className="brief-card brief-round" aria-label={round.title}>
+     <div className="brief-round-heading"><span className="brief-round-number">Round {round.number}</span><h4 id={`interview-round-${round.number}-title`}>{round.name}</h4></div>
+     <div className="brief-round-columns">
+      <div><h5>What to expect</h5>
+       {expectation?<ul className="brief-round-preview"><FindingCard finding={expectation} numbers={numbers} showRound={false} className="brief-round-finding"/></ul>:<p className="brief-card-label">{running?'Research for this round is still in progress.':'Round-specific expectations were not found in the sources.'}</p>}
+      </div>
+      <div><h5>Questions reported</h5>
+       {question?<ul className="brief-round-preview"><FindingCard finding={question} numbers={numbers} showRound={false} className="brief-round-finding"/></ul>:<p className="brief-card-label">{running?'Question research is still in progress.':'No round-specific questions reported.'}</p>}
+      </div>
      </div>
-     <div>
-      <h5>How to prepare</h5>
-      {round.preparation.length>0?<ul className="brief-evidence">{round.preparation.map(finding=><FindingCard key={finding.finding_id} finding={finding} numbers={numbers} showRound={false} className="brief-round-finding"/>)}</ul>:<p className="brief-card-label">{running?'Preparation research is still in progress.':'Preparation guidance was not found for this round.'}</p>}
+     {all.length>0&&<details className="brief-round-details">
+      <summary>More about this round<span aria-hidden="true" className="brief-round-toggle"/></summary>
+      <div className="brief-round-detail-content">
+       {([{title:"Format, tasks and difficulty",values:round.expectations},{title:"Questions reported",values:round.questions},{title:"How to prepare",values:round.preparation}]).map(({title,values})=>values.length>0&&<div key={title}>
+        <h5>{title}</h5><ul className="brief-round-detail-list">{values.map(finding=><FindingCard key={finding.finding_id} finding={finding} numbers={numbers} showRound={false} className="brief-round-finding"/>)}</ul>
+       </div>)}
+      </div>
+     </details>}
+     <div className="brief-round-preparation"><h5>How to prepare</h5>
+      {preparation?<ul className="brief-round-preview"><FindingCard finding={preparation} numbers={numbers} showRound={false} className="brief-round-finding"/></ul>:<p className="brief-card-label">{running?'Preparation research is still in progress.':'Preparation guidance was not found for this round.'}</p>}
      </div>
-    </div>
-   </section>)}
+    </section>;
+   })}
   </section>}
   {generalSections(details)}
   {!running&&missing.length>0&&<SectionPanel id="interview-gaps-title" title="Not found yet" dashed><ul className="brief-gaps">{missing.map(title=><li key={title}>{title}</li>)}</ul></SectionPanel>}

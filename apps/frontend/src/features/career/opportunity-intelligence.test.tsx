@@ -169,10 +169,12 @@ it('displays saved interview research verbatim without requesting a summary',asy
  expect(process.getByText('HR call').tagName).toBe('STRONG');
  expect(process.getByRole('link',{name:'Source 1: Interview report 1'})).toBeVisible();
  expect(screen.getByRole('note')).toHaveTextContent('Researched 21 Nov 2026 from 7 public sources.');
- expect(roundCard(2,'Technical interview').getByText(interviewResearch.findings[4].value)).toBeVisible();
+ expect(roundCard(2,'Technical interview').getAllByText(interviewResearch.findings[4].value)[0]).toBeVisible();
  expect(within(panel('What candidates reported')).getByText(interviewResearch.findings[6].value)).toBeVisible();
- expect(roundCard(2,'Technical interview').getByText('SQL joins')).toBeVisible();
- expect(roundCard(2,'Technical interview').getByText('An online call with the hiring manager.')).toBeVisible();
+ expect(roundCard(2,'Technical interview').getAllByText('SQL joins').at(-1)!).toBeVisible();
+ const technicalCard=panel('Round 2: Technical interview');
+ technicalCard.querySelector('details')!.open=true;
+ expect(within(technicalCard.querySelector('details')!).getByText('An online call with the hiring manager.')).toBeVisible();
  expect(screen.queryByRole('alert')).toBeNull();
  expect(vi.mocked(careerApi).mock.calls.some(call=>call[0].includes('/v2/')||call[0].endsWith('/interview-prep'))).toBe(false);
  expect(vi.mocked(careerApi).mock.calls.every(call=>call[2]?.method!=='POST')).toBe(true);
@@ -195,17 +197,17 @@ it('shows related context, limited evidence, conflicts and estimates without rew
  result.findings[4]={...result.findings[4],scope:'related_role',confidence:'low',conflict_group:'question-reports',evidence_type:'inferred'};
  renderInterview();
  const questions=within(await screen.findByRole('region',{name:'Round 2: Technical interview'}));
- expect(questions.getByText('Related role · Limited evidence')).toBeVisible();
- expect(questions.getByText('Conflicting reports')).toBeVisible();
- expect(questions.getByText('Estimated')).toBeVisible();
- expect(questions.getByText(interviewResearch.findings[4].value)).toBeVisible();
+ expect(questions.getAllByText('Related role · Limited evidence')[0]).toBeVisible();
+ expect(questions.getAllByText('Conflicting reports')[0]).toBeVisible();
+ expect(questions.getAllByText('Estimated')[0]).toBeVisible();
+ expect(questions.getAllByText(interviewResearch.findings[4].value)[0]).toBeVisible();
 });
 
 it('shows empty interview topics as gaps and preserves available partial research',async()=>{
  const result=research.categories.interview_intelligence!;
  result.status='partial';result.error_code='unavailable';result.findings=result.findings.filter(finding=>finding.field==='interview_questions');
  renderInterview();
- expect(await screen.findByText(interviewResearch.findings[4].value)).toBeVisible();
+ expect((await screen.findAllByText(interviewResearch.findings[4].value))[0]).toBeVisible();
  expect(screen.getByRole('status')).toHaveTextContent('Some interview research could not finish');
  expect(screen.queryByRole('region',{name:'How to prepare'})).toBeNull();
  expect(within(panel('Not found yet')).getByText('How to prepare')).toBeVisible();
@@ -216,7 +218,7 @@ it('displays retained interview findings while research runs without requesting 
  research={...research,status:'running',finished:false};
  research.categories.interview_intelligence!.status='running';
  renderInterview();
- expect(await screen.findByText(interviewResearch.findings[4].value)).toBeVisible();
+ expect((await screen.findAllByText(interviewResearch.findings[4].value))[0]).toBeVisible();
  expect(screen.getByText(/Researching…/)).toBeVisible();
  expect(vi.mocked(careerApi).mock.calls.some(call=>call[0].includes('/v2/'))).toBe(false);
 });
@@ -235,12 +237,12 @@ it('groups every reported round into its own card with matching expectations and
  const hr=roundCard(1,'HR call'),technical=roundCard(2,'Technical interview'),final=roundCard(3,'Final interview');
  for(const card of [hr,technical,final]){
   expect(card.getByRole('heading',{name:'What to expect'})).toBeVisible();
-  expect(card.getByRole('heading',{name:'How to prepare'})).toBeVisible();
+  expect(card.getAllByRole('heading',{name:'How to prepare'}).at(-1)!).toBeVisible();
  }
- expect(hr.getByText(interviewResearch.findings[7].value)).toBeVisible();
- expect(hr.getByText(interviewResearch.findings[8].value)).toBeVisible();
+ expect(hr.getAllByText(interviewResearch.findings[7].value)[0]).toBeVisible();
+ expect(hr.getAllByText(interviewResearch.findings[8].value).at(-1)!).toBeVisible();
  expect(hr.queryByText('SQL joins')).toBeNull();
- expect(technical.getByText('SQL joins')).toBeVisible();
+ expect(technical.getAllByText('SQL joins').at(-1)!).toBeVisible();
  expect(technical.queryByText(interviewResearch.findings[8].value)).toBeNull();
  expect(final.getByText('Preparation guidance was not found for this round.')).toBeVisible();
  expect(vi.mocked(careerApi).mock.calls.every(call=>call[0].includes('/opportunity-research')&&call[2]?.method!=='POST')).toBe(true);
@@ -313,4 +315,25 @@ it('uses saved short round titles in overview and card headings without rewritin
  for(const title of document.querySelectorAll('.brief-round-overview h4,.brief-round h4'))expect(title.textContent!.replace(/^\d+/, '').trim().split(/\s+/).length).toBeLessThanOrEqual(3);
  expect(research.categories.interview_intelligence!.findings.find(finding=>finding.round_number===2)!.round_name).toBe(original);
  expect(vi.mocked(careerApi).mock.calls.every(call=>call[2]?.method!=='POST')).toBe(true);
+});
+
+it('uses backend previews and keeps the rest of each round in its details dropdown',async()=>{
+ const findings=research.categories.interview_intelligence!.findings;
+ const extra={...findings[2],finding_id:'fabcdefabcdefabcd',value:'Additional live debugging exercise.',round_number:2};
+ findings.push(extra);
+ research.round_previews={'2':{expectation_id:extra.finding_id,question_id:findings[4].finding_id,preparation_id:findings[5].finding_id}};
+ renderInterview();
+ const card=await screen.findByRole('region',{name:'Round 2: Technical interview'});
+ const preview=within(card.querySelector('.brief-round-columns')! as HTMLElement);
+ expect(preview.getByText(extra.value)).toBeVisible();
+ const details=card.querySelector('details')!;
+ expect(details.open).toBe(false);
+ expect(within(details).getByText(extra.value)).not.toBeVisible();
+ fireEvent.click(within(details).getByText('More about this round'));
+ expect(details.open).toBe(true);
+ expect(within(details).getByText(extra.value)).toBeVisible();
+ expect(within(details).getByText('SQL joins')).toBeVisible();
+ expect(within(details).getAllByRole('link').length).toBeGreaterThan(0);
+ fireEvent.click(within(details).getByText('More about this round'));
+ expect(details.open).toBe(false);
 });
