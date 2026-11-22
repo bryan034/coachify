@@ -16,6 +16,7 @@ from app.ai.opportunity_contracts import (
     findings_schema,structure_input,
 )
 from app.schemas.analysis import ResearchSource
+from app.ai.opportunity_config import OpportunitySettings
 from app.schemas.opportunity import CATEGORIES,FIELDS
 from app.workflows.opportunity.domain import supported_claims,dedupe_findings
 from app.workflows.opportunity.engine import OpportunityEngine
@@ -181,7 +182,7 @@ def test_referenced_provider_findings_persist_and_remain_readable_through_existi
     try:
         assert ingest(opportunity_flow).status_code==202
         workspace,result,path=research(opportunity_flow)
-        assert result['status']=='completed' and len(calls)==2*len(CATEGORIES)
+        assert result['status']=='completed' and len(CATEGORIES)<=len(calls)<=(OpportunitySettings().topic_searches+1)*len(CATEGORIES)
         assert all(category['findings'] for category in result['categories'].values())
         finding=result['categories']['internship_insights']['findings'][0]
         assert 'quotes' not in finding

@@ -506,7 +506,7 @@ using the configured Career model for coordination and reasoning and the selecte
 and Career storage are available. All model stages share the configured Career client. Existing JSON fields and immutable saved models are retained.
 Explicit guidance maps evidence into each allowed field; missing evidence stays missing.
 
-Compose passes `OPPORTUNITY_ENABLED` (true), searches per topic (2), searches per run (40),
+Compose passes `OPPORTUNITY_ENABLED` (true), gap searches per topic (2), searches per run (25),
 concurrency (3), HTTP timeout (30s), transient retries (1), schema repairs (1),
 evidence tokens (blank sends every passage), freshness (168h), incomplete freshness (1h) and worker
 deadline (300s). See the [complete settings/API/graph contract](../services/career-service/OPPORTUNITY_INTELLIGENCE.md).

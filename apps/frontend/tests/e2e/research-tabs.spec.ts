@@ -1,11 +1,13 @@
 import {expect,type Page} from '@playwright/test';
 import {careerFixture,test} from './career-fixture';
-import {interviewBrief,roleBrief} from '../fixtures/research-brief';
+import {roleGoal,roleResearch,roleResearchSources} from '../fixtures/role-research';
+import {interviewResearch,interviewResearchSources} from '../fixtures/interview-research';
 
-const goal={_id:'0'.repeat(24),version:1,target_type:'specific_job',role:'GenAI Delivery Intern',field:'Health technology',company:'Example Health',location:'Singapore',employment_type:'internship',seniority_level:null,job_url:null,skills:[],non_skill_requirements:[],responsibilities:[],summary:'Coordinate GenAI projects with delivery teams.'};
-const base={status:'completed',findings:[],missing_fields:[],warnings:[],error_code:null,researched_at:'2026-11-21T08:00:00Z',expires_at:null,searches:1,model_calls:1,latency_ms:100,estimated_cost_usd:null};
+const goal={_id:'0'.repeat(24),version:1,target_type:'specific_job',role:'GenAI Delivery Intern',field:'Health technology',company:'Example Health',location:'Singapore',employment_type:'internship',seniority_level:null,job_url:null,skills:[],non_skill_requirements:roleGoal.requirements.map((description,index)=>({requirement_id:`r${index}`,category:'qualification',description,priority:'required',evidence:description,group_id:null,group_operator:'all',origin:'employer'})),responsibilities:roleGoal.duties,summary:'Coordinate GenAI projects with delivery teams.'};
 
-async function mockCareer(page:Page,refreshed:{category?:string|null}){
+async function mockCareer(page:Page,requests:{researchWrites?:number;summaryCalls?:number}){
+ const interview=structuredClone(interviewResearch);
+ for(const finding of interview.findings)if(finding.round_number===2)finding.round_name='Technical interview with the hiring manager';
  await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
@@ -15,14 +17,13 @@ async function mockCareer(page:Page,refreshed:{category?:string|null}){
  });
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/v2/role-research'))return route.fulfill({json:{status:'ready',brief:roleBrief}});
-  if(path.endsWith('/v2/interview-research'))return route.fulfill({json:{status:'ready',brief:interviewBrief}});
+  if(path.includes('/v2/')||path.endsWith('/interview-prep')||path.endsWith('/role-summary')){requests.summaryCalls=(requests.summaryCalls||0)+1;return route.fulfill({status:503,json:{detail:'No research summary should be requested.'}});}
   if(path.endsWith('/context/assessment'))return route.fulfill({json:careerFixture(route.request().url(),{status:'evaluated',cv_uploaded:true,skills_evaluated:true})});
   if(path.endsWith('/opportunity-research/progress'))return route.fulfill({json:{status:'completed',finished:true,result_version:'v1',categories:{}}});
   if(path.endsWith('/opportunity-research')){
-   if(route.request().method()==='POST')refreshed.category=route.request().postDataJSON().category;
-   return route.fulfill({json:{available:true,status:'completed',finished:true,job_id:'job',career_target_id:goal._id,research_id:'research',sources:[],error_code:null,updated_at:'2026-11-21T08:00:00Z',
-    categories:{interview_intelligence:base,internship_insights:base,career_progression:base,conversion_outcomes:base,company_intelligence:base}}});
+   if(route.request().method()==='POST')requests.researchWrites=(requests.researchWrites||0)+1;
+   return route.fulfill({json:{available:true,status:'completed',finished:true,job_id:'job',career_target_id:goal._id,research_id:'research',sources:[...interviewResearchSources,...roleResearchSources],error_code:null,updated_at:'2026-11-21T08:00:00Z',
+    round_titles:{'1':'HR call','2':'Technical interview','3':'Final interview'},categories:{interview_intelligence:interview,...roleResearch}}});
   }
   return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',review:{review_id:'1'.repeat(24),version:1,target_type:'specific_job',extraction:goal,requirements_need_review:false},current:{selection_version:1,goal},research:null,coverage:[],error:null,retry_after:null})});
  });
@@ -62,55 +63,83 @@ async function capture(page:Page,name:string){
  await page.setViewportSize({width:1280,height:900});
 }
 
-test('About the role renders the brief, its toggles and citations at desktop and phone widths',async({page})=>{
- const refreshed:{category?:string|null}={};
- await mockCareer(page,refreshed);
+test('About the role displays saved findings, goal details and citations without a summary on desktop and phone',async({page})=>{
+ const requests:{researchWrites?:number;summaryCalls?:number}={};
+ await mockCareer(page,requests);
  await page.setViewportSize({width:1280,height:900});
  await page.goto('/career-goal/role');
- await expect(page.getByText(roleBrief.summary)).toBeVisible();
+ await expect(page.getByRole('region',{name:'What it is like'})).toContainText(roleResearch.internship_insights!.findings[2].value);
+ await expect(page.getByRole('region',{name:'Who can apply'})).toContainText(roleGoal.requirements[0]);
+ await expect(page.getByRole('region',{name:'What you would do'})).toContainText(roleGoal.duties[0]);
+ await expect(page.getByRole('region',{name:'Pay and what comes after'})).toContainText('S$1,799/mo');
  await expect(page.getByRole('note')).toContainText('Researched 21 Nov 2026 from 7 public sources.');
- await capture(page,'about-role-collapsed');
+ await capture(page,'about-role-findings');
 
  const pay=page.getByRole('region',{name:'Pay and what comes after'});
- await pay.getByRole('link',{name:'Source 7: Business Analyst salary estimate'}).click();
+ await pay.getByRole('link',{name:'Source 7: Role report 7'}).first().click();
  await expect(page.locator('#role-src-7')).toHaveClass(/is-flash/);
  await expect(page.locator('#role-src-7')).toBeInViewport();
- await expect(page.getByRole('button',{name:'Show fewer sources'})).toHaveAttribute('aria-expanded','true');
- await page.getByRole('button',{name:'Show fewer sources'}).click();
+ await expect(page.locator('#role-src-7 a')).toBeFocused();
+ const toggle=page.getByRole('button',{name:'Show fewer sources'});
+ await toggle.focus();await page.keyboard.press('Enter');
  await expect(page.locator('#role-src-6')).toHaveCount(0);
 
  await expandAll(page);
  await expect(page.getByRole('region',{name:'What you would do'}).getByRole('listitem')).toHaveCount(6);
  await expect(page.getByText(/limited time to mentor/)).toBeVisible();
- await citationsResolve(page,'role',roleBrief.sources.map(source=>source.title));
+ await citationsResolve(page,'role',roleResearchSources.map(source=>source.title!));
  await capture(page,'about-role-expanded');
 
- await page.getByRole('button',{name:'Refresh research'}).click();
- await expect.poll(()=>refreshed.category).toBe(null);
+ await expect(page.getByRole('button',{name:/Refresh research|Research opportunity/})).toHaveCount(0);
+ await page.reload();
+ await expect(page.getByRole('region',{name:'What it is like'})).toContainText(roleResearch.internship_insights!.findings[2].value);
+ expect(requests.summaryCalls||0).toBe(0);
+ expect(requests.researchWrites||0).toBe(0);
 });
 
-test('Interview preparation renders the process, difficulty, questions and reports at desktop and phone widths',async({page})=>{
- const refreshed:{category?:string|null}={};
- await mockCareer(page,refreshed);
+test('Interview preparation displays saved findings and citations without a summary request on desktop and phone',async({page})=>{
+ const requests:{researchWrites?:number;summaryCalls?:number}={};
+ await mockCareer(page,requests);
  await page.setViewportSize({width:1280,height:900});
  await page.goto('/career-goal/interview');
- await expect(page.getByText(interviewBrief.summary)).toBeVisible();
- await expect(page.getByRole('img',{name:'Difficulty: Average, estimated'})).toBeVisible();
- const practise=page.getByRole('region',{name:'Practise these'});
- await expect(practise.getByRole('button',{expanded:true})).toHaveCount(1);
- await capture(page,'interview-collapsed');
+ await expect(page.getByRole('region',{name:'Round 2: Technical interview'})).toContainText(interviewResearch.findings[4].value);
+ await expect(page.getByRole('region',{name:'Difficulty'})).toContainText('Moderate');
+ await expect(page.getByRole('region',{name:'Interview rounds',exact:true}).getByRole('heading',{level:4})).toHaveText(['HR call','Technical interview','Final interview']);
+ await expect(page.getByRole('region',{name:'Round 2: Technical interview'})).toContainText('SQL joins');
+ await expect(page.getByRole('region',{name:'Round 1: HR call'})).toContainText(interviewResearch.findings[8].value);
+ await expect(page.getByRole('region',{name:'Round 3: Final interview'})).toContainText('Preparation guidance was not found for this round.');
+ await expect(page.getByRole('region',{name:'What candidates reported'})).toContainText(interviewResearch.findings[6].value);
+ await expect(page.getByRole('note')).toContainText('Researched 21 Nov 2026 from 7 public sources.');
+ await expect(page.getByRole('heading',{name:'3 reported interview rounds'})).toBeVisible();
+ const overview=page.getByRole('region',{name:'3 reported interview rounds'});
+ await expect(overview.getByRole('heading',{level:4})).toHaveText(['1HR call','2Technical interview','3Final interview']);
+ await expect(overview.getByRole('listitem').nth(0)).toContainText(interviewResearch.findings[7].value);
+ await expect(overview.getByRole('listitem').nth(1)).toContainText(interviewResearch.findings[2].value);
+ await expect(overview.getByRole('listitem').nth(2)).toContainText(interviewResearch.findings[9].value);
+ await expect(page.locator('#interview-preparation h3').first()).toHaveText('3 reported interview rounds');
+ const cardLayout=await page.locator('.brief-rounds > .brief-round').evaluateAll(cards=>cards.map(card=>({
+  top:card.getBoundingClientRect().top,bottom:card.getBoundingClientRect().bottom,padding:parseFloat(getComputedStyle(card).paddingTop),
+ })));
+ expect(cardLayout).toHaveLength(3);
+ for(let i=0;i<cardLayout.length;i++){
+  expect(cardLayout[i].padding).toBeGreaterThanOrEqual(20);
+  if(i>0)expect(cardLayout[i].top-cardLayout[i-1].bottom).toBeGreaterThanOrEqual(20);
+ }
+ await capture(page,'interview-findings');
 
- await practise.getByRole('button',{name:/planning skills/}).click();
- await expect(practise.getByText(interviewBrief.questions[1].prep)).toBeVisible();
- await expect(practise.getByText(interviewBrief.questions[0].prep)).toBeHidden();
- await page.keyboard.press('Enter');
- await expect(practise.getByRole('button',{expanded:true})).toHaveCount(0);
- await practise.getByRole('button',{name:/planning skills/}).click();
- await expandAll(page);
- await expect(page.getByText(/asked about themselves and past projects/)).toBeVisible();
- await citationsResolve(page,'interview',interviewBrief.sources.map(source=>source.title));
- await capture(page,'interview-expanded');
+ await page.getByRole('region',{name:'What candidates reported'}).getByRole('link',{name:'Source 7: Interview report 7'}).click();
+ await expect(page.locator('#interview-src-7')).toHaveClass(/is-flash/);
+ await expect(page.locator('#interview-src-7 a')).toBeFocused();
+ const toggle=page.getByRole('button',{name:'Show fewer sources'});
+ await toggle.focus();await page.keyboard.press('Enter');
+ await expect(page.locator('#interview-src-7')).toHaveCount(0);
+ await page.getByRole('button',{name:'Show all 7 sources'}).click();
+ await citationsResolve(page,'interview',[0,1,3,2,4,5,6].map(index=>interviewResearchSources[index].title!));
+ await capture(page,'interview-sources-expanded');
 
- await page.getByRole('button',{name:'Refresh research'}).click();
- await expect.poll(()=>refreshed.category).toBe('interview_intelligence');
+ await expect(page.getByRole('button',{name:/Refresh research|Research opportunity/})).toHaveCount(0);
+ await page.reload();
+ await expect(page.getByRole('region',{name:'Round 2: Technical interview'})).toContainText(interviewResearch.findings[4].value);
+ expect(requests.summaryCalls||0).toBe(0);
+ expect(requests.researchWrites||0).toBe(0);
 });

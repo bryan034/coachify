@@ -1,6 +1,6 @@
-"""Per-topic search wording: the model owns role-specific queries, with plain employer-and-role fallbacks."""
+"""Search wording: the model writes one query per search group; topic gap searches use plain employer-and-role wording."""
 from app.schemas.opportunity import CATEGORIES
-from .topics import TOPICS,topic_query
+from .topics import GROUPS,TOPICS,group_query,topic_query
 
 ACTIVITIES={
  'interview_intelligence':'searching_interviews',
@@ -11,13 +11,17 @@ ACTIVITIES={
 }
 
 
-def planned_queries(plan,searches,public=None):
-    """Up to `searches` distinct queries per topic: the planner's wording first, then plain fallbacks."""
+def planned_queries(plan,public=None):
+    def query(group):
+        value=(getattr(plan,group,None) if plan is not None else None) or group_query(public,group)
+        return ' '.join(value.split())[:180] if value else None
+    return {group:value for group in GROUPS if (value:=query(group))}
+
+
+def topic_queries(public,searches):
     def queries(topic):
-        planned=list(getattr(plan,topic,None) or []) if plan is not None else []
-        fallbacks=[topic_query(public,topic,attempt) for attempt in range(searches)]
-        values=[' '.join(q.split())[:180] for q in [*planned,*fallbacks] if q]
-        return list(dict.fromkeys(values))[:searches]
+        values=[topic_query(public,topic,attempt) for attempt in range(searches)]
+        return list(dict.fromkeys(' '.join(q.split())[:180] for q in values if q))
     return {topic:queries(topic) for topic in TOPICS}
 
 

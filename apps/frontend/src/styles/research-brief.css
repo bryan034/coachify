@@ -8,10 +8,6 @@
 .brief-head-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px 16px}
 .brief-meta{margin:0;max-width:600px;font-size:14px;line-height:1.5;color:var(--slate)}
 .brief-meta .brief-tag{margin-left:0}
-.brief .brief-refresh{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 18px;border:1px solid var(--haze-strong);border-radius:999px;background:var(--white);color:var(--ink);font:inherit;font-size:14px;font-weight:600;cursor:pointer}
-.brief .brief-refresh:hover:not(:disabled){background:var(--snow)}
-.brief .brief-refresh:disabled{opacity:.6;cursor:not-allowed}
-.brief .brief-refresh svg{flex:none;width:16px;height:16px}
 .brief-lead{margin:0;max-width:900px;font-size:clamp(20px,1vw + 14px,28px);font-weight:600;line-height:1.25;letter-spacing:-.02em;overflow-wrap:anywhere}
 
 .brief .brief-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:1px;margin:0;padding:0;list-style:none;background:var(--haze);border:1px solid var(--haze);border-radius:20px;overflow:hidden}
@@ -33,7 +29,7 @@
 .brief-panel-body{flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:12px}
 
 .brief .brief-cards{display:flex;flex-direction:column;gap:14px;margin:0;padding:0;list-style:none}
-.brief-card{display:flex;flex-direction:column;gap:8px;min-width:0;padding:24px;background:var(--snow);border:1px solid var(--haze);border-radius:16px}
+.brief-card{display:flex;flex-direction:column;gap:8px;min-width:0;overflow-wrap:anywhere;padding:24px;background:var(--snow);border:1px solid var(--haze);border-radius:16px}
 .brief-card p{margin:0;font-size:16px;line-height:1.5}
 .brief-card-label{font-size:13px;color:var(--slate)}
 .brief-topic-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
@@ -94,6 +90,23 @@
 .brief-prep>span{font-size:13px;font-weight:600;color:var(--forest-ink)}
 .brief-prep p{font-size:15px;line-height:1.55}
 
+.brief-round-overview{display:flex;flex-direction:column;gap:16px}
+.brief-round-overview h4{margin:0;font-size:17px;line-height:1.4}
+.brief-round-description{margin:0;color:var(--slate);font-size:14px;line-height:1.55;overflow-wrap:anywhere}
+.brief-round-overview h3{margin:0;font-size:24px;font-weight:600;letter-spacing:-.02em}
+.brief-round-link{display:flex;align-items:center;gap:12px;color:var(--ink);font-size:17px;font-weight:600;text-decoration:none}
+.brief-round-link:hover{color:var(--forest)}
+.brief-rounds{display:flex;flex-direction:column;gap:24px}
+.brief-round{gap:20px;padding:40px;background:var(--white);border-radius:20px}
+.brief-round-heading{display:flex;flex-direction:column;gap:8px}
+.brief-round h4{scroll-margin-top:100px}
+.brief-round h4{margin:0;font-size:20px;font-weight:600;line-height:1.35}
+.brief-round-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:24px}
+.brief-round-columns>div{min-width:0;display:flex;flex-direction:column;gap:10px}
+.brief-round h5,.brief-round h6{margin:0;font-size:15px;font-weight:600}
+.brief-round h6{margin-top:10px;color:var(--slate);font-size:13px}
+.brief-round .brief-round-finding p{font-size:15px}
+
 .brief-reports{display:flex;flex-direction:column;gap:14px}
 .brief .brief-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
 .brief .brief-chips li{padding:8px 14px;border:1px solid var(--haze);border-radius:999px;background:var(--white);font-size:15px}
@@ -105,7 +118,7 @@
 .brief .brief-sources a:hover .brief-source-title{text-decoration:underline}
 .brief .brief-sources li.is-flash a{background:var(--mint-mist);box-shadow:inset 0 0 0 2px var(--mint-line)}
 .brief-source-title{flex:1 1 auto;min-width:0;font-size:15px;line-height:1.4;overflow-wrap:anywhere}
-.brief-source-site{flex:none;font-size:13px;color:var(--slate)}
+.brief-source-site{flex:0 1 auto;min-width:0;overflow-wrap:anywhere;font-size:13px;color:var(--slate)}
 .brief .brief-sources svg{flex:none;color:var(--slate)}
 .brief-sources-more{padding-top:6px;border-top:1px solid var(--haze)}
 

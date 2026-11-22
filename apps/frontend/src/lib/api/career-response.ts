@@ -57,17 +57,23 @@ const chat:Check=value=>reply(value)&&record(value)&&
  (value.workspace===undefined||value.workspace===null||workspace(value.workspace))&&
  (value.proposed_skills===undefined||value.proposed_skills===null||array(skill,60)(value.proposed_skills));
 const finding=shape({finding_id:nonempty,field:nonempty,value:nonempty,confidence:oneOf('high','medium','low','insufficient_evidence'),
- evidence_type:oneOf('official','candidate_reported','third_party','inferred'),source_ids:strings,scope:text,conflict_group:nullable(text),last_verified_at:text});
+ evidence_type:oneOf('official','candidate_reported','third_party','inferred'),source_ids:strings,scope:text,conflict_group:nullable(text),last_verified_at:text,
+ round_number:optional(nullable(value=>positive(value)&&Number(value)<=10)),round_name:optional(nullable(nonempty))});
 const category=shape({status:oneOf('pending','running','completed','partial','failed','not_applicable'),findings:array(finding,20),
  missing_fields:strings,warnings:strings,error_code:nullable(text)});
 const categories:Check=value=>record(value)&&Object.entries(value).every(([key,item])=>
  ['interview_intelligence','internship_insights','career_progression','conversion_outcomes','company_intelligence'].includes(key)&&category(item));
-const source=shape({source_id:nonempty,platform:nonempty,url:nonempty,title:nullable(text)});
+const httpUrl:Check=value=>{
+ if(typeof value!=='string')return false;
+ try{return ['http:','https:'].includes(new URL(value).protocol);}catch{return false;}
+};
+const source=shape({source_id:nonempty,platform:nonempty,url:httpUrl,title:nullable(text)});
 const researchProgress=shape({status:text,finished:boolean,result_version:nullable(text),categories:value=>record(value)&&
  Object.values(value).every(shape({status:text,error_code:nullable(text)}))});
 const evidence=shape({finding_id:nonempty,quotes:strings,sources:array(source,30)});
 const research=shape({available:boolean,job_id:nullable(text),career_target_id:nonempty,status:oneOf('pending','running','partial','completed','failed'),
- finished:optional(boolean),research_id:optional(nullable(text)),categories,sources:optional(array(source,30)),error_code:nullable(text),
+ finished:optional(boolean),research_id:optional(nullable(text)),categories,sources:optional(array(source,100)),error_code:nullable(text),
+ round_titles:optional(value=>record(value)&&Object.entries(value).every(([key,title])=>/^(?:[1-9]|10)$/.test(key)&&typeof title==='string'&&title.trim().length>0&&title.length<=80&&title.trim().split(/\s+/).length<=3)),
  summary:optional(shape({overview_refs:strings,key_takeaway_refs:strings,consideration_refs:strings})),retry_after:retryAfter});
 
 export const careerPreview=shape({kind:oneOf('url','document'),text:value=>nonempty(value)&&Array.from(value as string).length<=20_000,

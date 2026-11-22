@@ -329,6 +329,16 @@ Duplicate-finding regressions cover different summaries sharing one extract ID, 
 identity while merging corroborating citations, and quality-stage cleanup of persisted
 duplicates before final report validation.
 
+Grouped research checks verify one search per topic group before any gap search, a page
+found by two groups is triaged and extracted once, gap searches reserve factual topics
+without findings first and skip topics without queries or reads left, each category's first
+gap round stays within its share of the remaining searches, and usage metrics
+include cached and reasoning tokens and search calls, including adopted JD prefetch.
+Regressions also check shared-topic findings and grounded interview round metadata survive
+cross-category extraction, terminal failures release page claims while quota pauses preserve
+repair state, later gap rounds protect unused first-round shares, and concurrent gap triage
+reuses saved page labels.
+
 Opportunity-source limit checks verify per-topic research: triage sees only page
 metadata and pages it rejects are never read, each topic reads no more than its
 per-search and total allowances, a factual topic backed by two different sites is not

@@ -22,6 +22,7 @@ from elo_shared.model_budget import (ModelBudgetExceeded, ModelBudgetUnavailable
 from app.repositories.goals import GoalError,now
 from app.schemas.analysis import ResearchSource
 from app.ai.discovery_config import MAX_URLS_PER_QUERY, BRAVE_CONTEXT_TOKENS
+from app.ai.metrics import observe_usage
 from app.clients.research import normalize_sources
 from app.schemas.discovery import DiscoverySource
 from http import HTTPStatus
@@ -40,6 +41,7 @@ MAX_REJECTION_BYTES = 16 * 1024
 OPPORTUNITY_SOURCE_LIMIT=5
 # Largest built-in URLs-per-search (goal research/chat); a configured cap only lowers it.
 MAX_URLS_LIMIT=6
+OPPORTUNITY_URL_LIMIT=10
 OPPORTUNITY_EXCERPT_LIMIT=8000
 
 def excerpt(text):return re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]*>',' ',text or ''))).strip()[:600]
@@ -414,7 +416,7 @@ class SourceAPIs:
         return await self.search(query,country='ALL')
 
     async def collect_opportunity_query(self,context,query,max_sources=OPPORTUNITY_SOURCE_LIMIT):
-        return await self.search(query,country=search_country(context.location),focus=query,max_sources=min(max_sources,MAX_URLS_LIMIT),
+        return await self.search(query,country=search_country(context.location),focus=query,max_sources=min(max_sources,OPPORTUNITY_URL_LIMIT),
             evidence_chars=OPPORTUNITY_EXCERPT_LIMIT,context_tokens=16384,threshold='lenient',snippets_per_url=12,snippets=60,search_count=50)
 
     async def collect_discovery_query(self,context,query):
@@ -490,6 +492,7 @@ class SourceAPIs:
         except httpx.HTTPError:raise SearchBackendError('unavailable','Could not connect to OpenRouter search.') from None
         try:payload=json.loads(bytes(data))
         except (ValueError,UnicodeError):raise SearchBackendError('invalid_response','OpenRouter search returned an unreadable response.') from None
+        if isinstance(payload,dict):observe_usage(payload.get('usage'))
         return self.sources(citation_results(payload),focus=focus,evidence_chars=evidence_chars,max_sources=max_sources,discovery=discovery)
 
     async def aclose(self):

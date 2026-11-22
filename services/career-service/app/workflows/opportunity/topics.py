@@ -17,12 +17,29 @@ FACTUAL=Policy(urls_per_search=2,max_urls=5,keep=2,backing_sites=2)
 REVIEWS=Policy(urls_per_search=4,max_urls=8,keep=4,backing_sites=4)
 # Search results whose title, URL, date and preview are triaged before any page is read.
 CANDIDATES_PER_SEARCH=6
+GROUP_CANDIDATES=10
 
 FACTUAL_TOPICS=frozenset({'compensation','benefits','conversion_salary','conversion_rate','historical_cohort',
     'offer_acceptance','full_time_role','application_timeline','recruitment_stages'})
 
 TOPICS=tuple(dict.fromkeys(field for category in CATEGORIES for field in FIELDS[category]))
 TOPIC_CATEGORIES={topic:tuple(c for c in CATEGORIES if topic in FIELDS[c]) for topic in TOPICS}
+
+GROUPS={
+ 'interview_process':('recruitment_stages','round_format','application_timeline','difficulty'),
+ 'interview_content':('interview_questions','preparation_topics','candidate_experience'),
+ 'pay':('compensation','benefits','conversion_salary'),
+ 'intern_experience':('projects','mentorship','work_life_balance'),
+ 'conversion':('full_time_role','conversion_rate','historical_cohort','offer_acceptance'),
+ 'career':('career_path',),
+ 'culture':('company_culture','team_culture','management'),
+}
+TOPIC_GROUP={topic:group for group,topics in GROUPS.items() for topic in topics}
+GROUP_TERMS={
+ 'interview_process':'interview process rounds timeline','interview_content':'interview questions experience',
+ 'pay':'intern salary benefits graduate pay','intern_experience':'intern experience projects mentorship',
+ 'conversion':'return offer conversion intern intake','career':'career path graduate programme progression',
+ 'culture':'company culture management reviews'}
 
 # What a person would type after the employer and role.
 TERMS={
@@ -40,7 +57,11 @@ ALTERNATE={
  'conversion_rate':'return offer rate reddit','benefits':'intern benefits glassdoor',
  'company_culture':'culture reddit glassdoor','team_culture':'team reviews reddit','management':'manager reviews glassdoor',
  'work_life_balance':'hours overtime reddit','mentorship':'intern mentor reddit','candidate_experience':'interview glassdoor',
- 'interview_questions':'interview questions glassdoor reddit'}
+ 'interview_questions':'interview questions glassdoor reddit','recruitment_stages':'interview process glassdoor reddit',
+ 'difficulty':'interview difficulty glassdoor','application_timeline':'application timeline reddit',
+ 'preparation_topics':'interview preparation reddit','round_format':'interview rounds format glassdoor',
+ 'projects':'intern projects reddit','full_time_role':'return offer reddit','career_path':'career progression reddit glassdoor',
+ 'historical_cohort':'number of interns intake reddit','offer_acceptance':'return offer accepted reddit'}
 
 def policy(topic):
     return FACTUAL if topic in FACTUAL_TOPICS else REVIEWS
@@ -55,13 +76,22 @@ def category_topics(category):
     return [topic for topic in FIELDS[category] if owner(topic)==category]
 
 
+def employer_role(public):
+    if not public:return ''
+    return ' '.join(' '.join((public.get(key) or '').split()) for key in ('company','role')).strip()[:140]
+
+
 def topic_query(public,topic,attempt=0):
     """A plain employer-and-role search for one topic; a second attempt targets review and salary sites."""
-    if not public:return None
-    who=' '.join(' '.join((public.get(key) or '').split()) for key in ('company','role')).strip()
+    who=employer_role(public)
     if not who:return None
     terms=ALTERNATE.get(topic,TERMS[topic]) if attempt else TERMS[topic]
-    return f'{who[:140]} {terms}'
+    return f'{who} {terms}'
+
+
+def group_query(public,group):
+    who=employer_role(public)
+    return f'{who} {GROUP_TERMS[group]}' if who else None
 
 
 def site(url):
@@ -79,3 +109,7 @@ def backing_sites(topic,findings,sources):
 
 def settled(topic,findings,sources):
     return len(backing_sites(topic,findings,sources))>=policy(topic).backing_sites
+
+
+def gap_rank(topic,findings):
+    return (topic not in FACTUAL_TOPICS,any(f.field==topic for f in findings))

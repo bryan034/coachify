@@ -2,7 +2,6 @@ import {careerFixture,test} from './career-fixture';
 import {mockEmptyConversation} from '../fixtures/cv-ui';
 import {policy,emptyDeclarations} from '../fixtures/cv';
 import {expect} from '@playwright/test';
-import {interviewBrief,roleBrief} from '../fixtures/research-brief';
 
 test('saved briefing accordions, guided refinement, replacement and CV handoff on desktop and mobile',async({page},testInfo)=>{
  await mockEmptyConversation(page);
@@ -30,8 +29,6 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  };
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/v2/interview-research'))return route.fulfill({json:{status:'ready',brief:interviewBrief}});
-  if(path.endsWith('/v2/role-research'))return route.fulfill({json:{status:researching?'researching':'ready',brief:researching?null:roleBrief}});
   if(path.endsWith('/context/assessment'))return route.fulfill({json:careerFixture(route.request().url(),{status:'no_cv',cv_uploaded:false,skills_evaluated:false})});
   if(path.endsWith('/workspace/jd')){extractions++;currentRole='Data Engineer';return route.fulfill({json:careerFixture(route.request().url(),state())});}
   if(path.endsWith('/workspace/messages')){edits++;return route.fulfill({json:careerFixture(route.request().url(),{reply:edits===1?'Which part would you like to change: your role, skills or location?':'Your goal has been updated.',edit_status:'clarifying'})});}
@@ -54,7 +51,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await expect(page.getByRole('region',{name:'Who can apply'})).toContainText('Degree in a related discipline');
  researching=false;
  await page.getByRole('navigation',{name:'Career goal pages'}).getByRole('link',{name:'Interview preparation'}).click();
- await expect(page.locator('#interview-preparation')).toContainText(interviewBrief.summary);
+ await expect(page.locator('#interview-preparation')).toContainText('Technical interview · Coding exercise');
  await page.screenshot({path:test.info().outputPath('goal-overview-desktop.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

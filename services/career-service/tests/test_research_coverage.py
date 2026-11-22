@@ -11,7 +11,7 @@ from app.schemas.analysis import ResearchContext,ResearchSource
 from app.workflows.opportunity.domain import validate_claims
 from app.workflows.opportunity.sources import retain_useful
 from app.workflows.opportunity.topics import policy,settled
-from tests.test_opportunity import opportunity_flow,research,RUN_SEARCHES
+from tests.test_opportunity import opportunity_flow,query_group,query_topic,research,RUN_SEARCHES
 from tests.test_workspace import ingest
 
 
@@ -19,7 +19,7 @@ def test_pages_rejected_at_triage_are_never_read_and_better_second_results_are(o
     flow=opportunity_flow;search=flow[4];collect=search.collect_opportunity_query
     primary=flow[2];generate=primary.generate;triaged=[]
     async def sources(context,query,max_sources=5):
-        values=await collect(context,query);followup='additional' in query
+        values=await collect(context,query);followup=not query_group(query)
         return [values[0].model_copy(update={'url':values[0].url+f'/{followup}/{i}',
             'title':'Useful account' if followup else 'Unrelated listing',
             'evidence':values[0].evidence if followup else 'An unrelated company advert.'}) for i in range(max_sources)]
@@ -62,8 +62,8 @@ def test_a_factual_topic_backed_by_two_sites_is_not_searched_again(opportunity_f
     ingest(flow);_,result,_=research(flow)
     pay=[f for f in result['categories']['internship_insights']['findings'] if f['field']=='compensation']
     assert pay and len({sid for f in pay for sid in f['source_ids']})>=2
-    assert len([q for q in search.calls if q.endswith('compensation')])==1
-    assert len([q for q in search.calls if q.endswith('benefits')])==2
+    gaps=[query_topic(q) for q in search.calls if not query_group(q)]
+    assert 'compensation' not in gaps and 'benefits' in gaps
 
 
 def test_settling_needs_distinct_agreeing_sites_and_reviews_need_more():

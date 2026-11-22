@@ -8,6 +8,7 @@ from app.schemas.opportunity import ResearchCommand
 from app.schemas.opportunity_api import OpportunityView,EvidenceView,ResearchProgress
 from app.workflows.opportunity.sources import pool
 from app.repositories.question_memory import QuestionMemory
+from app.workflows.round_titles import prepare as prepare_round_titles
 
 router=APIRouter(prefix='/api/v1/career/goals',tags=['J12/J13 Opportunity Intelligence'])
 
@@ -41,6 +42,7 @@ async def presentation(request,account,goal):
     if not job['finished']:service.launch(job['_id'])
     return jsonable_encoder({**availability,'job_id':job['_id'],'career_target_id':goal.id,'status':job['status'],
         'research_id':record.id if record else None,'research_version':record.version if record else None,'sources':pool([s for values in job.get('retained_sources',job.get('evidence',{})).values() for s in values]),'categories':job['categories'],'finished':job['finished'],
+        'round_titles':await prepare_round_titles(request,account,job['categories'],job['finished']),
         'summary':job.get('summary',{}),'metrics':job.get('metrics',{}),'error_code':job.get('error_code'),'updated_at':job['updated_at'],
         'retry_after':max(0,int((job['next_attempt_at']-now()).total_seconds())) if not job['finished'] else None},by_alias=True)
 
@@ -83,7 +85,7 @@ async def read(goal_id:str,request:Request,research_id:str|None=None,account=Dep
         if not record or not record.intelligence:raise GoalError('Opportunity report was not found.',404)
         current=await thread(request.app.state.workspace_store.row,account)
         questions=question_views(await question_records(request,account,goal)) if current.get('workspace',{}).get('research_id')==record.id else []
-        return OpportunityView(available=service.available,availability_issues=service.availability_issues,job_id=None,career_target_id=goal.id,status=record.intelligence.status,finished=True,historical=True,research_id=record.id,research_version=record.version,categories=record.intelligence.categories,sources=record.sources,summary=record.intelligence.summary,updated_at=record.updated_at,question_research=questions)
+        return OpportunityView(available=service.available,availability_issues=service.availability_issues,job_id=None,career_target_id=goal.id,status=record.intelligence.status,finished=True,historical=True,research_id=record.id,research_version=record.version,categories=record.intelligence.categories,sources=record.sources,round_titles=await prepare_round_titles(request,account,record.intelligence.categories),summary=record.intelligence.summary,updated_at=record.updated_at,question_research=questions)
     return await presentation(request,account,goal)
 
 @router.post('/{goal_id}/opportunity-research',status_code=202,response_model=OpportunityView,response_model_exclude={'sources':{'__all__':{'evidence'}},'categories':{'__all__':{'findings':{'__all__':{'quotes'}}}}})

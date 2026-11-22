@@ -56,7 +56,7 @@ class OpportunityStore:
         retained={category:[s for s in sources if s['source_id'] in set(value.get('source_ids',[]))|{sid for finding in value['findings'] for sid in finding['source_ids']}][:MAX_CATEGORY_SOURCES] for category,value in categories.items()}
         row={'_id':identifier,'kind':'opportunity_job','owner':owner,'goal_id':goal.id,'goal_version':goal.version,'selection':selection,'session':session,'run':run,
              'digest':digest,'public':public,'context':context.model_dump(mode='json'),'status':'pending' if pending or summary_pending else cached.intelligence.status,
-             'finished':not (pending or summary_pending),'prefetched':bool(seed),'queries_planned':bool((seed or {}).get('queries_planned')),'categories':categories,'sources':sources,'queries':(seed or {}).get('queries',{}),'evidence':(seed or {}).get('evidence',{}),'history':(seed or {}).get('history',{}),'searches_used':(seed or {}).get('searches_used',0),
+             'metrics':(seed or {}).get('metrics',{}),'finished':not (pending or summary_pending),'prefetched':bool(seed),'queries_planned':bool((seed or {}).get('queries_planned')),'categories':categories,'sources':sources,'queries':(seed or {}).get('queries',{}),'group_queries':(seed or {}).get('group_queries',{}),'group_history':(seed or {}).get('group_history',{}),'evidence':(seed or {}).get('evidence',{}),'history':(seed or {}).get('history',{}),'searches_used':(seed or {}).get('searches_used',0),
              'retained_sources':retained,'requested':pending,'skills':rating_skills(goal),'skill_levels':[v.model_dump(mode='json') for v in cached.intelligence.skill_levels] if cached and not pending else [],'research_id':cached.id if cached else None,'created_at':now(),'updated_at':now(),'next_attempt_at':now(), 'summary':cached.intelligence.summary.model_dump() if cached else {}}
         waits=(seed or {}).get('waits',{})
         if waits and pending:
@@ -93,10 +93,19 @@ class OpportunityStore:
         result=self.rows.update_one({'_id':identifier,'worker_token':token},update)
         if not result.matched_count:raise GoalError('A newer worker replaced this research run.')
 
-    def reserve_search(self,identifier,token,limit):
+    def reserve_search(self,identifier,token,limit,share=None,protected=None):
         """Count one search against the run's allowance; False once the allowance is spent."""
-        return bool(self.rows.update_one({'_id':identifier,'worker_token':token,'$or':[{'searches_used':{'$lt':limit}},{'searches_used':{'$exists':False}}]},
-            {'$inc':{'searches_used':1}}).modified_count)
+        query={'_id':identifier,'worker_token':token,'$and':[{'$or':[{'searches_used':{'$lt':limit}},{'searches_used':{'$exists':False}}]}]}
+        increments={'searches_used':1}
+        if share:
+            counter,cap=share
+            if cap<=0:return False
+            query['$and'].append({'$or':[{counter:{'$lt':cap}},{counter:{'$exists':False}}]});increments[counter]=1
+        if protected:
+            reserved=[{'$cond':[{'$eq':[{'$ifNull':[f'$gap_complete.{category}',False]},True]},0,
+                {'$max':[0,{'$subtract':[cap,{'$ifNull':[f'$gap_searches.{category}',0]}]}]}]} for category,cap in protected.items()]
+            query['$expr']={'$gt':[{'$subtract':[limit,{'$ifNull':['$searches_used',0]}]},{'$sum':reserved}]}
+        return bool(self.rows.update_one(query,{'$inc':increments}).modified_count)
 
     def release(self,identifier,token):
         self.rows.update_one({'_id':identifier,'worker_token':token},{'$unset':{'worker_until':'','worker_token':''}})

@@ -13,7 +13,8 @@ from app.schemas.analysis import ResearchSource
 from app.schemas.opportunity import CATEGORIES,CategoryResult,OpportunityReport
 from app.workflows.jd_prefetch import prefetch
 from app.workflows.opportunity.domain import validate_claims
-from app.workflows.opportunity.topics import TOPICS,policy,topic_query
+from app.workflows.opportunity.queries import topic_queries
+from app.workflows.opportunity.topics import GROUP_CANDIDATES,GROUPS,TOPIC_GROUP,TOPICS,group_query,topic_query
 from tests.test_opportunity import opportunity_flow
 
 @pytest.mark.parametrize('company',['Example',None])
@@ -21,10 +22,10 @@ from tests.test_opportunity import opportunity_flow
  ('Investment Banking Summer Analyst','Finance','valuation accounting deal exposure'),
  ('Software Engineering Intern','Software Engineering','coding algorithms API projects'),
 ])
-def test_model_writes_every_topic_query_before_search(role,field,terms,company):
+def test_model_writes_every_group_query_before_search(role,field,terms,company):
     calls=[];plans=[]
     identity=JobIdentity(is_job_description=True,role=role,field=field,company=company,location='Singapore',employment_type='internship',evidence=['Synthetic JD'])
-    expected={topic:[f'Example {role} Singapore {topic} {terms}'] for topic in TOPICS}
+    expected={group:f'Example {role} Singapore {group} {terms}' for group in GROUPS}
     class AI:
         async def generate(self,request,operation,**kwargs):
             assert request.stage=='opportunity_plan'
@@ -38,11 +39,11 @@ def test_model_writes_every_topic_query_before_search(role,field,terms,company):
     engine=SimpleNamespace(ai=AI(),source=Search(),slots=asyncio.Semaphore(3),settings=SimpleNamespace(timeout_seconds=30,topic_searches=2,run_searches=40))
     result=asyncio.run(prefetch(engine,identity,'synthetic-owner','synthetic-revision'))
     public={'company':company,'role':role}
-    planned={topic:[*values,topic_query(public,topic)] for topic,values in expected.items()}
-    assert sorted(calls)==sorted((values[0],policy(topic).urls_per_search) for topic,values in planned.items())
-    assert result['queries_planned'] and result['queries']==planned and result['searches_used']==len(TOPICS)
-    assert all(' '.join(filter(None,[company,role])) in values[1] and 'Singapore' not in values[1] for values in planned.values())
-    assert set(result['history'])==set(TOPICS)
+    assert sorted(calls)==sorted((query,GROUP_CANDIDATES) for query in expected.values())
+    assert result['queries_planned'] and result['group_queries']==expected and result['searches_used']==len(GROUPS)
+    assert result['queries']==topic_queries(public,2) and set(result['queries'])==set(TOPICS)
+    assert all(' '.join(filter(None,[company,role])) in query and 'Singapore' not in query for values in result['queries'].values() for query in values)
+    assert set(result['group_history'])==set(GROUPS) and set(result['evidence'])==set(TOPICS)
     assert 'actual\nquestions' in PROMPTS['opportunity_plan'] or 'actual questions' in PROMPTS['opportunity_plan']
     assert 'historical' in PROMPTS['opportunity_plan']
 
@@ -50,13 +51,13 @@ def test_model_writes_every_topic_query_before_search(role,field,terms,company):
 def test_prefetch_stops_at_the_run_search_allowance():
     class AI:
         async def generate(self,request,operation,**kwargs):
-            return SimpleNamespace(data=QueryPlan(**{topic:[f'Example Analyst {topic}'] for topic in TOPICS}))
+            return SimpleNamespace(data=QueryPlan(**{group:f'Example Analyst {group}' for group in GROUPS}))
     calls=[]
     class Search:
         async def collect_opportunity_query(self,context,query,max_sources):calls.append(query);return []
     engine=SimpleNamespace(ai=AI(),source=Search(),slots=asyncio.Semaphore(3),settings=SimpleNamespace(timeout_seconds=30,topic_searches=2,run_searches=5))
     result=asyncio.run(prefetch(engine,JobIdentity(is_job_description=True,role='Analyst',company='Example'),'owner','revision'))
-    assert len(calls)==5 and result['searches_used']==5 and len(result['history'])==5
+    assert len(calls)==5 and result['searches_used']==5 and len(result['group_history'])==5
 
 
 def test_early_planner_failure_never_sends_template_queries():
@@ -66,14 +67,28 @@ def test_early_planner_failure_never_sends_template_queries():
         async def collect_opportunity_query(self,*args):pytest.fail('No unplanned searches allowed')
     engine=SimpleNamespace(ai=AI(),source=Search(),settings=SimpleNamespace(timeout_seconds=30,topic_searches=2,run_searches=40))
     result=asyncio.run(prefetch(engine,JobIdentity(is_job_description=True,role='Analyst'),'owner','revision'))
-    assert not result.get('queries_planned') and not result['history']
+    assert not result.get('queries_planned') and not result['group_history']
 
 
-def test_query_plan_requires_every_topic_and_bounded_nonempty_wording():
-    values={topic:['Example Analyst Singapore relevant query'] for topic in TOPICS}
-    for change in ({'compensation':[]},{'conversion_rate':['x'*181]},{'mentorship':['one query','two query','three query']}):
+def test_query_plan_requires_one_bounded_query_per_group():
+    values={group:'Example Analyst Singapore relevant query' for group in GROUPS}
+    assert QueryPlan(**values)
+    for change in ({'pay':''},{'conversion':'x'*181},{'culture':['one query','two query']}):
         with pytest.raises(ValidationError):QueryPlan(**{**values,**change})
-    with pytest.raises(ValidationError):QueryPlan(**{k:v for k,v in values.items() if k!='conversion_rate'})
+    with pytest.raises(ValidationError):QueryPlan(**{k:v for k,v in values.items() if k!='conversion'})
+
+
+def test_every_topic_is_searched_by_exactly_one_group():
+    assert sorted(t for topics in GROUPS.values() for t in topics)==sorted(TOPICS)
+    assert all(topic in GROUPS[TOPIC_GROUP[topic]] for topic in TOPICS)
+
+
+def test_group_query_is_a_plain_employer_role_search():
+    public={'company':'Optiver','role':'Quantitative Trading Intern'}
+    assert group_query(public,'pay')=='Optiver Quantitative Trading Intern intern salary benefits graduate pay'
+    assert group_query({'company':None,'role':''},'pay') is None and group_query(None,'pay') is None
+    assert len({group_query(public,g) for g in GROUPS})==len(GROUPS)
+    assert not {group_query(public,g) for g in GROUPS}&{topic_query(public,t,a) for t in TOPICS for a in (0,1)}
 
 
 def test_reports_require_five_explicit_statuses():

@@ -292,6 +292,7 @@ OpportunityReport *-- CategoryResult : five_independent_categories
 CategoryResult *-- Finding
 OpportunityReport *-- Summary : validated_finding_refs_only
 Finding --> ResearchSource : exact_quotes_and_source_ids
+note for Finding "Original round names remain evidence-bound. The API returns separate 1-3-word round_titles from research_contexts; only overlong labels receive one cached title-only model pass."
 
 class DiscoveryEvidence {
     +String research_id

@@ -46,7 +46,7 @@ def test_blank_output_limit_keeps_each_stage_safety_cap(stage):
     assert payload['max_tokens']==STAGE_OUTPUT_TOKENS[stage]
 
 
-@pytest.mark.parametrize('ceiling,expected',[(512,512),(32768,4096)])
+@pytest.mark.parametrize('ceiling,expected',[(512,512),(32768,1024)])
 def test_configured_output_limit_only_lowers_a_stage_cap(ceiling,expected):
     settings=AISettings(enabled=True,model='synthetic',api_key='synthetic',max_output_tokens=ceiling)
     assert AIAdapter(settings,None)._payload(AIInput(stage='opportunity_plan',context='{}'))['max_tokens']==expected

@@ -18,7 +18,7 @@ from app.ai.routing import ModelRouter,opportunity_models
 from app.clients.search_sources import SourceAPIs
 from app.main import create_app
 from app.workflows.opportunity.engine import availability_issues
-from app.workflows.opportunity.topics import TOPICS
+from app.workflows.opportunity.topics import GROUPS
 
 
 def test_research_uses_configured_model_even_when_chat_is_disabled():
@@ -27,7 +27,7 @@ def test_research_uses_configured_model_even_when_chat_is_disabled():
         def response(request):
             calls.append(request)
             assert request.headers['authorization']=='Bearer synthetic-key'
-            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps({topic:['Example Analyst Singapore '+topic] for topic in TOPICS})}}]})
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps({group:'Example Analyst Singapore '+group for group in GROUPS})}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as client:
             primary=AIAdapter(AISettings(enabled=True,api_key='synthetic-key'),client)
             context_model=AISettings(enabled=False,api_key='synthetic-key')

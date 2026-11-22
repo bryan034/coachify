@@ -133,6 +133,8 @@ legend bottom
   The model services share a per-account daily call allowance.
   Provider quotas and task context/output/time limits also apply.
   Opportunity Intelligence embeds typed categories/findings/summary in interview_research.
+  Overlong interview round names receive one title-only model pass, cached separately in research_contexts.
+  Original evidence and round names remain immutable; the API exposes separate short round_titles.
   Durable category jobs/receipts reuse research_contexts; no duplicate domain collections.
   The configured model plans, evaluates cited evidence and selects validated summaries using unchanged JSON models.
   Career, CV, Assessment and Roadmap use the OpenAI Python SDK with independent endpoint settings.

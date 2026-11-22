@@ -59,12 +59,13 @@ def retain_useful(category,findings,sources,relevant_ids=()):
     return [],[s.model_copy(update={'evidence':next((p['text'] for p in evidence_passages([s])),None)}) for s in checked]
 
 
-def choose_reads(due,found,flags,read):
+def choose_reads(due,found,flags,read,grouped=False):
     """Pages to read this round: per topic, its own search's triaged pages up to one search's allowance,
     then pages other topics' searches found for it, never beyond the topic's total read allowance."""
     chosen={};reads={}
     for topic in due:
         done=set(read.get(topic,[]));limit=policy(topic).max_urls-len(done)
+        if grouped:limit=min(limit,policy(topic).urls_per_search)
         mine=[s for s in found.get(topic,[]) if topic in flags.get(s.source_id,()) and s.source_id not in done]
         others=[s for t in due if t!=topic for s in found.get(t,[]) if topic in flags.get(s.source_id,()) and s.source_id not in done]
         picks=list({s.source_id:s for s in mine[:min(policy(topic).urls_per_search,limit)]}.values())
