@@ -175,9 +175,11 @@ Use the SMTP settings from your chosen provider; no particular paid provider or
 API key is required by the code. A real mailbox delivery test needs those settings.
 Production rejects plaintext/development SMTP and incomplete configuration.
 
-Sessions last 24 hours and survive same-tab reload in sessionStorage after server
-validation. Sign-out/account changes clear other tabs, which require explicit
-sign-in. Deploy behind HTTPS; the local Compose file is a development deployment,
+Sessions last 24 hours. Credentials use HttpOnly, SameSite=Strict cookies, Secure
+in production; only a public tab marker survives reload in sessionStorage after
+server validation. Deploy the frontend, Profile and gateway together for the cookie
+transport upgrade, reload NGINX, and sign in again. No database migration is needed.
+Sign-out/account changes clear other tabs, which require explicit sign-in. Deploy behind HTTPS; the local Compose file is a development deployment,
 not a complete public production hosting configuration. School lookups still need
 no API key or download.
 

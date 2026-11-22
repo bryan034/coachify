@@ -112,7 +112,7 @@ test('local account session loads and saves without Google', async () => {
   expect(saved.occupational_status).toBe('employed');
   const writes = vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'PATCH');
   expect(writes).toHaveLength(1);
-  expect(writes[0][1]?.headers).toHaveProperty('Authorization', 'Bearer synthetic-session-token');
+  expect(writes[0][1]?.headers).toHaveProperty('x-elo-session', 'synthetic-session-token');
 });
 
 test('configuration failure does not unlock saving or fall back to local mode', async () => {

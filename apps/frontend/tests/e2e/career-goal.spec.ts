@@ -2,7 +2,7 @@ import {careerFixture,test} from './career-fixture';
 import {expect,type Page} from '@playwright/test';
 async function workspace(page:Page){
  let sessionChecks=0;
- await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});
@@ -17,7 +17,7 @@ test('Career Goal supports three temporary inputs, recovery and responsive navig
  await workspace(page);const calls:string[]=[];
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;if(route.request().method()==='GET')return route.fulfill({json:careerFixture(route.request().url(),path.endsWith('/workspace')?{phase:'empty',current:{goal:null}}:{goals:[],reviews:[]})});calls.push(path);
-  expect(route.request().headers().authorization).toBe('Bearer synthetic-session');
+  expect(route.request().headers()['x-elo-session']).toBe('synthetic-session');
   if(path.endsWith('/url')){
    const {url}=route.request().postDataJSON();
    if(url.includes('blocked'))return route.fulfill({status:422,json:careerFixture(route.request().url(),{detail:'The information could not be extracted from this website. Copy and paste the job description instead.'})});

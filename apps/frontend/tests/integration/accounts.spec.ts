@@ -34,7 +34,7 @@ test('P09–P12 register, switch A/B, restore history, revoke and protect back/r
  await expect(page.getByText('Synthetic account B',{exact:true})).toHaveCount(0);
 });
 
-test('logout failure stays locked across reload and old retry does not clear B', async ({ page }) => {
+test('logout failure stays locked across reload and rejects an old retry without clearing B', async ({ page }) => {
  const a = await createLocalAccount(page,'Synthetic logout A');
  let fail = true;
  await page.route('**/api/v1/profile/auth/logout', route => fail ? route.fulfill({status:503,json:{detail:'Synthetic termination outage'}}) : route.continue());
@@ -46,7 +46,9 @@ test('logout failure stays locked across reload and old retry does not clear B',
  await expect(page.getByRole('button',{name:'Save background'})).toHaveCount(0);
  const b = await createLocalAccount(page,'Synthetic logout B');
  fail=false;
- expect((await page.request.post('/api/v1/profile/auth/logout',{headers:a.headers})).ok()).toBe(true);
+ const staleLogout = await page.request.post('/api/v1/profile/auth/logout',{headers:a.headers});
+ expect(staleLogout.status()).toBe(409);
+ expect(staleLogout.headers()['set-cookie']).toBeUndefined();
  expect((await b.get('/api/v1/profile')).ok()).toBe(true);
  await page.reload();
  await expect(page.getByRole('heading',{name:'Where are you right now?'})).toBeVisible();

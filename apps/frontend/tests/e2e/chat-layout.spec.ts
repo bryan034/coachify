@@ -6,7 +6,7 @@ for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:3
   await page.setViewportSize(viewport);
   await page.addInitScript(() => {
    localStorage.setItem('elo.access-epoch','1');
-   sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));
+   sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'}));
   });
   await page.route('**/api/v1/profile**', route => {
    const path=new URL(route.request().url()).pathname;

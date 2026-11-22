@@ -2,7 +2,7 @@ import {expect} from '@playwright/test';
 import {careerFixture,test} from './career-fixture';
 
 test('canonical goal confirmation is explicit, survives reload and must follow the current revision',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:{mode:'email',google_enabled:false}});

@@ -4,7 +4,7 @@
   "private": true,
   "description": "elo Next.js workspace UI with profile APIs, Vitest and Playwright.",
   "dependencies": {
-    "next": "16.4.3",
+    "next": "16.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-markdown": "^10.1.0"
@@ -19,7 +19,7 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.4.3",
+    "eslint-config-next": "16.4.6",
     "jsdom": "30.1.3",
     "typescript": "5.9.3",
     "vitest": "5.0.5"

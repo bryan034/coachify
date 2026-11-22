@@ -3,7 +3,7 @@ import { careerFixture } from './career-fixture';
 
 test('Home shows the saved comparison read-only and sends the person to Career Goal to compare', async ({ page }, testInfo) => {
  let compared = false; const commands: string[] = [];
- await page.addInitScript(() => { localStorage.setItem('elo.access-epoch','1'); sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'})); });
+ await page.addInitScript(() => { localStorage.setItem('elo.access-epoch','1'); sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'})); });
  await page.route('**/api/v1/**', route => {
   const path = new URL(route.request().url()).pathname;
   const method = route.request().method();

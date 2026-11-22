@@ -3,6 +3,12 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import {AgentProgress,AgentMarkdown,AgentReply,AgentRecovery,formatWait} from './agent-message';
 
 describe('assistant Markdown',()=>{
+ it('rejects backslash links that browsers interpret as another origin',()=>{
+  render(<AgentMarkdown>{'[bad](/\\\\attacker.test/path)\n\n[local](/cv)\n\n[section](#skills)'}</AgentMarkdown>);
+  expect(screen.queryByRole('link',{name:'bad'})).toBeNull();
+  expect(screen.getByRole('link',{name:'local'})).toHaveAttribute('href','/cv');
+  expect(screen.getByRole('link',{name:'section'})).toHaveAttribute('href','#skills');
+ });
  it('renders emphasis, headings, lists and code instead of literal markers',()=>{
   const {container}=render(<AgentMarkdown>{'## Preparation\n\nLearn **SQL** and *Python*.\n\n- Practise joins\n- Build an API\n\nUse `SELECT`.'}</AgentMarkdown>);
   expect(screen.getByRole('heading',{name:'Preparation'})).toBeInTheDocument();

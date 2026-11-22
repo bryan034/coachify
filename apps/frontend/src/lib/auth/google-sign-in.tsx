@@ -1,6 +1,7 @@
 "use client";
 import Script from 'next/script';
 import { useCallback, useRef, useState } from 'react';
+import { useSecurityNonce } from '@/components/security-nonce';
 
 type GoogleIdentity = { accounts: { id: {
   initialize: (options: { client_id: string; nonce?: string; callback: (response: { credential: string }) => void }) => void;
@@ -10,6 +11,7 @@ type GoogleIdentity = { accounts: { id: {
 declare global { interface Window { google?: GoogleIdentity } }
 
 export function GoogleSignIn({ onCredential, nonce }: { nonce: string; onCredential: (credential: string) => void }) {
+  const scriptNonce = useSecurityNonce();
   const button = useRef<HTMLDivElement>(null);
   const [error, setError] = useState('');
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -21,7 +23,7 @@ export function GoogleSignIn({ onCredential, nonce }: { nonce: string; onCredent
   }, [clientId, onCredential, nonce]);
   if (!clientId) return <p role="status">Sign-in is not configured yet. Contact your elo administrator to enable saving.</p>;
   return <>
-    <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={render}
+    <Script src="https://accounts.google.com/gsi/client" nonce={scriptNonce} strategy="afterInteractive" onReady={render}
       onError={() => setError('Google sign-in could not load. Check your connection and reload.')} />
     <div ref={button} />{error && <p role="alert">{error}</p>}
   </>;

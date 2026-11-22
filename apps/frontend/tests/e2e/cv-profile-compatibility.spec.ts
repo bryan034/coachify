@@ -14,7 +14,7 @@ async function workspace(page: Page) {
   cv.clarifications = [{ id: 'contribution', item_id: cv.items[0].id, kind: 'project', question: 'Which Python work was yours?', uncertainty_key: 'contribution', status: 'unanswered', answer: null, career_target_id: confirmedTarget.id, career_target_version: confirmedTarget.version }];
   await page.addInitScript(() => {
     localStorage.setItem('elo.access-epoch', '1');
-    sessionStorage.setItem('elo.session', JSON.stringify({ token: 'synthetic-session', epoch: '1' }));
+    sessionStorage.setItem('elo.session', JSON.stringify({ marker: 'synthetic-session', epoch: '1' }));
   });
   await page.route('**/api/v1/profile**', async route => {
     const path = new URL(route.request().url()).pathname;

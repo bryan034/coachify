@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {careerFixture} from './career-fixture';
 
 test('role-relative skill progress stays readable on desktop and mobile',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   const value=path.endsWith('/auth-config')?{mode:'email',google_enabled:false}:path.endsWith('/auth/session')?{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'}:{version:1,onboarding_complete:true,occupational_status:'employed',education:{}};

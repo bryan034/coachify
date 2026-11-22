@@ -1,4 +1,4 @@
-/** User-facing wording for failures. Technical detail stays in the console and Network tab. */
+/** User-facing wording for failures. */
 
 /** True when a request stopped because the page navigated away or unmounted. Never show these. */
 export function isAbortError(cause: unknown): boolean {
@@ -32,14 +32,12 @@ export function friendlyCode(code: string | null | undefined): string | null {
 
 /**
  * The message to show for a failure, or null when nothing should be shown (an aborted request).
- * Logs the original so developers can still see it.
  */
 export function friendlyError(cause: unknown, fallback: string, code?: string | null): string | null {
  if (isAbortError(cause)) return null;
  const raw = cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : '';
  const status = cause && typeof cause === 'object' && 'code' in cause && typeof (cause as { code: unknown }).code === 'string' ? (cause as { code: string }).code : null;
  const mapped = friendlyCode(code ?? status);
- if (raw || mapped) console.warn('[elo]', code ?? status ?? '', raw || cause);
  if (mapped) return mapped;
  if (!raw) return fallback;
  if (NETWORK.test(raw)) return 'We couldn’t reach elo. Check your connection and try again.';

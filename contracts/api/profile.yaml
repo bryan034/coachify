@@ -2096,7 +2096,8 @@
             "maxLength": 128,
             "minLength": 32,
             "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Session Token"
+            "title": "Session Token",
+            "description": "Client session marker in X-Elo-Browser: 1 mode; the server derives the credential and returns it only in an HttpOnly cookie. Otherwise the caller-supplied bearer for non-browser API clients."
           },
           "name": {
             "anyOf": [
@@ -3877,7 +3878,8 @@
             "maxLength": 128,
             "minLength": 32,
             "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Session Token"
+            "title": "Session Token",
+            "description": "The same client session marker (browser cookie mode) or bearer (non-browser mode) supplied at account completion."
           }
         },
         "additionalProperties": false,
@@ -3910,7 +3912,8 @@
             "maxLength": 128,
             "minLength": 32,
             "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Session Token"
+            "title": "Session Token",
+            "description": "The same client session marker (browser cookie mode) or bearer (non-browser mode) supplied at account completion."
           },
           "challenge_id": {
             "type": "string",

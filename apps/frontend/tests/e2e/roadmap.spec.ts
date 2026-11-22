@@ -5,7 +5,7 @@ import { blankPlanner, config, review, roadmap, runway, workspace } from '../fix
 function initial(): Workspace { return workspace({ planner: { ...blankPlanner(), inputs: { goal: { role: 'Backend developer', target_type: 'specific_job', skills: [{ name: 'Python' }] }, cv: { id: 'synthetic-cv', name: 'synthetic-cv.docx' }, skills: [{ ref: 'cv:skill', name: 'Git', kind: 'skill', text: 'Used Git on a synthetic project.' }], experience: [{ ref: 'cv:project', name: 'Synthetic API project', kind: 'project', text: 'Built an API.' }], skill_groups: { Git: 'Tools' } } } }); }
 
 async function signIn(page: Page) {
- await page.addInitScript(() => { localStorage.setItem('elo.access-epoch', '1'); sessionStorage.setItem('elo.session', JSON.stringify({ token: 'synthetic-session', epoch: '1' })); });
+ await page.addInitScript(() => { localStorage.setItem('elo.access-epoch', '1'); sessionStorage.setItem('elo.session', JSON.stringify({ marker: 'synthetic-session', epoch: '1' })); });
  await page.route('**/api/v1/profile**', route => { const path = new URL(route.request().url()).pathname;
   return route.fulfill({ json: path.endsWith('/auth-config') ? { mode: 'email', google_enabled: false } : path.endsWith('/auth/session') ? { id: 'synthetic-owner', name: 'Synthetic User', email_verified: true, provider: 'email' } : { version: 1, onboarding_complete: true, occupational_status: 'employed', education: {} } }); });
 }

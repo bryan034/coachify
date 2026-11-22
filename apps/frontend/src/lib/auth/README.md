@@ -9,8 +9,12 @@ six-digit code, then submits it with a new password. A successful reset returns 
 sign-in and invalidates existing sessions; it preserves saved account/profile data.
 Failures retain form inputs for retry. Recovery requires the account's email address.
 Successful access creates a elo session; protected APIs validate that session
-and derive the owner on the server. The frontend keeps its bearer and access epoch
-in tab-scoped session storage. Cross-tab epoch changes clear the old account's
+and derive the owner on the server. The frontend keeps only a public session marker and access epoch
+in tab-scoped session storage. Profile derives the bearer server-side and sets it
+in an HttpOnly, SameSite=Strict cookie, Secure in production. The gateway requires
+the matching public marker and `X-Elo-Browser: 1` before translating the cookie to
+a bearer. Cookie-only cross-site requests cannot authenticate. Legacy stored
+bearers are discarded and require a fresh sign-in. Cross-tab epoch changes clear the old account's
 private state. Google credentials are used for the access exchange, rather than
 being the credential for every subsequent workspace request.
 

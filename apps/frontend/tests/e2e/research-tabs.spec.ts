@@ -8,7 +8,7 @@ const goal={_id:'0'.repeat(24),version:1,target_type:'specific_job',role:'GenAI 
 async function mockCareer(page:Page,requests:{researchWrites?:number;summaryCalls?:number}){
  const interview=structuredClone(interviewResearch);
  for(const finding of interview.findings)if(finding.round_number===2)finding.round_name='Technical interview with the hiring manager';
- await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});

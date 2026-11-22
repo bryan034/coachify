@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('P13 uses canonical completion, guards deep links and distinguishes profile outage',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'}));});
  let complete=false;let outage=false;
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
@@ -43,7 +43,7 @@ test('P13 uses canonical completion, guards deep links and distinguishes profile
 async function previewSetup(page: import('@playwright/test').Page) {
  await page.addInitScript(() => {
   localStorage.setItem('elo.access-epoch','1');
-  sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-preview',epoch:'1'}));
+  sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-preview',epoch:'1'}));
   const state = window as unknown as Window & { setupAnimations: string[] };
   state.setupAnimations = [];
   document.addEventListener('animationstart',event => state.setupAnimations.push(event.animationName));

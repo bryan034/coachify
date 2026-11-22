@@ -24,3 +24,28 @@ reload the gateway after changing its mounted `nginx.conf`.
 Jobs requests have a 60-second upstream timeout for bounded live employer-board aggregation. No scheduled catalogue worker is required.
 
 The active gateway also forwards `/api/v1/dashboard` to the stateless dashboard service on the private backend network, with a 60-second upstream timeout. The dashboard validates the owner session and reads Roadmap and Assessment through their APIs.
+
+## Browser session boundary
+
+Profile sets `elo_session=<public marker>.<server credential>` with HttpOnly,
+SameSite=Strict and `/api/v1` scope; production also sets Secure and requires HTTPS.
+For `X-Elo-Browser: 1` requests, every API location derives Authorization only from
+a correctly shaped cookie whose marker matches `X-Elo-Session`. Supplied browser
+Authorization headers are ignored. Cookies alone and mismatched/stale markers do
+not authenticate. The custom headers require a CORS preflight from foreign origins;
+the gateway/services do not enable cross-origin browser API access. Do not add
+permissive credentialed CORS. Explicit bearer clients without the browser header
+and private service-to-service calls retain their existing protocol.
+
+Deploy the Profile, frontend and gateway changes together, then reload NGINX.
+Existing browser sessions must sign in again. No database migration is needed.
+
+Verify cookie/marker matching, CSRF rejection and bearer compatibility without the
+application stack or private configuration:
+
+```sh
+python3.12 infrastructure/testing/gateway_browser_session_smoke.py
+```
+
+This uses disposable Docker resources with synthetic upstreams and removes them on
+exit. It needs Docker plus the `nginx:alpine` and `python:3.12-slim` images.
