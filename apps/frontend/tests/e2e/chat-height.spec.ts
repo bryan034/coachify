@@ -5,7 +5,7 @@ for(const [name,path] of [['career chat','/career-goal/chat'],['job description 
  for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:820,height:1100},{width:390,height:844}]){
   test(`${name} fits the conversation within a ${viewport.width}x${viewport.height} screen`,async({page})=>{
    await page.setViewportSize(viewport);
-   await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+   await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'}));});
    await page.route('**/api/v1/profile**',route=>{
     const url=route.request().url(),path=new URL(url).pathname;
     if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(url,{mode:'email',google_enabled:false,development_tools_enabled:true})});

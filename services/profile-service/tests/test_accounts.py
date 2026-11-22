@@ -63,6 +63,31 @@ def register(client, name='Synthetic Account'):
     return response.json(), {'Authorization': 'Bearer ' + body['session_token']}, body, attempt
 
 
+def test_browser_registration_verification_and_logout_never_expose_the_bearer(setup):
+    client, repository = setup
+    attempt = begin(client)
+    browser = {'X-Elo-Browser': '1'}
+    body = {'flow_id': attempt['flow_id'], 'attempt_id': attempt['attempt_id'],
+            'session_token': token_urlsafe(32), 'email': uuid4().hex + '@example.test', 'password': PASSWORD}
+    pending = client.post(BASE + '/auth/complete', json=body, headers=browser)
+    assert pending.status_code == 200 and 'set-cookie' not in pending.headers
+    verification = {key: body[key] for key in ('flow_id', 'attempt_id', 'session_token')}
+    verification.update(challenge_id=pending.json()['challenge_id'], code=repository.mailer.messages[-1][1])
+    response = client.post(BASE + '/auth/verify-email', json=verification, headers=browser)
+    assert response.status_code == 200
+    cookie = response.cookies['elo_session']
+    marker, bearer_token = cookie.split('.')
+    assert marker == body['session_token'] and bearer_token != marker
+    assert bearer_token not in response.text
+    assert 'HttpOnly' in response.headers['set-cookie']
+    assert client.post(BASE + '/auth/verify-email', json=verification, headers=browser).cookies['elo_session'] == cookie
+    assert client.get(BASE, headers={'Authorization': 'Bearer ' + marker}).status_code == 401
+    private_headers = {**browser, 'Authorization': 'Bearer ' + bearer_token}
+    assert client.get(BASE, headers=private_headers).status_code == 200
+    assert client.post(BASE + '/auth/logout', headers=private_headers).status_code == 200
+    assert client.get(BASE, headers=private_headers).status_code == 401
+
+
 def test_registration_retries_names_and_private_ownership(setup):
     client, repo = setup
     assert client.get(BASE).status_code == 401

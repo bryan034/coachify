@@ -11,7 +11,7 @@ export function AgentMarkdown({children}:{children:string}){
   a:({href,children})=>{
    const source=href&&sourceLink(href);
    if(source)return <a className="agent-citation" href={source.url} title={source.url} target="_blank" rel="noopener noreferrer">{source.domain}</a>;
-   return href&&/^(\/(?!\/)|#)/.test(href)?<a href={href}>{children}</a>:<span>{children}</span>;
+   return href&&/^(\/(?!\/)|#)/.test(href)&&!/[\\\u0000-\u0020\u007f]|%(?:5c|0[0-9a-f]|1[0-9a-f]|7f)/i.test(href)?<a href={href}>{children}</a>:<span>{children}</span>;
   },
  }}>{humaniseText(children)}</Markdown></div>;
 }

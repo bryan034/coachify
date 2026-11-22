@@ -1,4 +1,5 @@
-const base = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
+import { browserRequest } from './browser-request';
+const base = '/api/v1';
 
 export type JobType = 'internship' | 'graduate' | 'full_time' | 'part_time' | 'contract' | 'temporary' | 'unknown';
 export type Workplace = 'onsite' | 'hybrid' | 'remote' | 'unknown';
@@ -29,7 +30,7 @@ const isOptions = (value: unknown) => Array.isArray(value) && value.every(o => t
 const isApplication = (value: Application) => typeof value?.id === 'string' && Number.isInteger(value?.version) && typeof value?.status === 'string' && typeof value?.snapshot?.title === 'string';
 
 async function request(path: string, token: string, init: RequestInit = {}): Promise<unknown> {
- const response = await fetch(`${base}/jobs${path}`, { cache: 'no-store', ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+ const response = await fetch(`${base}/jobs${path}`, browserRequest({ cache: 'no-store', ...init, headers: { 'Content-Type': 'application/json' } }, token));
  if (response.status === 204) return null;
  const value = await response.json().catch(() => ({}));
  if (!response.ok) {

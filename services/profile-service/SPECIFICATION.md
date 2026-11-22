@@ -245,7 +245,15 @@ truth. The [README](README.md) lists available endpoints, and the
 - Start access using random `flow_id`/`attempt_id`, an increasing generation and
   `intent`. The server returns a nonce. Complete with those IDs plus a random
   `session_token`, and either email/password (optional display name on registration)
-  or a Google credential. The browser generates 256-bit secrets with Web Crypto.
+  or a Google credential. The browser generates flow/attempt identifiers and a random
+  public session marker with Web Crypto. With `X-Elo-Browser: 1`, `session_token`
+  carries that marker; Profile derives the actual bearer using domain-separated
+  HMAC-SHA256 over the flow, attempt and marker with the server OTP hash secret.
+  Completion/verification retries derive the same credential, preserving existing
+  CAS/idempotency checks. Successful verified access sets only an HttpOnly,
+  SameSite=Strict `/api/v1` cookie (Secure in production); the bearer never appears
+  in a JSON response or frontend storage. Non-browser clients retain explicit
+  caller-supplied bearers without setting cookies.
   Provider attempts initially last ten minutes; a proved credential awaiting email
   verification has a 30-minute access window and TTL; completed flows retain a
   two-day TTL to cover their 24-hour sessions. New generations supersede old attempts.
@@ -274,7 +282,12 @@ truth. The [README](README.md) lists available endpoints, and the
   to retry with the identical verification request. Only the winning code can recover
   that session; consumption cannot be replayed to create a different one.
 - elo sessions last 24 hours and store only SHA-256 secret hashes server-side.
-  Bearers live in tab-scoped sessionStorage; private API responses use no-store.
+  Only public markers live in tab-scoped sessionStorage; private API responses use no-store.
+  The gateway converts cookie credentials to private API bearers only when the
+  browser custom header and matching marker are present. Mismatched old-tab requests
+  cannot run as a newly signed-in account. Logout clears the cookie only after
+  revocation, and a stale marker cannot clear a different current cookie. Legacy
+  bearer-based browser storage is discarded and requires sign-in again.
   Sessions are validated before private content, after restoration/focus, every 30
   seconds and at their expiry timer. Incompatible modes, pending email/migration,
   expired or revoked sessions are rejected server-side. Existing name-only/old-mode

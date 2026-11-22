@@ -33,8 +33,8 @@ export async function createLocalAccount(page: Page, name = 'Synthetic test acco
  await page.getByRole('button',{name:'Verify email',exact:true}).click();
  await expect(page).toHaveURL(/\/onboarding$/);
  await expect(page.getByRole('heading', { name: 'Where are you right now?' })).toBeVisible();
- const token = await page.evaluate(() => JSON.parse(sessionStorage.getItem('elo.session')!).token as string);
- const headers = { Authorization: `Bearer ${token}` };
+ const token = await page.evaluate(() => JSON.parse(sessionStorage.getItem('elo.session')!).marker as string);
+ const headers = { 'X-Elo-Browser': '1', 'X-Elo-Session': token };
  return {
   token,headers,email,password:TEST_PASSWORD,
   get: (path: string) => page.request.get(path, { headers }),

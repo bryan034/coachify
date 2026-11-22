@@ -97,7 +97,7 @@ describe('Search Jobs',()=>{
   expect(screen.getByText('Closes Tue, 1 Dec 2026')).toBeVisible();
   expect(screen.getByText('2 jobs in Singapore')).toBeVisible();
   const headers=(vi.mocked(fetch).mock.calls[0][1] as RequestInit).headers as Record<string,string>;
-  expect(headers.Authorization).toBe('Bearer synthetic-token');
+  expect(headers['x-elo-session']).toBe('synthetic-token');
  });
  it('searches nothing on load, and sends each chosen filter only when Search is pressed',async()=>{
   render(<SearchJobs/>);

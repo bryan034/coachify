@@ -1,11 +1,12 @@
+import { browserRequest } from './browser-request';
 import { ApiError } from './profile';
 import {careerPreview,record,validCareerResponse} from './career-response';
 export type CareerPreview = { kind: 'url' | 'document'; text: string; source_name: string; source_url?: string | null; notices: string[] };
 export async function importCareer(path: 'url' | 'document', body: string | FormData, token: string, signal: AbortSignal): Promise<CareerPreview> {
- const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/career/imports/${path}`, {
+ const response = await fetch(`/api/v1/career/imports/${path}`, browserRequest({
   method: 'POST', body, signal, cache: 'no-store',
-  headers: { Authorization: `Bearer ${token}`, ...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {}) },
- });
+  headers: { ...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {}) },
+ }, token));
  const result = await response.json().catch(() => ({}));
  if (!response.ok) {
   if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired', { detail: token }));
@@ -40,9 +41,9 @@ export class CareerApiError extends ApiError {
  }
 }
 export async function careerApi<T>(path:string,token:string, options:RequestInit={}):Promise<T>{
- const response=await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/career${path}`,{
-  ...options,cache:'no-store',headers:{Authorization:`Bearer ${token}`,...(typeof options.body==='string'?{'Content-Type':'application/json'}:{}),...options.headers},
- });
+ const response=await fetch(`/api/v1/career${path}`,browserRequest({
+  ...options,cache:'no-store',headers:{...(typeof options.body==='string'?{'Content-Type':'application/json'}:{}),...options.headers},
+ }, token));
  const body:unknown=await response.json().catch(()=>null);
  if(!response.ok){
   if(response.status===401)window.dispatchEvent(new CustomEvent('elo:expired',{detail:token}));

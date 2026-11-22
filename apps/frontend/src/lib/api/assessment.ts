@@ -1,5 +1,6 @@
+import { browserRequest } from './browser-request';
 import type { Assessment } from '@/features/roadmap/types';
-const base = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
+const base = '/api/v1';
 const statuses = ['supported', 'partial', 'uncertain', 'confirmed_shortfall'] as const;
 export type SkillMatch = typeof statuses[number] | 'covered';
 type Outcome = { ref?: unknown; match_status?: unknown };
@@ -10,7 +11,7 @@ type Group = { operator?: unknown; match_status?: unknown; requirement_refs?: un
  */
 export async function currentSkillMatches(token: string, signal: AbortSignal): Promise<Record<string, SkillMatch> | null> {
  try {
-  const response = await fetch(`${base}/assessments/current`, { cache: 'no-store', signal, headers: { Authorization: `Bearer ${token}` } });
+  const response = await fetch(`${base}/assessments/current`, browserRequest({ cache: 'no-store', signal }, token));
   if (!response.ok) return null;
   const value = await response.json();
   if (value?.stale !== false || !Array.isArray(value.result?.job_skill_gaps)) return null;
@@ -28,8 +29,8 @@ export async function currentSkillMatches(token: string, signal: AbortSignal): P
 
 /** Owner-scoped commands retain UUID and expected revision on ambiguous transport failures. */
 export async function assessmentApi<T>(path: string, token: string, body?: unknown, signal?: AbortSignal): Promise<T> {
- const response = await fetch(`${base}/assessments${path}`, {method: body === undefined ? 'GET' : 'POST', cache: 'no-store', signal,
- headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'}, ...(body === undefined ? {} : {body: JSON.stringify(body)})});
+ const response = await fetch(`${base}/assessments${path}`, browserRequest({method: body === undefined ? 'GET' : 'POST', cache: 'no-store', signal,
+ headers: {'Content-Type': 'application/json'}, ...(body === undefined ? {} : {body: JSON.stringify(body)})}, token));
  const value = await response.json();
  if (!response.ok) {
   if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired', {detail: token}));

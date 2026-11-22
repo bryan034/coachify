@@ -14,7 +14,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
   if(path==='/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
   return route.fallback();
  });
- await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/capabilities'))return route.fallback();
@@ -86,7 +86,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
 });
 
 test('the grouped skill list supports keyboard disclosure, long lists, confirmed layout and small screens',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   const value=path.endsWith('/auth-config')?{mode:'email',google_enabled:false}:path.endsWith('/auth/session')?{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'}:{version:1,onboarding_complete:true,occupational_status:'employed',education:{}};

@@ -83,7 +83,9 @@ supply inputs; they do not generate a roadmap.
 | `POST /api/v1/profile/auth/forgot-password` | Email a password reset code for an existing verified email/password account. |
 | `POST /api/v1/profile/auth/reset-password` | Set a new password using the code; invalidate old sessions and credential attempts. |
 
-Private requests use a elo session bearer. Email accounts sign in with email
+Browser access uses server-derived HttpOnly session cookies through the gateway,
+with matching public tab markers and custom headers for CSRF protection. Production
+cookies require HTTPS. Non-browser and internal clients retain explicit bearers. Email accounts sign in with email
 and password (8–128 characters for registration and password reset). The current local configuration disables Google sign-in. New registrations
 accept any valid email address and require an emailed OTP before an account is created.
 Pending details live in the expiring verification attempt; resume that attempt or

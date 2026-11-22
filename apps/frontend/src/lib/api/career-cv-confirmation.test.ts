@@ -6,7 +6,7 @@ const respond=(body:unknown)=>vi.stubGlobal('fetch',vi.fn().mockResolvedValue(ne
 afterEach(()=>vi.unstubAllGlobals());
 it('uses authenticated no-store requests and exact confirmation revisions',async()=>{
  respond(value);const signal=new AbortController().signal;await getCvGoalConfirmation('token',signal);
- expect(fetch).toHaveBeenCalledWith('/api/v1/career/goals/current/cv-confirmation',expect.objectContaining({cache:'no-store',headers:{Authorization:'Bearer token'},signal}));
+ expect(fetch).toHaveBeenCalledWith('/api/v1/career/goals/current/cv-confirmation',expect.objectContaining({cache:'no-store',headers:{'x-elo-browser':'1','x-elo-session':'token'},signal}));
  const body={expected_goal_id:id,expected_goal_version:2,expected_selection_version:3,mutation_id:'request'};respond(value);await confirmCvGoal(body,'token',signal);
  expect(fetch).toHaveBeenLastCalledWith('/api/v1/career/goals/current/cv-confirmation',expect.objectContaining({method:'POST',body:JSON.stringify(body)}));
 });

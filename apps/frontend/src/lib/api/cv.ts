@@ -1,3 +1,4 @@
+import { browserRequest } from './browser-request';
 import type { SkillsProfile, ProfileEntry, ProfileSkill, IntakeField, ReviewFact, InterviewProgress, InterviewTopic, SkillEstimate, SkillLevelInfo, SkillList, ListedSkill, SkillListSource } from '@/features/cv-ingestion/types';
 import { ApiError } from './profile';
 import type { CvDetail, CvList, CvPolicy, CvSummary, CvItem, CvSkill, Declaration, Declarations, DeclarationInput, Evidence, ItemInput, Clarification, ConfirmedTargetContext, PrepareQuestionsInput, Questions, Selection, SkillSource, Interpretation, InterpretationClaim, TargetCondition, Reconciliation, ReconciliationInput, DeclarationLinks, DeclarationLink, CvMatch, CvConversation, ConversationAction, ConversationMessage, ConversationInput, ConversationDecision, ConversationList } from '@/features/cv-ingestion/types';
@@ -62,7 +63,7 @@ export class CvApiError extends ApiError {
  constructor(message: string, status: number, public code?: string) { super(message,status); }
 }
 async function request<T>(path: string, token: string, signal: AbortSignal, guard: Guard<T>, init: RequestInit = {}): Promise<T> {
- const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}${path}`, { ...init, signal:AbortSignal.any([signal,AbortSignal.timeout(45_000)]), cache:'no-store', headers:{Authorization:`Bearer ${token}`,...(init.body && !(init.body instanceof FormData) ? {'Content-Type':'application/json'} : {}),...init.headers} });
+ const response = await fetch(`/api/v1${path}`, browserRequest({ ...init, signal:AbortSignal.any([signal,AbortSignal.timeout(45_000)]), cache:'no-store', headers:{...(init.body && !(init.body instanceof FormData) ? {'Content-Type':'application/json'} : {}),...init.headers} }, token));
  const value: unknown = await response.json().catch(()=>null);
  if (!response.ok) {
   if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired',{detail:token}));

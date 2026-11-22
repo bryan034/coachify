@@ -16,11 +16,11 @@ describe('friendlyError', () => {
  it('shows nothing for aborted requests', () => {
   expect(friendlyError(new Error('signal is aborted without reason'), 'Could not load.')).toBeNull();
  });
- it('replaces technical model validation messages and logs the original', () => {
+ it('replaces technical model validation messages without copying diagnostics to the console', () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   expect(friendlyError(new Error('Use the source-scoped personal skill claim, not its whole team/project item.'), 'Could not finish.', 'assessment_output')).toBe('We couldn’t compare your skills this time. Try again.');
   expect(friendlyError(new Error('Chat interpretation is unavailable. Your message is saved; retry.'), 'We couldn’t process your answer.')).toBe('We couldn’t process your answer.');
-  expect(warn).toHaveBeenCalled();
+  expect(warn).not.toHaveBeenCalled();
  });
  it('turns network failures into one actionable line', () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {});

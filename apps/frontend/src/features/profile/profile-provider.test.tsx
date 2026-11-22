@@ -40,6 +40,15 @@ beforeEach(()=>{
  }));
 });
 afterEach(()=>{vi.useRealTimers();vi.restoreAllMocks();});
+test('discards legacy browser bearers before an unavailable configuration request can retain them',()=>{
+ sessionStorage.setItem('elo.session',JSON.stringify({token:'legacy-bearer',epoch:'1'}));
+ sessionStorage.setItem('elo.pending-logout','legacy-bearer');
+ vi.stubGlobal('fetch',vi.fn(()=>new Promise<Response>(()=>{})));
+ render(<ProfileProvider><Probe/></ProfileProvider>);
+ expect(sessionStorage.getItem('elo.session')).toBeNull();
+ expect(sessionStorage.getItem('elo.pending-logout')).toBeNull();
+ expect(vi.mocked(fetch).mock.calls.every(([,init])=>!JSON.stringify(init).includes('legacy-bearer'))).toBe(true);
+});
 test('signed-out entry never loads a private profile; registration and logout clear state',async()=>{
  render(<ProfileProvider><Probe/></ProfileProvider>);
  await waitFor(()=>expect(screen.getByTestId('loading')).toHaveTextContent('false'));
@@ -49,7 +58,7 @@ test('signed-out entry never loads a private profile; registration and logout cl
  fireEvent.click(screen.getByText('Logout',{exact:true}));
  expect(screen.getByTestId('account')).toHaveTextContent('signed out');
  expect(screen.getByTestId('profile')).toHaveTextContent('empty');
- await waitFor(()=>expect(sessionStorage.getItem('elo.pending-logout')).toBeNull());
+ await waitFor(()=>expect(sessionStorage.getItem('elo.pending-logout-marker')).toBeNull());
 });
 test('late profile response after logout cannot restore private state',async()=>{
  let release:(response:Response)=>void=()=>{};
@@ -75,7 +84,7 @@ test('failed logout stays locked across remount and offers termination retry',as
  await screen.findByText(/Sign-out is pending/);
  expect(requests.some(url=>url.endsWith('/auth/session')||url.endsWith('/profile'))).toBe(false);
  failedLogout=false;fireEvent.click(screen.getByText('Retry logout'));
- await waitFor(()=>expect(sessionStorage.getItem('elo.pending-logout')).toBeNull());
+ await waitFor(()=>expect(sessionStorage.getItem('elo.pending-logout-marker')).toBeNull());
  expect(screen.getByTestId('profile')).toHaveTextContent('empty');
 });
 test('cross-tab access change clears the account and ignores earlier session errors',async()=>{
@@ -83,7 +92,7 @@ test('cross-tab access change clears the account and ignores earlier session err
  await waitFor(()=>expect(screen.getByTestId('loading')).toHaveTextContent('false'));
  fireEvent.click(screen.getByText('Create',{exact:true}));
  await waitFor(()=>expect(screen.getByTestId('profile')).toHaveTextContent('Private course'));
- const previous = JSON.parse(sessionStorage.getItem('elo.session')!).token;
+ const previous = JSON.parse(sessionStorage.getItem('elo.session')!).marker;
  fireEvent.click(screen.getByText('Logout',{exact:true}));
  fireEvent.click(screen.getByText('Create',{exact:true}));
  await waitFor(()=>expect(screen.getByTestId('profile')).toHaveTextContent('Private course'));
@@ -205,7 +214,7 @@ test.each([
 
 test('malformed initial session readback retains credentials for an explicit connection retry',async()=>{
  localStorage.setItem('elo.access-epoch','1');
- const session=JSON.stringify({token:'synthetic-session-token',epoch:'1'});sessionStorage.setItem('elo.session',session);
+ const session=JSON.stringify({marker:'synthetic-session-token',epoch:'1'});sessionStorage.setItem('elo.session',session);
  sessionRead=async()=>new Response(JSON.stringify({name:'Incomplete identity'}));
  render(<ProfileProvider><Probe/><WorkspaceGuard><Draft/></WorkspaceGuard></ProfileProvider>);
  await screen.findByRole('alert');

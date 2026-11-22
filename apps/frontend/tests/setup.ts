@@ -7,5 +7,5 @@ afterEach(cleanup);
 beforeEach(() => {
  sessionStorage.clear(); localStorage.clear();
  localStorage.setItem('elo.access-epoch', '1');
- sessionStorage.setItem('elo.session', JSON.stringify({token:'synthetic-session-token',epoch:'1'}));
+ sessionStorage.setItem('elo.session', JSON.stringify({marker:'synthetic-session-token',epoch:'1'}));
 });

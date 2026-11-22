@@ -4,7 +4,7 @@ import {policy,savedCv,emptyDeclarations,clarificationState,confirmedTarget} fro
 import type {CvDetail,Declarations} from '../../src/features/cv-ingestion/types';
 async function workspace(page:Page){
  await mockEmptyConversation(page);
- await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/skills-profile'))return route.fulfill({json:{version:0,status:'empty',saved_at:null,areas:{},entries:[]}});
@@ -21,7 +21,7 @@ test('saved CV upload, explicit selection, correction, declaration and reload',a
   return route.fulfill({json:declarations});
  });
  await page.route('**/api/v1/cv{,/**}',route=>{
-  const request=route.request(),path=new URL(request.url()).pathname;if(path.includes('/conversations'))return route.fallback();expect(request.headers().authorization).toBe('Bearer synthetic-session');
+  const request=route.request(),path=new URL(request.url()).pathname;if(path.includes('/conversations'))return route.fallback();expect(request.headers()['x-elo-session']).toBe('synthetic-session');
   if(path.endsWith('/policy'))return route.fulfill({json:policy});
   if (path === '/api/v1/cv/skills') return route.fallback();
   if(path==='/api/v1/cv')return route.fulfill({json:{cvs,selection}});

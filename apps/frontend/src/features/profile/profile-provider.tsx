@@ -4,7 +4,7 @@ import { ApiError, profileApi } from '@/lib/api/profile';
 import type { Category, Profile } from './types';
 import { errorText } from '@/lib/errors';
 export type Account = { id: string; name: string; email?: string; email_verified?: boolean; provider: 'google' | 'local_test' | 'email'; expires_at?: string };
-type Access = { flow_id: string; attempt_id: string; session_token: string; nonce: string; epoch: string };
+type Access = { flow_id: string; attempt_id: string; marker: string; nonce: string; epoch: string };
 type Mode = 'google' | 'email' | 'local_test';
 export type Verification = { verification_required: true; challenge_id: string; masked_email: string; expires_at: string; resend_at: string };
 type Credentials = { name?: string; email?: string; password?: string; credential?: string };
@@ -20,7 +20,7 @@ type Session = {
 const Context = createContext<Session | null>(null);
 const SESSION = 'elo.session';
 const EPOCH = 'elo.access-epoch';
-const PENDING = 'elo.pending-logout';
+const PENDING = 'elo.pending-logout-marker';
 const SESSION_CHECK_TIMEOUT = 10_000;
 function validAccount(value: unknown): value is Account {
  if (!value || typeof value !== 'object') return false;
@@ -164,6 +164,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   return () => { window.removeEventListener('storage', changed); window.removeEventListener('elo:expired', expired); document.removeEventListener('visibilitychange', visible); window.removeEventListener('pageshow', restored); };
  }, [cancelAccess, clear, reload, signOut, validateSession]);
  useEffect(() => {
+  sessionStorage.removeItem('elo.pending-logout');
+  try {
+   const stored = JSON.parse(sessionStorage.getItem(SESSION) || 'null');
+   if (stored && (typeof stored.marker !== 'string' || Object.hasOwn(stored, 'token'))) sessionStorage.removeItem(SESSION);
+  } catch { sessionStorage.removeItem(SESSION); }
   const controller = new AbortController(); const id = ++operation.current;
   setDevelopmentToolsEnabled(false); setLoading(true); setConfigError(''); setLoadError(''); setProfile(null);
   async function load() {
@@ -176,12 +181,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     if (!['google', 'email', 'local_test'].includes(auth.mode)) throw new Error('Invalid account configuration.');
     setCategories(options); setMode(auth.mode); setGoogleEnabled(auth.google_enabled === true); setDevelopmentToolsEnabled(auth.development_tools_enabled === true);
     if (sessionStorage.getItem(PENDING)) { setLogoutError('Sign-out is pending. Retry sign-out or explicitly sign in again.'); return; }
-    let stored: { token: string; epoch: string } | null;
+    let stored: { marker: string; epoch: string } | null;
     try { stored = JSON.parse(sessionStorage.getItem(SESSION) || 'null'); }
     catch { clear(); return; }
-    if (!stored || typeof stored.token !== 'string' || !stored.token || typeof stored.epoch !== 'string' || stored.epoch !== localStorage.getItem(EPOCH)) { clear(); return; }
+    if (!stored || typeof stored.marker !== 'string' || !stored.marker || typeof stored.epoch !== 'string' || stored.epoch !== localStorage.getItem(EPOCH)) { clear(); return; }
     let who: Account;
-    try { who = await profileApi<Account>('/auth/session', { signal: controller.signal }, stored.token); }
+    try { who = await profileApi<Account>('/auth/session', { signal: controller.signal }, stored.marker); }
     catch (error) {
      if (controller.signal.aborted || id !== operation.current) return;
      if (error instanceof ApiError && error.status === 401) { clear(); nextEpoch(); return; } throw error;
@@ -190,9 +195,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     if (!validAccount(who)) throw new Error('Session response could not be validated. Please retry connection.');
     if ((currentAccount.current && who.id !== currentAccount.current.id)
         || (who.expires_at && Date.parse(who.expires_at) <= Date.now())) { clear(); nextEpoch(); return; }
-    activeToken.current = stored.token; activeEpoch.current = stored.epoch; setToken(stored.token); currentAccount.current = who; setAccount(who);
+    activeToken.current = stored.marker; activeEpoch.current = stored.epoch; setToken(stored.marker); currentAccount.current = who; setAccount(who);
     try {
-     const saved = await profileApi<Profile>('', { signal: controller.signal }, stored.token);
+     const saved = await profileApi<Profile>('', { signal: controller.signal }, stored.marker);
      if (!controller.signal.aborted && id === operation.current && (!latestProfile.current || saved.version >= latestProfile.current.version)
          && !(latestProfile.current?.onboarding_complete && !saved.onboarding_complete)) { latestProfile.current = saved; setProfile(saved); }
      else if (!controller.signal.aborted && id === operation.current && latestProfile.current) setProfile(latestProfile.current);
@@ -207,7 +212,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const epoch = nextEpoch();
   let flow = localStorage.getItem('elo.flow');
   if (!flow) { flow = secret(); localStorage.setItem('elo.flow', flow); }
-  const access: Access = { flow_id: flow, attempt_id: secret(), session_token: secret(), nonce: '', epoch };
+  const access: Access = { flow_id: flow, attempt_id: secret(), marker: secret(), nonce: '', epoch };
   attempt.current = access;
   const result = await profileApi<{ nonce: string }>('/auth/attempts', { method: 'POST', body: JSON.stringify({ flow_id: flow, attempt_id: access.attempt_id, generation: Number(epoch), intent }) });
   if (attempt.current !== access || localStorage.getItem(EPOCH) !== epoch) {
@@ -219,14 +224,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
  const installAccount = useCallback((who: Account, access: Access) => {
   if (attempt.current !== access || localStorage.getItem(EPOCH) !== access.epoch) return false;
   attempt.current = null; setVerification(null); sessionStorage.removeItem(PENDING); setLogoutError('');
-  sessionStorage.setItem(SESSION, JSON.stringify({ token: access.session_token, epoch: access.epoch }));
-  activeToken.current = access.session_token; activeEpoch.current = access.epoch; currentAccount.current = who; setToken(access.session_token); setAccount(who); setProfile(null); reload();
+  sessionStorage.setItem(SESSION, JSON.stringify({ marker: access.marker, epoch: access.epoch }));
+  activeToken.current = access.marker; activeEpoch.current = access.epoch; currentAccount.current = who; setToken(access.marker); setAccount(who); setProfile(null); reload();
   return true;
  }, [reload]);
  const completeAccess = useCallback(async (input: Credentials) => {
   const access = attempt.current;
   if (!access) throw new Error('Start a new access attempt.');
-  const result = await profileApi<Account | Verification>('/auth/complete', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, session_token: access.session_token, ...input }) });
+  const result = await profileApi<Account | Verification>('/auth/complete', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, session_token: access.marker, ...input }) });
   if (attempt.current !== access || localStorage.getItem(EPOCH) !== access.epoch) return false;
   if ('verification_required' in result) { setVerification(result); return false; }
   return installAccount(result, access);
@@ -234,13 +239,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
  const verifyEmail = useCallback(async (code: string) => {
   const access = attempt.current;
   if (!access || !verification) throw new Error('Start a new verification attempt.');
-  const who = await profileApi<Account>('/auth/verify-email', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, session_token: access.session_token, challenge_id: verification.challenge_id, code }) });
+  const who = await profileApi<Account>('/auth/verify-email', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, session_token: access.marker, challenge_id: verification.challenge_id, code }) });
   return installAccount(who, access);
  }, [verification, installAccount]);
  const resendVerification = useCallback(async () => {
   const access = attempt.current;
   if (!access) throw new Error('Start a new verification attempt.');
-  const result = await profileApi<Verification>('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, session_token: access.session_token }) });
+  const result = await profileApi<Verification>('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ flow_id: access.flow_id, attempt_id: access.attempt_id, session_token: access.marker }) });
   if (attempt.current === access && localStorage.getItem(EPOCH) === access.epoch) setVerification(result);
  }, []);
  const acceptProfile = useCallback((value: Profile) => {

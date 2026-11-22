@@ -31,6 +31,11 @@
 - Dashboard -> Roadmap/Assessment: passive owner-scoped progress and assessment snapshots, with bounded version rechecks; no cross-service database access.
 - Planned Review -> Profile/Career/Roadmap: read inputs, request a revision, request authorised application.
 
+Browser authentication uses Profile-issued HttpOnly cookies. The gateway requires
+the matching public tab marker and browser custom header, then supplies the existing
+owner bearer to private services. Services continue to validate that bearer through
+Profile; no service reads another service's session collection.
+
 Records are read through APIs, never another service's collections. Public endpoints
 verify ownership. Current CV/Profile calls forward the revocable owner bearer and
 keep both services private; public IDs do not confer access. A future autonomous

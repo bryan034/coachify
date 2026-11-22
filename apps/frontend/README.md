@@ -50,7 +50,8 @@ terminal model or authentication errors still require the existing recovery flow
 
 `ProfileProvider` in the root layout owns the account, elo session, server auth
 mode, profile and load/retry states. Workspace routes withhold private content until
-the session is validated. Session bearers survive same-tab reload in sessionStorage;
+the session is validated. Session credentials use HttpOnly, SameSite=Strict cookies (Secure in production).
+Only a non-secret tab marker survives reload in sessionStorage;
 Google credentials are exchanged only during account access. Logout, expiry and
 account changes clear private state and drafts, including other tabs. Normal initial
 `pageshow` events preserve drafts; back/forward-cache restores hide private content
@@ -170,7 +171,7 @@ Career replies reveal word by word after the validated API response arrives. Mar
 headings/lists format the first JD overview; older replies stay fully visible. Users
 can choose Show full response, and reduced-motion preferences disable animation.
 Token-limit errors, safe request-conflict explanations and a fixed disabled-AI explanation are shown. Other failures keep quiet retry
-controls and retained drafts; provider diagnostic codes/details remain in Network responses.
+controls and retained drafts; safe provider diagnostic codes/details remain in Network responses; errors are not copied to the browser console.
 The transient JD request key stays in the career session across chat navigation.
 Reopening the same pending JD reconnects to its running extraction; different-input
 conflicts show a safe explanation instead of only an unexplained Retry button.
@@ -341,3 +342,18 @@ Screens follow the "elo — Redesigned Screens" design canvas (sample content on
 - Search Jobs: no search runs until Find jobs is pressed (not on load, and not when filters or sort change).
 - Calendar: intro line, a dark Target date card and a Key in the side rail (study sessions forest, backup-block sessions dashed, interviews blue, deadlines orange, whole blocked-out days hatched) with a link to change study times in Roadmap.
 - Search Jobs is one page: hero search, results (after a search), a Saved jobs board (Saved, Applied, Interview, Offer; Closed appears only when used) and a Career Goal prompt. Home links to `/jobs#saved-jobs`. Search Jobs does not yet offer the canvas's skill-match filter or sort: they need per-posting match data from the Jobs service.
+
+## Browser security
+
+Page responses use a fresh nonce-based Content Security Policy, with inline script
+handlers, untrusted scripts, remote images, framing and plugins blocked. Google
+Identity Services is explicitly permitted; inline styles remain allowed for the
+existing UI and Google button. Nonces require dynamic page rendering and no-store
+HTML responses. Production browser source maps are disabled.
+
+API clients use only the same-origin gateway, send `X-Elo-Browser: 1` plus a public
+`X-Elo-Session` marker, and reject redirects. The gateway translates a matching
+HttpOnly cookie into a bearer for private services. The frontend's `token` context
+property is this public marker, never the bearer. Existing bearer-based browser
+sessions require sign-in again after this upgrade; their legacy storage is cleared.
+Backend ownership checks remain authoritative.

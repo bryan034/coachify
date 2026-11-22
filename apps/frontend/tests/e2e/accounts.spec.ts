@@ -21,7 +21,7 @@ test('P09–P16 Google entry, OTP verification, initial setup, reload and logout
   if(path.endsWith('/auth/session'))return route.fulfill({status:ended?401:200,json:ended?{detail:'Ended'}:account});
   if(path.endsWith('/companies')||path.endsWith('/industries'))return route.fulfill({json:[]});
   if(path.endsWith('/planning-inputs'))return route.fulfill({json:{profile_version:0,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
-  privateReads++;expect(route.request().headers().authorization).toBe('Bearer '+accessToken);return route.fulfill({json:profile});
+  privateReads++;expect(route.request().headers()['x-elo-session']).toBe(accessToken);return route.fulfill({json:profile});
  });
  await page.goto('/');
  await expect(page.getByRole('link',{name:'Create account',exact:true})).toBeVisible();

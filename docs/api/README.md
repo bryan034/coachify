@@ -2,6 +2,8 @@
 
 The browser sends API requests through the gateway. Each prefix belongs to the
 service below; its README lists individual endpoints grouped by Jira story.
+Browser requests use HttpOnly session cookies with matching public tab markers
+and custom headers at the gateway; private service calls retain owner bearers.
 
 | Main prefix | What it leads to | Service folder | Status |
 |---|---|---|---|

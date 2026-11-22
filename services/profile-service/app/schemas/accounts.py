@@ -16,7 +16,7 @@ class Begin(Attempt):
     generation: int = Field(strict=True, ge=1, le=9007199254740991)
 
 class Complete(Attempt):
-    session_token: Secret
+    session_token: Secret = Field(description='Client session marker in X-Elo-Browser: 1 mode; the server derives the credential and returns it only in an HttpOnly cookie. Otherwise the caller-supplied bearer for non-browser API clients.')
     name: str | None = Field(None, max_length=80)
     email: str | None = Field(None, max_length=254)
     password: str | None = Field(None, min_length=8, max_length=128)
@@ -28,7 +28,7 @@ class Complete(Attempt):
         return normalize_email(value) if value is not None else None
 
 class VerificationAccess(Attempt):
-    session_token: Secret
+    session_token: Secret = Field(description='The same client session marker (browser cookie mode) or bearer (non-browser mode) supplied at account completion.')
 
 class Verify(VerificationAccess):
     challenge_id: Secret

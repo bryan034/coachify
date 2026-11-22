@@ -1,6 +1,7 @@
 "use client";
 import {createContext,useCallback,useContext,useEffect,useId,useMemo,useState,type ReactNode} from 'react';
 import type {BriefSource,Citations} from '@/lib/api/career';
+import {sourceLink} from './source-links';
 
 export const VISIBLE_SOURCES=5;
 const FLASH_MS=2000;
@@ -69,7 +70,7 @@ export function SourceList({sources}:{sources:BriefSource[]}){
  const shown=expanded?sources:sources.slice(0,VISIBLE_SOURCES);
  return <>
   <ol className="brief-sources" id={id}>{shown.map(source=><li key={source.index} id={state?sourceAnchor(state.prefix,source.index):undefined} className={state?.flash===source.index?'is-flash':undefined}>
-   <a href={source.url} target="_blank" rel="noopener noreferrer">
+   <a href={sourceLink(source.url)?.url} target="_blank" rel="noopener noreferrer">
     <span className="brief-cite is-badge" aria-hidden="true">{source.index}</span>
     <span className="brief-source-title">{source.title}<span className="brief-sr"> (opens in a new tab)</span></span>
     <span className="brief-source-site">{source.domain}</span>

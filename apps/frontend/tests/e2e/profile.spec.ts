@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('save, reload, browse international schools, switch status and retry', async ({ page }) => {
-  await page.addInitScript(() => { localStorage.setItem('elo.access-epoch','1'); sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-token',epoch:'1'})); });
+  await page.addInitScript(() => { localStorage.setItem('elo.access-epoch','1'); sessionStorage.setItem('elo.session',JSON.stringify({marker:'synthetic-token',epoch:'1'})); });
   // Only the Google and HTTP boundaries are mocked.
   const categories = [
     { id: 'secondary', label: 'Secondary School' }, { id: 'ite', label: 'Institute of Technical Education' },

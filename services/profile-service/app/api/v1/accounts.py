@@ -1,9 +1,10 @@
 from typing import Annotated
 from ipaddress import ip_address
 from socket import gaierror, getaddrinfo
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from app.core.auth import bearer, verify_google
+from app.core.browser_session import browser_access, install_browser_session, clear_browser_session
 from app.schemas.accounts import Attempt, Begin, Complete, VerificationAccess, Verify, AccountView, PendingVerification, Choice, Nonce, Done, ResetRequest, ResetComplete, ResetReceipt
 
 router = APIRouter(prefix='/api/v1/profile/auth', tags=['P09–P16 account access'])
@@ -55,16 +56,22 @@ def cancel(data: Attempt, accounts=Depends(repo)):
     401: {'description': 'Incorrect password or invalid provider credential.'},
     404: {'description': 'No account found. Choose Create new account.'},
 })
-def complete(data: Complete, request: Request, accounts=Depends(repo)):
-    return accounts.finish(data, request.app.state.auth_settings, verify_google, password_source(request))
+def complete(data: Complete, request: Request, response: Response, accounts=Depends(repo)):
+    access = browser_access(data, request)
+    result = accounts.finish(access, request.app.state.auth_settings, verify_google, password_source(request))
+    install_browser_session(data, access, result, request, response)
+    return result
 
 @router.post('/verify-email', response_model=AccountView)
-def verify(data: Verify, request: Request, accounts=Depends(repo)):
-    return accounts.verify_email(data, request.app.state.auth_settings)
+def verify(data: Verify, request: Request, response: Response, accounts=Depends(repo)):
+    access = browser_access(data, request)
+    result = accounts.verify_email(access, request.app.state.auth_settings)
+    install_browser_session(data, access, result, request, response)
+    return result
 
 @router.post('/resend-verification', response_model=PendingVerification)
 def resend(data: VerificationAccess, request: Request, accounts=Depends(repo)):
-    return accounts.resend(data, request.app.state.auth_settings)
+    return accounts.resend(browser_access(data, request), request.app.state.auth_settings)
 
 @router.get('/session', response_model=AccountView)
 def session(request: Request, credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)], accounts=Depends(repo)):
@@ -73,7 +80,8 @@ def session(request: Request, credentials: Annotated[HTTPAuthorizationCredential
     return accounts.session(credentials.credentials, request.app.state.auth_settings)
 
 @router.post('/logout', response_model=Done)
-def logout(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)], accounts=Depends(repo)):
+def logout(request: Request, response: Response, credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)], accounts=Depends(repo)):
+    clear_browser_session(request, response, credentials)
     if credentials:
         accounts.logout(credentials.credentials)
     return {'ok': True}
