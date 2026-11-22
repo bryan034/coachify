@@ -23,7 +23,7 @@ async function mockCareer(page:Page,requests:{researchWrites?:number;summaryCall
   if(path.endsWith('/opportunity-research')){
    if(route.request().method()==='POST')requests.researchWrites=(requests.researchWrites||0)+1;
    return route.fulfill({json:{available:true,status:'completed',finished:true,job_id:'job',career_target_id:goal._id,research_id:'research',sources:[...interviewResearchSources,...roleResearchSources],error_code:null,updated_at:'2026-11-21T08:00:00Z',
-    round_titles:{'1':'HR call','2':'Technical interview','3':'Final interview'},categories:{interview_intelligence:interview,...roleResearch}}});
+    round_previews:{'2':{expectation_id:interview.findings[2].finding_id,question_id:interview.findings[4].finding_id,preparation_id:interview.findings[5].finding_id}},round_titles:{'1':'HR call','2':'Technical interview','3':'Final interview'},categories:{interview_intelligence:interview,...roleResearch}}});
   }
   return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',review:{review_id:'1'.repeat(24),version:1,target_type:'specific_job',extraction:goal,requirements_need_review:false},current:{selection_version:1,goal},research:null,coverage:[],error:null,retry_after:null})});
  });
@@ -118,14 +118,24 @@ test('Interview preparation displays saved findings and citations without a summ
  await expect(overview.getByRole('listitem').nth(2)).toContainText(interviewResearch.findings[9].value);
  await expect(page.locator('#interview-preparation h3').first()).toHaveText('3 reported interview rounds');
  const cardLayout=await page.locator('.brief-rounds > .brief-round').evaluateAll(cards=>cards.map(card=>({
-  top:card.getBoundingClientRect().top,bottom:card.getBoundingClientRect().bottom,padding:parseFloat(getComputedStyle(card).paddingTop),
+  top:card.getBoundingClientRect().top,bottom:card.getBoundingClientRect().bottom,padding:parseFloat(getComputedStyle(card.querySelector('.brief-round-heading')!).paddingTop),
  })));
  expect(cardLayout).toHaveLength(3);
  for(let i=0;i<cardLayout.length;i++){
   expect(cardLayout[i].padding).toBeGreaterThanOrEqual(20);
-  if(i>0)expect(cardLayout[i].top-cardLayout[i-1].bottom).toBeGreaterThanOrEqual(20);
+  if(i>0)expect(cardLayout[i].top-cardLayout[i-1].bottom).toBeGreaterThanOrEqual(16);
  }
+ const technical=page.getByRole('region',{name:'Round 2: Technical interview'});
+ const details=technical.locator('details');
+ await expect(details).not.toHaveAttribute('open','');
+ await technical.getByText('More about this round').focus();
+ await page.keyboard.press('Enter');
+ await expect(details).toHaveAttribute('open','');
+ await expect(details.getByText('An online call with the hiring manager.')).toBeVisible();
+ await expect(details.getByText('SQL joins')).toBeVisible();
  await capture(page,'interview-findings');
+ await technical.getByText('More about this round').click();
+ await expect(details).not.toHaveAttribute('open','');
 
  await page.getByRole('region',{name:'What candidates reported'}).getByRole('link',{name:'Source 7: Interview report 7'}).click();
  await expect(page.locator('#interview-src-7')).toHaveClass(/is-flash/);

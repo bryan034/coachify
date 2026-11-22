@@ -108,3 +108,36 @@ def test_public_finding_contract_matches_the_application():
     from app.main import create_app
     saved = json.loads((Path(__file__).resolve().parents[3] / 'contracts/api/career.yaml').read_text())
     assert saved['components']['schemas']['PublicFinding'] == create_app().openapi()['components']['schemas']['PublicFinding']
+
+
+def test_round_previews_prefer_direct_evidence_and_preserve_details():
+    from app.schemas.opportunity_api import OpportunityView
+    findings, _ = resolve(
+        claim(round_number=1, round_name='Online assessment', scope='general', confidence='low'),
+        claim(round_number=1, round_name='Online assessment', value='Direct coding assessment.', confidence='high'),
+        claim(field='interview_questions', value='Live coding.', round_number=2, round_name='Technical interview'),
+        claim(field='recruitment_stages', value='Three stages are reported.'))
+    view = OpportunityView(available=True, job_id=None, career_target_id='1'*24, status='completed',
+        categories={'interview_intelligence': {'status': 'completed', 'findings': findings}})
+    data = view.model_dump(mode='json')
+    assert set(data['round_previews']) == {'1', '2'}
+    assert data['round_previews']['1'] == {'expectation_id': findings[1].finding_id, 'question_id': None, 'preparation_id': None}
+    assert data['round_previews']['2']['question_id'] == findings[2].finding_id
+    assert len(data['categories']['interview_intelligence']['findings']) == 4
+    assert data['categories']['interview_intelligence']['findings'][0]['scope'] == 'general'
+    assert 'quotes' not in data['categories']['interview_intelligence']['findings'][0]
+
+
+def test_round_previews_are_empty_without_round_metadata():
+    from app.schemas.opportunity_api import OpportunityView
+    findings, _ = resolve(claim())
+    view = OpportunityView(available=True, job_id=None, career_target_id='1'*24, status='partial',
+        categories={'interview_intelligence': {'status': 'partial', 'findings': findings}})
+    assert view.round_previews == {}
+
+
+def test_round_preview_contract_matches_full_application():
+    from pathlib import Path
+    from app.main import create_app
+    saved = json.loads((Path(__file__).resolve().parents[3] / 'contracts/api/career.yaml').read_text())
+    assert saved == create_app().openapi()

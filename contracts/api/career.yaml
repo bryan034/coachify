@@ -5716,6 +5716,16 @@
               }
             ],
             "title": "Retry After"
+          },
+          "round_previews": {
+            "patternProperties": {
+              "^(?:[1-9]|10)$": {
+                "$ref": "#/components/schemas/RoundPreview"
+              }
+            },
+            "type": "object",
+            "title": "Round Previews",
+            "readOnly": true
           }
         },
         "additionalProperties": false,
@@ -5724,7 +5734,8 @@
           "available",
           "job_id",
           "career_target_id",
-          "status"
+          "status",
+          "round_previews"
         ],
         "title": "OpportunityView"
       },
@@ -8146,6 +8157,46 @@
           "exploration_id"
         ],
         "title": "WorkspaceView"
+      },
+      "RoundPreview": {
+        "properties": {
+          "expectation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectation Id"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
+          },
+          "preparation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preparation Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RoundPreview"
       }
     },
     "securitySchemes": {

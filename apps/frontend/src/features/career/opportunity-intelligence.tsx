@@ -83,7 +83,7 @@ export function OpportunityIntelligence({goalId,section='interview',goal}:{goalI
   {error&&<div role="alert" className="notice"><p>{error}</p><button className="btn ghost sm" onClick={()=>setAttempt(v=>v+1)}>Retry loading research</button></div>}
   {pending&&<p role="status" className="notice">{states.some(v=>['rate_limited','source_rate_limited'].includes(v.error_code||''))?`Waiting for the AI allowance${data?.retry_after?`; resuming in about ${data.retry_after} seconds`:''}.`:'Researching…'} Available findings stay visible.</p>}
   {notices.map(notice=><p key={notice} className="notice">{notice}</p>)}
-  {section==='interview'&&interview&&<InterviewResearch result={interview} sources={sources} roundTitles={data?.round_titles}/>}
+  {section==='interview'&&interview&&<InterviewResearch result={interview} sources={sources} roundTitles={data?.round_titles} roundPreviews={data?.round_previews}/>}
   {section==='role'&&<>{goal&&<GoalOnly goal={goal}/>}<RoleResearch categories={data?.categories||{}} sources={sources}/></>}
  </section>;
 }
