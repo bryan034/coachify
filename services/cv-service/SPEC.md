@@ -125,6 +125,10 @@ Profile-owned manual capabilities, including their historical attachment referen
 
 The UI provides a **Delete CV** control on each loaded saved-CV card, with explicit confirmation identifying filename/ID and the data removed/retained. Interrupted requests retain their deletion identity; stale versions refresh the list for a new review. Success removes the card and affected review/conversation/upload drafts, updates selection, and leaves manual capabilities available. No private CV data is stored in browser storage.
 
+## Development reset
+
+`POST /api/v1/cv/dev/reset` exists only in development and is excluded from OpenAPI. It deletes the authenticated account's CV records, selection and conversations, then removes their original/temporary files and releases both saved-record and original-byte reservations. Cleanup includes owner-matched ledger entries whose CV records were removed by an earlier reset. Shared file locks serialize cleanup with upload publication; a newly published CV that still has a record is preserved. Ledger updates use CAS so other accounts' reservations survive concurrent uploads. File-removal failures return 503 without crediting the affected reservation; retrying reset completes cleanup even if the CV list is already empty.
+
 ## Clarification and corrections
 
 The target provider boundary accepts only server-fetched confirmed specific-job requirements or exploration guidance with ID, type, version, canonical skill IDs and selection revision. CV forwards the owner's revocable bearer to Career's `GET /api/v1/career/goals/current/confirmed-context` for reads and `GET /api/v1/career/goals/{id}/confirmed-context?expected_version=N` for preparation. The private client uses a five-second total deadline, bounded 1 MiB strict JSON (at most 40 skill IDs, including Unicode normalization expansion), no proxy environment or redirects, and validates required metadata and canonical skill identities. A browser cannot submit target skills or confirmation to manufacture question relevance. Career unavailability is an explicit failure; only an explicit null selected context produces a deferred response.
