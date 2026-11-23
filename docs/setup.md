@@ -555,6 +555,12 @@ Then rebuild with your usual Compose command. The `mongodb-jobs-init` job adds t
 
 To change employers, edit [`sources.json`](../services/jobs-service/app/sources.json) and rebuild `jobs-service`.
 
+## Chats & Socials pilot
+
+Set `SOCIALS_DB_PASSWORD` in `infrastructure/docker/.env` before starting or rebuilding the stack. Generate a separate value with `openssl rand -hex 24`. The `mongodb-socials-init` job creates the scoped `elo_socials` user on both new and existing MongoDB volumes.
+
+Set `SOCIALS_OPERATOR_ACCOUNT_IDS` to the comma-separated IDs of verified, onboarded Profile accounts that operate the pilot, then recreate `socials-service`. The operator API publishes real expert profiles and availability, enrolls pilot members, and lists reports. An empty operator list leaves operator actions unavailable. See the [Socials service guide](../services/socials-service/README.md) for the operator workflow.
+
 ## Assessment and Roadmap adviser
 
 All user-configurable deployment inputs belong in the single ignored `infrastructure/docker/.env` file. The public [`infrastructure/docker/.env.example`](../infrastructure/docker/.env.example) documents them, including the new Assessment and Roadmap settings below. If you already have a private `.env`, add only the missing entries yourself; do not overwrite it by copying the template again. No additional environment file is needed in either service folder.

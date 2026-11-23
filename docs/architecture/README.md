@@ -1,6 +1,6 @@
 # elo architecture
 
-The current Compose stack runs Next.js behind NGINX and seven backend services: Profile, CV, Career, Assessment, Roadmap, Jobs and Dashboard. The first six own separate MongoDB databases; Dashboard aggregates through APIs without a database. Review remains a scaffold with no ASGI application, Compose service or gateway route.
+The current Compose stack runs Next.js behind NGINX with Profile, CV, Career, Assessment, Roadmap, Jobs, Socials and Dashboard. Each service owns a separate MongoDB database except the stateless Dashboard API. Review remains a scaffold.
 
 Profile owns accounts, background and manual declarations. CV owns saved evidence, source corrections, resumable extraction and private conversations. Career owns the canonical goal, its explicit CV confirmation stamp and public research. Assessment owns immutable versioned comparisons; Roadmap owns plans, sessions and progress. Jobs searches employer boards live and stores self-reported application snapshots. Synthetic checks establish workflow and contract behavior, not live-model quality.
 
@@ -30,11 +30,11 @@ flowchart TB
             Frontend[Next.js / React / TypeScript]
         end
         subgraph Backend[backend network]
-            APIs["HTTP APIs<br/>Profile / CV / Career<br/>Assessment / Roadmap / Jobs<br/>Dashboard: stateless"]
+            APIs["HTTP APIs<br/>Profile / CV / Career<br/>Assessment / Roadmap / Jobs / Socials<br/>Dashboard: stateless"]
             Mailpit[Mailpit: development profile only]
         end
         subgraph Database[database network: internal]
-            Mongo[("MongoDB 8.2<br/>elo_profile / elo_ingestion / elo_career<br/>elo_assessment / elo_roadmap / elo_jobs")]
+            Mongo[("MongoDB 8.2<br/>elo_profile / elo_ingestion / elo_career<br/>elo_assessment / elo_roadmap / elo_jobs / elo_socials")]
             Init[One-shot database initialisers]
         end
         Data[(profile_data: MongoDB files)]
@@ -45,7 +45,7 @@ flowchart TB
     Browser -->|Pages, assets and API requests| Gateway
     Gateway -->|Non-API routes| Frontend
     Gateway -->|/api/v1 routes| APIs
-    APIs -->|Six data owners only| Mongo
+    APIs -->|Data-owning services| Mongo
     Init --> Mongo
     Mongo --> Data
     APIs -->|CV| Uploads

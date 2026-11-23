@@ -8,6 +8,8 @@ Profile's existing `accounts` collection is the logical `users` authority, retai
 
 Services access foreign records through authenticated APIs. CV IDs remain UUID strings; Career's internal CV projection also accepts existing ObjectId references without remapping. Career-owned goal/research identities remain ObjectIds. There is no account or CV-ID migration.
 
+Socials owns expert profiles, schedules, booking and credit wallets, and reports in `elo_socials`. The `mongodb-socials-init` job creates its scoped database user.
+
 ## Canonical goal and historical compatibility
 
 `career_state` holds the current canonical goal pointer/workspace. The version-specific `cv_confirmation` stamp records goal ID/version, selection version, projection hash and confirmation time; bounded receipts support exact retries. Automatic Career saves do not implicitly confirm CV context. A changed goal or selection invalidates the stamp on reads, while earlier CV answers stay source-bound.

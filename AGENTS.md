@@ -22,6 +22,7 @@ Browser → **NGINX gateway** (`127.0.0.1:${GATEWAY_PORT:-8080}`) → Next.js fr
 | `assessment-service` | `/api/v1/assessments` | `elo_assessment` | Live | Immutable versioned skill-gap comparisons |
 | `roadmap-service` | `/api/v1/roadmaps` | `elo_roadmap` | Live | Study settings, adviser chat, LLM roadmaps, timed sessions, progress |
 | `jobs-service` | `/api/v1/jobs` | `elo_jobs` | Live | Live Singapore employer-board search, self-reported application tracking |
+| `socials-service` | `/api/v1/socials` | `elo_socials` | Pilot | Expert profiles, availability, coffee-chat bookings, credits, follow-up and reports |
 | `dashboard-service` | `/api/v1/dashboard` | none (stateless) | Backend only | Progress aggregation from Roadmap/Assessment |
 | `review-service` | `/api/v1/reviews`, `/api/v1/review-schedules` | — | Scaffold | Planned pace reviews; not routed by the gateway (404); the only service allowed an empty test suite |
 
@@ -31,6 +32,7 @@ Service-to-service dependencies (through APIs only, forwarding the owner's revoc
 - Career → Profile (session/onboarding), Career → CV (saved CV evidence)
 - Assessment → Profile/CV/Career; Roadmap → Assessment/Profile (including confirmed practice evidence writes); Dashboard → Profile/Roadmap/Assessment
 - Jobs → Profile (session and declarations); recommended ranking also reads Career (current goal) and CV (selected skills)
+- Socials → Profile (session and onboarding), Career (current goal for expert recommendations)
 - Full table and rationale: [service boundaries](docs/architecture/service-boundaries.md). Private `/internal/v1` routes are never exposed by the gateway.
 
 Other moving parts: `mongodb` (local container, Mongo 8.2) with one-shot `mongodb-*-init` containers running `infrastructure/mongodb/init-*.js`; `mailpit` (development profile) for captured email. Production DB proposal is MongoDB Atlas, external to containers.
@@ -42,7 +44,7 @@ AI: all model calls use the OpenAI Python SDK, routed to OpenRouter by default (
 ```text
 apps/frontend/               Next.js 16 App Router, React 19, TS. Routes: src/app/{(auth),(setup),(workspace)}
   src/features/<domain>/     Feature UI/logic (assessment, auth, calendar, career, career-assessment,
-                             cv-ingestion, dashboard, jobs, profile, reviews, roadmap)
+                             cv-ingestion, dashboard, jobs, profile, reviews, roadmap, chats-socials)
   src/lib/api/               Typed API clients per service (keep in sync with contracts/)
   src/styles/ + public/      elo theme tokens (elo-theme.css), bundled fonts, brand assets
   tests/                     Playwright e2e; unit tests (Vitest) sit beside source as *.test.ts(x)
@@ -111,7 +113,7 @@ python tools/lint/quickfix_check.py services/career-service           # add --pr
 ```
 
 - Profile, CV and Career integration tests need a disposable MongoDB (`MONGODB_TEST_URI`); ordinary unit tests do not. Career needs its tiktoken tokenizer cache (see CI). Full-stack browser journeys and fixtures: [testing](docs/testing.md), `compose.test.yaml`, `infrastructure/testing/`.
-- CI (`.github/workflows/ci.yml`) runs Career and Roadmap static analysis, vulture for every service, frontend typecheck/unit, Playwright, a backend matrix over all eight services, shared-package tests (via the assessment job), and Mongo integration jobs. Run the equivalent for what you touched. Changes to `elo-shared` affect every service: run more than one service's tests.
+- CI (`.github/workflows/ci.yml`) runs Career and Roadmap static analysis, vulture for every service, frontend typecheck/unit, Playwright, a backend test matrix, shared-package tests (via the assessment job), and Mongo integration jobs. Run the equivalent for what you touched. Changes to `elo-shared` affect every service: run more than one service's tests.
 - For logic changes, add meaningful coverage and keep fixing/rerunning relevant tests until they pass. Never remove, skip or weaken valid tests to get a pass; report blockers honestly. Report exact current results, not historical totals.
 - Review the final diff for unintended changes and secrets. Report changes, checks actually run and remaining limitations.
 

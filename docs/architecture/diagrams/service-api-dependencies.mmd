@@ -5,6 +5,7 @@ flowchart LR
     Assessment[Assessment]
     Roadmap[Roadmap]
     Jobs[Jobs]
+    Socials[Socials]
     Dashboard[Dashboard API]
 
     Profile -->|Validate matched CV item, version and skill evidence| CV
@@ -20,6 +21,8 @@ flowchart LR
     Jobs -->|Session; declarations for recommended ranking| Profile
     Jobs -->|Current goal for recommended ranking only| Career
     Jobs -->|Selected CV skills for recommended ranking only| CV
+    Socials -->|Session and onboarding| Profile
+    Socials -->|Current goal for expert recommendations| Career
     Dashboard -->|Session and background validation| Profile
     Dashboard -->|Passive progress and baseline snapshots| Roadmap
     Dashboard -->|Passive comparison snapshot| Assessment

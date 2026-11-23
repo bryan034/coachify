@@ -340,6 +340,40 @@ class job_applications {
 users "1" --> "0..*" job_applications : tracks
 note for job_applications "Private and owner-scoped. Snapshot keeps the record readable after a listing closes or is removed. Applied means the user reported it; Elo never submits applications."
 
+class SocialsExpert {
+  string _id
+  string account_id
+  bool active
+}
+class SocialsSchedule {
+  string _id
+  string expert_id
+  date date
+  int version
+  array slots
+}
+class SocialsWallet {
+  string _id
+  bool enabled
+  int credits
+  int version
+  array bookings
+  object receipts
+}
+class SocialsReport {
+  uuid _id
+  uuid booking_id
+  string reporter_id
+  uuid mutation_id
+  datetime created_at
+}
+users "1" --> "0..*" SocialsExpert : assigned account
+users "1" --> "0..1" SocialsWallet : owns
+SocialsExpert "1" --> "0..*" SocialsSchedule : publishes
+SocialsWallet "1" --> "0..*" SocialsReport : embedded booking
+note for SocialsSchedule "elo_socials schedules. One document per expert and Singapore date."
+note for SocialsWallet "elo_socials wallets. A single versioned write reserves credits and records the booking intent."
+
 %% Public job results are fetched live and remain transient; legacy catalogue collections are ignored.
 
 %% Assessment skill_gap_analyses may capture Profile-only declarations with null CV identities; exact selection/declaration/goal/research versions remain pinned.

@@ -21,6 +21,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   if(url.pathname === '/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
   if(url.pathname === '/api/v1/jobs/filters')return route.fulfill({json:{job_types:[{value:'internship',count:1}],industries:[{value:'fintech',count:1}],workplaces:[{value:'hybrid',count:1}],companies:[{value:'Synthetic Pay',count:1}],last_synced_at:'2026-11-05T04:00:00Z'}});
   if(url.pathname === '/api/v1/jobs/applications')return route.fulfill({json:{items:[]}});
+  if(url.pathname === '/api/v1/socials/agenda')return route.fulfill({json:[]});
   if(url.pathname === '/api/v1/jobs/search')return route.fulfill({json:{items:[{id:'0'.repeat(32),title:'Synthetic Data Intern',company:'Synthetic Pay',industry:'fintech',location:'Singapore',department:null,job_type:'internship',workplace:'hybrid',posted_at:'2026-11-01T00:00:00Z',posted_at_estimated:false,application_deadline:null,excerpt:'Support synthetic payments analysis.',listing_url:'https://jobs.example.test/1',apply_url:'https://jobs.example.test/1/apply',provider:'lever',status:'open'}],total:1,next_cursor:null}});
   if(url.pathname.endsWith('/profile/skills-profile'))return route.fulfill({json:{version:0,status:'empty',saved_at:null,areas:{},entries:[]}});
   if(url.pathname.endsWith('/profile/capabilities'))return route.fulfill({json:emptyDeclarations});
@@ -107,7 +108,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.locator('.roadmap-prerequisites a[href="/cv"]')).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/career-goal"]')).toBeVisible();
  await expect(page.getByRole('tab')).toHaveCount(0);
- expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||p==='/api/v1/roadmaps/workspace'||p==='/api/v1/career/goals/current'||p==='/api/v1/roadmaps/learning'||p==='/api/v1/roadmaps/dashboard-source'||p.startsWith('/api/v1/jobs/')||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
+ expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||p==='/api/v1/roadmaps/workspace'||p==='/api/v1/career/goals/current'||p==='/api/v1/roadmaps/learning'||p==='/api/v1/roadmaps/dashboard-source'||p.startsWith('/api/v1/jobs/')||p==='/api/v1/socials/agenda'||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
  expect(apiCalls).toContain('/api/v1/cv/policy');
  const sidebar = await page.locator('.side').boundingBox();
  const main = await page.locator('main').boundingBox();

@@ -18,6 +18,7 @@ const nav = [
 ];
 /** Supporting pages sit below a divider. */
 const more = [
+ { href: '/chats-socials', label: 'Chats & Socials', icon: 'chat' },
  { href: '/calendar', label: 'Calendar', icon: 'cal' },
 ];
 /** Short labels for the phone tab bar; same destinations and order as the sidebar. */

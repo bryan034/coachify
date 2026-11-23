@@ -10,12 +10,12 @@ vi.mock('@/features/profile/profile-provider', () => ({ useProfile: () => ({ pro
 
 beforeEach(() => { path.current = '/cv'; session.checking = false; });
 
-it('orders the sidebar by the journey and puts coming-soon pages below a divider', () => {
+it('orders the sidebar by the journey and puts supporting pages below a divider', () => {
  render(<WorkspaceShell><p>Page</p></WorkspaceShell>);
  const main = within(screen.getByRole('navigation', { name: 'Main navigation' })).getAllByRole('link').map(link => link.textContent);
  expect(main).toEqual(['Home', 'Career Goal', 'Skills Profile', 'Roadmap', 'Search Jobs']);
  const more = within(screen.getByRole('navigation', { name: 'More' })).getAllByRole('link').map(link => link.textContent);
- expect(more).toEqual(['Calendar']);
+ expect(more).toEqual(['Chats & Socials', 'Calendar']);
  expect(screen.getByRole('separator')).toBeInTheDocument();
  expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('link', { name: 'Skills Profile' })).toHaveAttribute('aria-current', 'page');
 });

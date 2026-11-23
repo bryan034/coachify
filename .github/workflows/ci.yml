@@ -105,7 +105,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [profile, cv, career, assessment, roadmap, jobs, dashboard, review]
+        service: [profile, cv, career, assessment, roadmap, jobs, socials, dashboard, review]
     defaults:
       run:
         working-directory: services/${{ matrix.service }}-service
@@ -165,7 +165,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [profile, cv, career, assessment, jobs, dashboard, review]
+        service: [profile, cv, career, assessment, jobs, socials, dashboard, review]
     defaults:
       run:
         working-directory: services/${{ matrix.service }}-service
@@ -202,7 +202,7 @@ jobs:
           MONGODB_TEST_URI: mongodb://localhost:27017
 
   analysis-integration:
-    name: Analysis MongoDB contracts (${{ matrix.service }})
+    name: Service MongoDB contracts (${{ matrix.service }})
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
@@ -210,7 +210,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [career, cv, jobs]
+        service: [career, cv, jobs, socials]
     services:
       mongodb:
         image: mongo:8.2
@@ -259,6 +259,7 @@ jobs:
       ASSESSMENT_DB_PASSWORD: ci-only-assessment-password
       ROADMAP_DB_PASSWORD: ci-only-roadmap-password
       JOBS_DB_PASSWORD: ci-only-jobs-password
+      SOCIALS_DB_PASSWORD: ci-only-socials-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
