@@ -107,10 +107,9 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
             if collection is None: raise HTTPException(503, 'CV storage is not configured.')
             def work():
                 identifiers = [str(row['_id']) for row in collection.find({'user_id': account['id']}, {'_id': 1})]
-                deleted = reset_owner_data(collection.database, account['id'])
-                for identifier in identifiers:
-                    try: request.app.state.files.remove(identifier)
-                    except ValueError: pass
+                deleted = reset_owner_data(collection.database, account['id'], keep=('cv_upload_capacity',))
+                released = request.app.state.service.capacity.reset_deleted_owner(account['id'], identifiers)
+                if released: deleted['cv_upload_capacity'] = released
                 return deleted
             return {'deleted': await run_in_threadpool(work)}
 

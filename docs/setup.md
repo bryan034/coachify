@@ -473,6 +473,8 @@ For Career interpretation/research, configure `AI_ENABLED`, an OpenRouter key or
 
 With the development override (`dc`), every workspace page shows a **Development** strip with a **Start afresh** button. After confirmation it calls `POST /api/v1/<prefix>/dev/reset` on the Career, CV, Assessment, Roadmap, Jobs and Profile services. These delete the signed-in account's goal and chats, CVs and uploaded files, assessments, roadmaps, job applications, and manual skills. The account, session, onboarding answers and shared job postings stay. The routes exist only when `APP_ENV=development` (set by `compose.dev.yaml`), are not in the OpenAPI contracts, and return 404 otherwise. In-flight background work is not cancelled.
 
+The CV reset also releases the account's saved-CV and original-file quota reservations after removing the files. It repairs stale reservations from earlier resets even when the saved-CV list is already empty. Other accounts' reservations remain unchanged. If file cleanup fails, reset returns an error and keeps the affected capacity charged; retry **Start afresh** to finish cleanup.
+
 ## Docker hot reload
 
 Use the opt-in [development Compose override](../infrastructure/docker/README.md#hot-reload-during-development)

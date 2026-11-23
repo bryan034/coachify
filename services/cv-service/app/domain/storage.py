@@ -162,6 +162,31 @@ class UploadCapacity:
             del document['entries'][identifier]
         self._change(change)
 
+    def reset_deleted_owner(self, owner, identifiers):
+        """Release development-reset reservations only after their records and files are gone."""
+        document = self.ledger.read()
+        if document is None: raise CapacityUnavailable()
+        identifiers = set(identifiers) | {identifier for identifier, entry in document['entries'].items()
+            if entry['owner'] == owner}
+        released = 0
+        for identifier in sorted(identifiers):
+            with self.files.lock(identifier):
+                if self.repository.capacity_record(identifier) is not None: continue
+                entry = self.entry(identifier)
+                if entry is not None and entry['owner'] != owner: raise CapacityUnavailable()
+                try: self.files.remove(identifier)
+                except OSError as exc:
+                    raise CvError('CV reset could not remove all uploaded files. Retry Start afresh to finish cleanup.', 503) from exc
+                def change(document):
+                    current = document['entries'].get(identifier)
+                    if current is None: return 0
+                    if entry is None or current['owner'] != owner or current['generation'] != entry['generation']:
+                        raise CapacityUnavailable()
+                    del document['entries'][identifier]
+                    return 1
+                released += self._change(change)
+        return released
+
     def recover_one(self, identifier):
         """A lock, never an elapsed lease, proves a writer is no longer active."""
         with self.files.lock(identifier, blocking=False) as acquired:

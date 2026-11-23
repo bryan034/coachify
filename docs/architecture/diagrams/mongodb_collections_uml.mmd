@@ -260,7 +260,7 @@ class career_state {
 users "1" --> "0..1" cv_selections : owns explicit source selection
 cv_selections --> cvs : validates owner and version
 cv_upload_capacity --> cvs : reserves record and original capacity
-note for cv_upload_capacity "One journaled CAS ledger; account totals derived from at most 20,000 fixed-shape entries. File locks and generation checks fence publication/deletion; no TTL release of uncertain bytes."
+note for cv_upload_capacity "One journaled CAS ledger; account totals derived from at most 20,000 fixed-shape entries. File locks and generation checks fence publication/deletion; no TTL release of uncertain bytes. Development reset releases only the caller's entries after their CV records and files are removed, including stale entries from earlier resets."
 note for cv_model_usage "Journaled daily provider-attempt admission across extraction, routing and clarification. Newer days reset counts; backwards clocks do not. Account-specific OS-locked slots enforce per-account concurrency."
 users "1" --> "0..*" cv_conversations : owns private retained history
 cv_conversations --> cvs : optional source reference
