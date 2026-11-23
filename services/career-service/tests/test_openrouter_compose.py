@@ -20,7 +20,7 @@ def render(tmp_path, env_file, overrides):
     env = {'PATH': os.environ.get('PATH', ''), 'HOME': os.environ.get('HOME', str(tmp_path))}
     env.update({name: 'synthetic-password' for name in (
         'MONGO_ROOT_PASSWORD', 'PROFILE_DB_PASSWORD', 'CAREER_DB_PASSWORD', 'CV_DB_PASSWORD',
-        'ASSESSMENT_DB_PASSWORD', 'ROADMAP_DB_PASSWORD', 'JOBS_DB_PASSWORD')})
+        'ASSESSMENT_DB_PASSWORD', 'ROADMAP_DB_PASSWORD', 'JOBS_DB_PASSWORD', 'SOCIALS_DB_PASSWORD')})
     env.update(overrides)
     command = ([COMPOSE] if COMPOSE else [DOCKER, 'compose']) + ['--project-directory', str(tmp_path),
         '--env-file', str(env_file), '-f', str(ROOT / 'infrastructure/docker/compose.yaml'),

@@ -133,6 +133,8 @@ This improves JavaScript-page support; it does not guarantee access to blocked s
 
 `jobs-service` fetches public boards on request and uses `elo_jobs` only for private application snapshots. `compose.test.yaml` disables provider access through the existing synthetic-test flag. Apply the [required setting](../../docs/setup.md#jobs-service) before rebuilding.
 
+`socials-service` stores pilot expert profiles, appointments, chat credits and reports in `elo_socials`. Set the [Socials environment values](../../docs/setup.md#chats--socials-pilot) before rebuilding an existing Compose checkout.
+
 ## Assessment and Roadmap adviser services
 
 The active stack now includes separately scoped Assessment and Roadmap services/databases. Apply the [new required settings](../../docs/setup.md#assessment-and-roadmap-adviser) yourself before rebuilding. Their gateway routes stay on `/api/v1`; no additional service host ports are opened. `init-planning.js` creates missing scoped users without resetting existing credentials. Profile/CV/Career images now build from repository root to install the shared skill registry package. Runtime app source mounts remain `/service/app`; shared-package changes require rebuilding the images. No environment files need to be mounted in an image or test.

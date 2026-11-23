@@ -9,7 +9,7 @@ Before CV clarification uses the current goal, the user explicitly confirms its 
 ## Stack
 
 - Frontend: Next.js App Router, React, and TypeScript; Node.js server runtime.
-- Backend: eight independently deployed Python FastAPI service boundaries.
+- Backend: independently deployed Python FastAPI service boundaries.
 - Gateway: NGINX reverse proxy and request routing.
 - Database: MongoDB, with separate databases and credentials for data-owning services.
 - Development infrastructure: Docker Compose; optional local MongoDB container.
@@ -26,6 +26,7 @@ services/cv-service/         CV extraction and clarification
 services/career-service/     Career goals, JD interpretation and public research
 services/assessment-service/ Private versioned skill comparisons
 services/jobs-service/       Singapore job search and application tracking
+services/socials-service/    Invite-only expert coffee chats and pilot credits
 services/roadmap-service/    Study settings, validated LLM roadmaps, timed sessions, adviser chat and progress
 services/dashboard-service/ Stateless progress aggregation
 services/review-service/    Pace reviews and scheduling

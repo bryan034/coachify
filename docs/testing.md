@@ -493,6 +493,8 @@ The previous C-series captioned recording uses synthetic models and the pre-inte
 
 See the [Jobs test guide](../services/jobs-service/tests/README.md). Tests use synthetic listings on `mongomock`, plus disposable real MongoDB when `MONGODB_TEST_URI` is set. Contract tests compare the complete generated OpenAPI document. No test calls a live job provider. `compose.test.yaml` disables provider access via the synthetic-test flag. Live-search tests inject changing provider responses and verify that no catalogue writes occur.
 
+Socials tests use standalone MongoDB via `MONGODB_TEST_URI` for concurrent booking, credit settlement and interruption recovery. The [Playwright Chats & Socials checks](../apps/frontend/tests/e2e/chats-socials.spec.ts) cover the request form, a lost response, the expert inbox and confirmed chats in Roadmap using synthetic API responses.
+
 ## Assessment and Roadmap adviser
 
 Run each service separately because they use independent `app` namespaces. With pinned dependencies installed, repository tests can use:

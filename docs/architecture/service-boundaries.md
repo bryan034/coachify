@@ -8,6 +8,7 @@
 | Assessment | G01–G07 | Private immutable skill_gap_analyses, captured evidence/version vectors, comparison checkpoints and current result |
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Study settings, consumed planning-input snapshots, milestones, timed sessions, progress history, self-reported outcomes and confirmations, proposed/applied revisions |
 | Jobs | No Jira stories yet | Live public Singapore listings from employer boards; private self-reported application snapshots, including user-supplied job links that Jobs never fetches |
+| Socials | Chats & Socials pilot | Curated experts, bookable windows, credits, booking requests and decisions, private follow-up, and reports |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
 | Review | A01 orchestration; S01-S06 | Planned only: review state, pace analysis, schedules and approval preferences; no ASGI application, Compose service or gateway route |
 
@@ -28,6 +29,8 @@
 - Planned Career -> Profile: versioned background/planning inputs; manual additions use the Profile declaration API, while CV-specific corrections use CV.
 - Jobs -> Profile: validate the account/session and completed onboarding; `sort=recommended` additionally reads manual declarations.
 - Jobs -> Career/CV: for `sort=recommended` only, read the current goal and selected CV skills to rank live results. Other search orders do not make these reads.
+- Socials -> Profile: validate the account/session and completed onboarding. Socials enforces member access, assigned-expert permissions and operator permissions.
+- Socials -> Career: read current goal role and field for member-facing expert recommendations. The browser reads confirmed chats from Socials to show follow-up in Roadmap.
 - Planned Roadmap -> Review: verify the current automatic-application policy.
 - Dashboard -> Profile/Roadmap/Assessment: session/background validation and passive owner-scoped progress/assessment snapshots, with bounded version rechecks; no cross-service database access. The home dashboard instead uses browser calls to the domain APIs; it does not consume this aggregation API.
 - Planned Review -> Profile/Career/Roadmap: read inputs, request a revision, request authorised application.

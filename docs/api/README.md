@@ -13,6 +13,7 @@ and custom headers at the gateway; private service calls retain owner bearers.
 | `/api/v1/assessments` | Private version-pinned CV/goal/interview comparison, saved evaluation freshness and durable operations | [assessment-service](../../services/assessment-service/README.md) | Available; configured database and model required |
 | `/api/v1/roadmaps` | Study settings, chat helper and runway, projected weekly objectives and reviewed one-week task schedules, timed or anytime tasks, backlog scheduling, checkpoints, self-ratings, progress and per-skill learning steps | [roadmap-service](../../services/roadmap-service/README.md) | Available; configured database and model required |
 | `/api/v1/jobs` | Singapore job and internship search with filters, search links to other job sites, and private tracking of self-reported applications, including jobs saved from a pasted link | [jobs-service](../../services/jobs-service/README.md) | Available; listings fetched live from configured employer boards |
+| `/api/v1/socials` | Expert directory, online coffee-chat bookings, pilot credits, member follow-up and reports | [socials-service](../../services/socials-service/README.md) | Invite-only pilot |
 | `/api/v1/dashboard` | Daily, weekly, monthly and whole-roadmap progress | [dashboard-service](../../services/dashboard-service/README.md) | Backend available; frontend integration planned |
 | `/api/v1/reviews`, `/api/v1/review-schedules` | Manual or scheduled pace reviews and adaptation preferences | [review-service](../../services/review-service/README.md) | Planned |
 

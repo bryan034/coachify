@@ -10,4 +10,6 @@ failures. Canonical schemas remain in `contracts/api/` and the owning service.
 
 `jobs.ts` searches listings and manages the owner's tracked applications, validating responses before rendering.
 
+`socials.ts` reads the expert directory and member agenda, and sends booking, decision, report and follow-up commands through the gateway.
+
 `assessment.ts` reads the saved skill comparison for Career Goal. It is read-only and never starts an analysis.

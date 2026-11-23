@@ -29,6 +29,7 @@ node "Docker Compose — elo-profile" {
     node "Assessment\n/api/v1/assessments\nImmutable versioned comparisons" as Assessment
     node "Roadmap\n/api/v1/roadmaps\nAdviser, plans, sessions and progress" as Roadmap
     node "Jobs\n/api/v1/jobs\nLive search and self-reported applications" as Jobs
+    node "Socials\n/api/v1/socials\nExpert chats and pilot credits" as Socials
     node "Dashboard\n/api/v1/dashboard\nStateless progress aggregation" as Dashboard
     node "Mailpit\nDevelopment profile only\nUI at 127.0.0.1:${MAILPIT_PORT:-8025}" as Mailpit
   }
@@ -40,8 +41,9 @@ node "Docker Compose — elo-profile" {
       database "elo_assessment\nAssessment-owned" as AssessmentDB
       database "elo_roadmap\nRoadmap-owned" as RoadmapDB
       database "elo_jobs\nJobs-owned application snapshots" as JobsDB
+      database "elo_socials\nSocials-owned schedules, wallets and reports" as SocialsDB
     }
-    node "One-shot database initialisers\nmongodb-career-init\nmongodb-planning-init\nmongodb-jobs-init" as Init
+    node "One-shot database initialisers\nmongodb-career-init\nmongodb-planning-init\nmongodb-jobs-init\nmongodb-socials-init" as Init
   }
   artifact "profile_data\nPersistent MongoDB files" as Data
   artifact "cv_uploads\nPrivate originals; expiry cleanup\n24-hour default retention" as Uploads
@@ -56,6 +58,7 @@ Gateway --> Career : /api/v1/career
 Gateway --> Assessment : /api/v1/assessments
 Gateway --> Roadmap : /api/v1/roadmaps
 Gateway --> Jobs : /api/v1/jobs
+Gateway --> Socials : /api/v1/socials
 Gateway --> Dashboard : /api/v1/dashboard
 
 Profile --> ProfileDB
@@ -64,6 +67,7 @@ Career --> CareerDB
 Assessment --> AssessmentDB
 Roadmap --> RoadmapDB
 Jobs --> JobsDB
+Socials --> SocialsDB
 Init --> Mongo : Bootstrap service users / databases
 Mongo --> Data
 CV --> Uploads

@@ -42,7 +42,7 @@ def run(args):
         'MAILPIT_BASE_URL':f'http://localhost:{args.mail_port}',
         'CAREER_FLOW_E2E':'1','ELO_TEST_COMPOSE_PROJECT':project,
     })
-    for name in ('MONGO_ROOT_PASSWORD','PROFILE_DB_PASSWORD','CAREER_DB_PASSWORD','CV_DB_PASSWORD','ASSESSMENT_DB_PASSWORD','ROADMAP_DB_PASSWORD','JOBS_DB_PASSWORD'):
+    for name in ('MONGO_ROOT_PASSWORD','PROFILE_DB_PASSWORD','CAREER_DB_PASSWORD','CV_DB_PASSWORD','ASSESSMENT_DB_PASSWORD','ROADMAP_DB_PASSWORD','JOBS_DB_PASSWORD','SOCIALS_DB_PASSWORD'):
         env[name]='synthetic-career-flow-'+name.lower()
     compose=['docker','compose','--env-file','/dev/null','-p',project,
         '-f',str(ROOT/'infrastructure/docker/compose.yaml'),
