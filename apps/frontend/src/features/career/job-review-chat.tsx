@@ -1,7 +1,8 @@
 "use client";
 import { BrandLogo } from '@/components/ui/brand-logo';
+import {ChatBubble} from './chat-bubble';
 import {ChatScrollControl,useChatScroll} from './use-chat-scroll';
-import {useEffect,useRef,useState,type ReactNode} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {useProfile} from '@/features/profile/profile-provider';
 import {useCareerSession} from './career-session';
@@ -22,10 +23,6 @@ function reportPending(research:OpportunityView){
 }
 function responseReady(workspace:CareerWorkspace,research?:OpportunityView){
  return !!workspace.current.goal&&['ready','research_failed'].includes(workspace.phase)&&!!research&&research.career_target_id===workspace.current.goal._id&&research.research_id===workspace.research_id&&research.finished!==false&&['completed','partial','failed'].includes(research.status)&&Object.values(research.categories).every(category=>category&&!['pending','running'].includes(category.status));
-}
-/** CV-review style message: elo avatar, speaker label and a bordered bubble. */
-function ChatBubble({role,children}:{role:'assistant'|'user';children:ReactNode}){
- return <div className={`agent-message ${role}`}>{role==='assistant'&&<span className="agent-message-avatar" aria-hidden="true"><BrandLogo compact decorative/></span>}<span className="agent-message-label">{role==='user'?'You':'elo'}</span><div className="agent-bubble">{children}</div></div>;
 }
 export function JobReviewChat(){
  const {token}=useProfile(),session=useCareerSession(),router=useRouter();

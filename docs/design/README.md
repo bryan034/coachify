@@ -28,6 +28,11 @@ error and warning colours keep their semantic meaning. Desktop navigation uses a
 (Home, Career Goal, Skills Profile, Roadmap, Search Jobs), with coming-soon pages below a divider. Mobile navigation expands
 from a Menu button beside the logo and current page title; selecting a link or pressing Escape closes it. Keyboard focus and reduced-motion support are preserved.
 
+Career Discovery and Goal conversation share the full-screen chat layout, elo avatar
+and bordered assistant bubbles, mint user bubbles, and the bottom message input.
+Discovery keeps its session history, conversation details and research controls in
+this layout.
+
 ### Shared conventions
 
 - **Errors:** `src/lib/errors.ts` turns failures into one actionable line. Aborted
