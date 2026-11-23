@@ -874,7 +874,7 @@ RequiredSkillLevel *-- SkillLevelExample
 CvSkill *-- SkillLevelInfo
 SkillClaim *-- SkillLevelInfo
 OpportunityReport *-- RequiredSkillLevel
-note for SkillLevelInfo "Shared competence scale: 1 not competent, 5 independent with understanding, 10 most complex. Missing independence caps guided use at 3. Review ratings are fingerprint-bound overlays stored on the CV; goal comparison remains Assessment-owned."
+note for SkillLevelInfo "Shared understanding scale (understanding-1-10-v2): 1-3 no/little/basic understanding, 4-6 moderate, 7-8 good, 9-10 expert. Skill use without demonstrated understanding is capped at 3; a named skill without described use is capped at 2. Independent delivery is not the criterion. Review ratings are fingerprint-bound overlays stored on the CV; goal comparison remains Assessment-owned."
 
 
 class EvaluationStatus {
@@ -919,3 +919,24 @@ class PartialOutlineReview {
 RoadmapOutline *-- PartialOutlineReview : reviewed omissions
 
 %% Create roadmap activates the outline and validated first week atomically; weekly objectives remain backend planning context, not calendar UI rows.
+
+
+class roadmap_workspaces["elo_roadmap.workspaces"] {
+    +RoadmapPlannerState planner
+}
+class RoadmapPlannerState {
+    +PlannerConfig config?
+    +Object candidate?
+    +Object active?
+    +Object confirmations
+    +String[] confirmed_evidence
+    +Object outline_candidate?
+    +Object outline_active?
+    +Object[] outline_history
+    +Object week_candidate?
+    +Object[] week_blocks
+    +Object[] week_history
+    +Object[] month_blocks [legacy accepted coverage]
+}
+roadmap_workspaces *-- RoadmapPlannerState
+note for RoadmapPlannerState "Stored under workspaces.planner. Contains plan configuration, previews, active plan, confirmations and accepted outline/week history; messages, pending operation and mutation receipts remain workspace-root fields."

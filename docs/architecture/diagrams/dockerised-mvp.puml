@@ -1,5 +1,5 @@
 @startuml elo_dockerised_mvp
-title elo — CV, Career, Assessment and Roadmap adviser
+title elo — current Compose deployment and data ownership
 left to right direction
 skinparam shadowing false
 skinparam componentStyle rectangle
@@ -12,137 +12,90 @@ skinparam componentBackgroundColor white
 skinparam databaseBackgroundColor #EFF6FA
 
 actor "User browser" as Browser
-component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nAccount-owned manual skills intake + capability declarations" as Profile
-cloud "Configured CV model API\nOpenAI-compatible extraction, routing and interpretation" as CVLLM
-cloud "Career model API\nOpenAI-compatible HTTPS (OpenRouter default)\nShared adapter: extraction, chat, research coordination" as LLM
-cloud "Public employer job boards\nGreenhouse / Lever / Ashby" as JobBoards
-cloud "Public web search\nOpenRouter native search\n(Brave LLM Context fallback)" as Sources
+cloud "Model APIs\nOpenAI Python SDK; OpenRouter defaults\nIndependent service settings" as Models
+cloud "Public research\nOpenRouter native web search\nBrave LLM Context fallback" as Research
+cloud "Live employer job boards\nGreenhouse / Lever / Ashby" as Boards
+cloud "Google sign-in (optional)\nSMTP email provider" as Identity
 
-node "Docker Compose — focused design" {
-  node "Next.js / React / TypeScript" as Web <<Docker container>>
-  node "NGINX API gateway" as Gateway <<Docker container>>
-
-  package "Private backend network" {
-    node "CV analyser\nservices/cv-service" as CV <<Docker container>> {
-      artifact "Summary-first upload/review/deletion and explicit resumable chat\nSource-linked clarification, correction and selection\nMerged Skills Profile evidence\nTransient LangGraph extraction + one validated repair + review preparation\n/api/v1/cv" as CVAPI
-    }
-    node "Career goal and public research\nservices/career-service" as Career <<Docker container>> {
-      artifact "Specific JD or conversational discovery\nOne canonical CareerGoal + explicit CV confirmation\nStructured skills and five-category Opportunity Intelligence\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
-    }
-    node "Private capability assessment\nservices/assessment-service" as Assessment <<Docker container>> {
-      artifact "Version-pinned comparison and source evidence\nSeparate role, interview and constraint outcomes\n/api/v1/assessments" as AssessmentAPI
-    }
-    node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
-      artifact "Chat-assisted settings and calculated runway\nAutomatic roadmap and first-week activation\nTimed or anytime tasks, backlog moves and checkpoints\n/api/v1/roadmaps" as RoadmapAPI
-    }
-    node "Job search and application tracking\nservices/jobs-service" as Jobs <<Docker container>> {
-      artifact "Singapore listing search and filters\nSelf-reported application tracking\n/api/v1/jobs" as JobsAPI
-    }
+node "Docker Compose — elo-profile" {
+  node "NGINX gateway\n127.0.0.1:${GATEWAY_PORT:-8080}\nJoins web and backend networks" as Gateway
+  package "web network" {
+    node "Next.js frontend\nReact / TypeScript\nPage routes and assets" as Web
   }
-
-  node "MongoDB — local development" as Mongo <<Docker container>> {
-    database "CV-owned database\ncvs\ncv_selections + cv_conversations (operational)\ncv_upload_capacity + cv_model_usage (operational)" as CVDB
-    database "Career-owned database\ncareer_goals + career_state (operational)\ninterview_research" as CareerDB
-    database "Assessment-owned database\nskill_gap_analyses\nworkspaces with batch checkpoints" as AssessmentDB
-    database "Roadmap-owned database\nroadmaps immutable revisions\nworkspaces with weekly outlines, accepted weeks and chat" as RoadmapDB
-    database "Jobs-owned database\njob_applications only" as JobsDB
+  package "backend network — service-to-service HTTP" {
+    node "Profile\n/api/v1/profile\nAccounts, background and declarations" as Profile
+    node "CV\n/api/v1/cv\nEvidence, extraction, review and conversations" as CV
+    node "Career\n/api/v1/career\nCanonical goal, discovery and public research" as Career
+    node "Assessment\n/api/v1/assessments\nImmutable versioned comparisons" as Assessment
+    node "Roadmap\n/api/v1/roadmaps\nAdviser, plans, sessions and progress" as Roadmap
+    node "Jobs\n/api/v1/jobs\nLive search and self-reported applications" as Jobs
+    node "Dashboard\n/api/v1/dashboard\nStateless progress aggregation" as Dashboard
+    node "Mailpit\nDevelopment profile only\nUI at 127.0.0.1:${MAILPIT_PORT:-8025}" as Mailpit
   }
-  artifact "Service-private temporary CV storage\nQuota admission, shared POSIX locks and recoverable cleanup" as Uploads <<Private storage>>
+  package "database network — internal: true" {
+    node "MongoDB 8.2" as Mongo {
+      database "elo_profile\nProfile-owned" as ProfileDB
+      database "elo_ingestion\nCV-owned" as CVDB
+      database "elo_career\nCareer-owned" as CareerDB
+      database "elo_assessment\nAssessment-owned" as AssessmentDB
+      database "elo_roadmap\nRoadmap-owned" as RoadmapDB
+      database "elo_jobs\nJobs-owned application snapshots" as JobsDB
+    }
+    node "One-shot database initialisers\nmongodb-career-init\nmongodb-planning-init\nmongodb-jobs-init" as Init
+  }
+  artifact "profile_data\nPersistent MongoDB files" as Data
+  artifact "cv_uploads\nPrivate originals; expiry cleanup\n24-hour default retention" as Uploads
+  artifact "model_budget\nShared persistent daily call allowance" as Budget
 }
 
-Browser --> Web : Use application
-Web --> Gateway : /api/v1 requests
-Gateway --> Profile : Existing account / profile routes
-Gateway --> CV : Saved CV and conversation routes
-Gateway --> Career : Career routes
-Gateway --> Assessment : Assessment owner routes
-Gateway --> Roadmap : Adviser and tasks
-Gateway --> Jobs : Job search and tracking
+Browser --> Gateway : Pages, assets and /api/v1 requests
+Gateway --> Web : Non-API routes
+Gateway --> Profile : /api/v1/profile
+Gateway --> CV : /api/v1/cv
+Gateway --> Career : /api/v1/career
+Gateway --> Assessment : /api/v1/assessments
+Gateway --> Roadmap : /api/v1/roadmaps
+Gateway --> Jobs : /api/v1/jobs
+Gateway --> Dashboard : /api/v1/dashboard
 
-' API dependencies point from caller to the service it calls.
-CV --> Profile : Validate session / read Skills Profile and declarations / confirmed additions
-Profile --> CV : Validate explicit source attachment
-CV --> Career : Current confirmed goal/version/selection projection
-Career --> Profile : Validate session / read selected context
-Career --> CV : Read effective CV skills and extraction version
-Roadmap --> Profile : Read deadline and availability
-Assessment --> CV : Selected effective evidence and versions
-Assessment --> Career : Full goal and linked research snapshot
-Assessment --> Profile : Verify session and current background
-Roadmap --> Assessment : Reuse current saved skill evaluation; explicit update first; resume pending work
-Jobs --> Profile : Verify session
-
-CV --> CVDB : Own records only
-Career --> CareerDB : Own records only
-Assessment --> AssessmentDB : Own records only
-Roadmap --> RoadmapDB : Own records only
-Jobs --> JobsDB : Private application snapshots only
-Jobs --> JobBoards : Fetch public boards on each search
-CV --> Uploads : Temporary original access
-CV --> CVLLM : Schema-constrained extraction/repair, bounded routing and interpretation
-Career --> LLM : Goal interpretation / scoped chat / cited research synthesis
-Career --> Sources : LangGraph parallel public research branches
-Assessment --> LLM : Service-scoped evidence interpretation
-Roadmap --> LLM : Settings chat and schema-constrained plans, with bounded validation retry
-
-note bottom of Career
-  One career_goals model: specific_job or career_exploration.
-  Career calibrates skill targets from JD wording and fresh cited public role research.
-  CV review captures optional 1-10 skill self-ratings in source-owned facts.
-  Assessment applies evidence ceilings (ambiguous project 3; levels rate understanding of the subject, not independent delivery)
-  and role-relative progress; self-ratings cannot override assessed evidence.
-  Discovery synthesis/refinements publish automatically with selection/conversation guards; no chat save action.
-  CV acknowledgement binds the exact current goal/version/selection.
-  Automatic goal saves do not silently confirm CV context.
-  company may be null. Interview research is reusable public context;
-  private CV/chat data must not enter that shared research.
-  Validate scope/evidence; identity overlaps full JD extraction with public retrieval.
-  Matching early evidence seeds the existing research job after goal saving.
-  Cards update on extraction; chat retains observed activity until both results succeed.
-  The configured model writes one cited overview from JD details and completed research.
-  Temporary observed activity disappears on completion; scoped follow-up chat can search the selected provider.
-  Missing goal answers allow three distinct public-subject searches; cited exact passages append to question research.
-  Owner/version-linked question snapshots retain evidence without rewriting the goal or existing reports.
-  Persist structured output and bounded evidence, not full raw JD text.
-  JD originals/previews use service-private temporary parsing storage.
-end note
-
-note bottom of Mongo
-  Separate service-owned databases and credentials.
-  No cross-service collection queries; use authenticated APIs.
-  Production may replace local MongoDB with MongoDB Atlas.
-  The users collection in the UML maps to the existing
-  Profile/account authority outside this diagram's three-service scope.
-end note
+Profile --> ProfileDB
+CV --> CVDB
+Career --> CareerDB
+Assessment --> AssessmentDB
+Roadmap --> RoadmapDB
+Jobs --> JobsDB
+Init --> Mongo : Bootstrap service users / databases
+Mongo --> Data
+CV --> Uploads
+CV --> Budget
+Career --> Budget
+Assessment --> Budget
+Roadmap --> Budget
+CV --> Models
+Career --> Models
+Assessment --> Models
+Roadmap --> Models
+Career --> Research
+Jobs --> Boards
+Profile --> Identity
+Profile ..> Mailpit : Dev SMTP
 
 legend bottom
-  Focused design direction, not a deployment or implementation claim.
-  Core scope: CV, Career, separate Assessment, Roadmap adviser and Jobs.
-  Existing Profile/auth is shown only as an external dependency.
-  Dashboard, review/scheduling and future services are intentionally omitted;
-  extend this diagram when their scope is agreed.
-  Current implementation: Profile/auth, temporary Career JD previews,
-  optional-CV exploration, one autosaved current goal/chat, LangGraph research, saved CV upload/review/chat and data contracts.
-  Importance review, advisory skills and versioned research orchestration/review are implemented.
-  OpenRouter runs the model provider's native web search;
-  Brave LLM Context is the fallback. Historical attribution remains readable.
-  Source-linked CV interpretation is implemented; Assessment comparison and Roadmap adviser are implemented with synthetic verification; live quality remains unverified.
-  Synthetic tests do not establish live-provider quality or deployed readiness.
-  career_state (including version-bound CV acknowledgement) and research_contexts are operational metadata.
-  career_checkpoints / career_checkpoint_writes retain safe graph state for 24h.
-  The model services share a per-account daily call allowance.
-  Provider quotas and task context/output/time limits also apply.
-  Opportunity Intelligence embeds typed categories/findings/summary in interview_research.
-  Overlong interview round names receive one title-only model pass, cached separately in research_contexts.
-  Original evidence and round names remain immutable; the API exposes separate short round_titles.
-  Durable category jobs/receipts reuse research_contexts; no duplicate domain collections.
-  The configured model plans, evaluates cited evidence and selects validated summaries using unchanged JSON models.
-  Career, CV, Assessment and Roadmap use the OpenAI Python SDK with independent endpoint settings.
-  The deployment template selects OpenRouter.
-  Collection and embedded-object schemas: sibling mongodb_*.mmd files.
+  Source: compose.yaml, gateway/nginx.conf and service implementations.
+  Service HTTP dependencies: service-api-dependencies.mmd.
+  Home calls domain APIs; it does not use the Dashboard aggregation API.
+  Each data owner has a separate database and credentials; foreign reads use HTTP.
+  Dashboard has no database. MongoDB Atlas remains a production proposal.
+  Profile bootstrap uses MongoDB's init-profile.js mount.
+  CV persists parsed extraction state in cv_extraction_states for restart recovery.
+  Roadmap outline/week state is nested in workspaces.planner.
+  Gateway rejects /internal/ and unknown /api/ paths.
+  Review is a scaffold: no ASGI app, Compose service or gateway route.
+  Jobs builds external search links for the browser; the server does not fetch those sites.
+  Public listings remain transient; saved application snapshots are private.
+  The four AI services share model_budget but keep independent provider settings.
+  Synthetic tests do not establish live-model quality or deployed readiness.
+  Collection / embedded schemas: sibling mongodb_*.mmd files.
+  Historical PostgreSQL reference: reference/dockerised-mvp.puml (unchanged).
 endlegend
 @enduml
-
-' CV interview memory persists in existing CV Mongo records; extraction graph/provider context remains transient.
-
-' CV skill ratings and Career researched requirements share the 1-10 competence scale; Assessment compares them.

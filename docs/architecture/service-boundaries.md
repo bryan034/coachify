@@ -9,7 +9,7 @@
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Study settings, consumed planning-input snapshots, milestones, timed sessions, progress history, self-reported outcomes and confirmations, proposed/applied revisions |
 | Jobs | No Jira stories yet | Live public Singapore listings from employer boards; private self-reported application snapshots, including user-supplied job links that Jobs never fetches |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
-| Review | A01 orchestration; S01-S06 | Manual/scheduled review state, pace analysis, schedules, approval preferences |
+| Review | A01 orchestration; S01-S06 | Planned only: review state, pace analysis, schedules and approval preferences; no ASGI application, Compose service or gateway route |
 
 ## Shared skill display categories
 
@@ -18,17 +18,18 @@
 ## API dependencies
 
 - CV -> Profile: validate account/session, read account declarations with their revision, and submit explicitly confirmed conversational capability additions through the existing declaration API.
-- Profile -> CV: validate an explicitly chosen matching CV item/version before a manual attachment; no CV is needed for a plain declaration.
+- Profile -> CV: validate ownership, version and supporting skill evidence for an explicitly chosen matching CV item before a manual attachment; no CV is needed for a plain declaration.
 - CV -> Career: authenticate and validate the owner’s selected confirmed target, skill IDs and exact target/selection versions for relevant clarification.
 - Career -> Profile: validate the account/session and completed onboarding.
 - Career -> CV: read owner-scoped saved metadata and effective evidence through the CV API; preserve CV identifiers and provenance in its internal projection. New Assessment comparison uses shared canonical identities and complete input revalidation; this Career CV projection remains a compatibility read.
 - Assessment -> Profile/CV/Career: authenticated source snapshots, current versions, effective evidence and owner-linked research; no foreign database reads.
-- Roadmap -> Assessment/Profile: comparison/context, an evidence preview and baseline planning inputs; Roadmap owns plan-specific study blocks, previews, active roadmaps and sessions.
+- Roadmap -> Assessment: comparison/context, source assessment ID/hash and freshness; immutable evidence remains addressable through the Assessment API. CV/Career context reaches Roadmap through Assessment, rather than direct CV/Career calls.
+- Roadmap -> Profile: session validation, baseline planning inputs and declarations; explicitly confirmed practice evidence is written through the Profile capabilities API. Roadmap owns plan-specific study blocks, previews, active roadmaps and sessions.
 - Planned Career -> Profile: versioned background/planning inputs; manual additions use the Profile declaration API, while CV-specific corrections use CV.
-- Roadmap -> Assessment: source assessment ID/hash and freshness; immutable evidence remains addressable through the Assessment API.
-- Jobs -> Profile: validate the account/session and completed onboarding. Jobs reads no other service's data, and no service calls Jobs yet.
+- Jobs -> Profile: validate the account/session and completed onboarding; `sort=recommended` additionally reads manual declarations.
+- Jobs -> Career/CV: for `sort=recommended` only, read the current goal and selected CV skills to rank live results. Other search orders do not make these reads.
 - Planned Roadmap -> Review: verify the current automatic-application policy.
-- Dashboard -> Roadmap/Assessment: passive owner-scoped progress and assessment snapshots, with bounded version rechecks; no cross-service database access.
+- Dashboard -> Profile/Roadmap/Assessment: session/background validation and passive owner-scoped progress/assessment snapshots, with bounded version rechecks; no cross-service database access. The home dashboard instead uses browser calls to the domain APIs; it does not consume this aggregation API.
 - Planned Review -> Profile/Career/Roadmap: read inputs, request a revision, request authorised application.
 
 Browser authentication uses Profile-issued HttpOnly cookies. The gateway requires
@@ -235,11 +236,11 @@ CV-conversation-owned, source-fenced and preserves saved answers while moving on
 
 ## Timed roadmap
 
-Roadmap runs Configure → Create roadmap → Tasks. UI creation activates the validated outline and first week in the backend operation; preview APIs remain available for compatibility. Weekly objectives are internal planning context rather than calendar UI rows. Assessment's `GET /context` additionally returns its evidence records, without a model call, so the settings panel can show what will be sent; generation still reuses or runs a full Assessment. Roadmap owns the deterministic runway calculation and plan validation. The LLM owns gaps, sequencing, effort and assignments within those checks. Session completion, self-reported outcomes and experience confirmations stay in Roadmap's `workspaces.planner` and `roadmaps`, and never write to Profile, CV or Assessment. No new service, collection or foreign database access is introduced. See the [Roadmap specification](../../services/roadmap-service/SPEC.md).
+Roadmap runs Configure → Create roadmap → Tasks. UI creation activates the validated outline and first week in the backend operation; preview APIs remain available for compatibility. Weekly objectives are internal planning context rather than calendar UI rows. Assessment's `GET /context` additionally returns its evidence records, without a model call, so the settings panel can show what will be sent; generation still reuses or runs a full Assessment. Roadmap owns the deterministic runway calculation and plan validation. The LLM owns gaps, sequencing, effort and assignments within those checks. Session completion, self-reported outcomes and experience confirmations stay in Roadmap's `workspaces.planner` and `roadmaps`. A separate explicit evidence-proposal confirmation writes self-reported practice evidence to Profile's capabilities API; completion alone does not change Profile, CV or Assessment. No new service, collection or foreign database access is introduced. See the [Roadmap specification](../../services/roadmap-service/SPEC.md).
 
 ## Job search
 
-Jobs owns live public board aggregation and private application snapshots in its own `elo_jobs` database. Searches call configured Greenhouse, Lever and Ashby boards at request time and filter transient normalised results; no listing catalogue or scheduled worker is used. Only application snapshots and user-reported status history persist. Partial provider failures are visible; saved listings have unknown current availability until checked on the employer site. Career's single-job URL intake remains separate. See the [Jobs specification](../../services/jobs-service/SPEC.md).
+Jobs owns live public board aggregation and private application snapshots in its own `elo_jobs` database. Searches call configured Greenhouse, Lever and Ashby boards at request time and filter transient normalised results; no listing catalogue or scheduled worker is used. Only application snapshots and user-reported status history persist. Recommended ranking reads the owner's current Career goal, Profile declarations and selected CV skills through APIs; these inputs stay internal and are not sent to employer boards. External-search endpoints only generate browser links. Partial provider failures are visible; saved listings have unknown current availability until checked on the employer site. Career's single-job URL intake remains separate. See the [Jobs specification](../../services/jobs-service/SPEC.md).
 
 Phase 2 allows Assessment to capture saved Profile declarations without a selected
 CV. Its source-mode and nullable CV revisions distinguish that snapshot from the

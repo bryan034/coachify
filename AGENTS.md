@@ -25,11 +25,12 @@ Browser → **NGINX gateway** (`127.0.0.1:${GATEWAY_PORT:-8080}`) → Next.js fr
 | `dashboard-service` | `/api/v1/dashboard` | none (stateless) | Backend only | Progress aggregation from Roadmap/Assessment |
 | `review-service` | `/api/v1/reviews`, `/api/v1/review-schedules` | — | Scaffold | Planned pace reviews; not routed by the gateway (404); the only service allowed an empty test suite |
 
-Service-to-service dependencies (read through APIs only, forwarding the owner's revocable bearer):
+Service-to-service dependencies (through APIs only, forwarding the owner's revocable bearer):
 
-- CV → Profile (session, declarations), CV → Career (confirmed goal for clarification)
+- Profile → CV (validate matched source evidence); CV → Profile (session, declarations, confirmed additions), CV → Career (confirmed goal for clarification)
 - Career → Profile (session/onboarding), Career → CV (saved CV evidence)
-- Assessment → Profile/CV/Career; Roadmap → Assessment/Profile/CV/Career; Dashboard → Roadmap/Assessment; Jobs → Profile only
+- Assessment → Profile/CV/Career; Roadmap → Assessment/Profile (including confirmed practice evidence writes); Dashboard → Profile/Roadmap/Assessment
+- Jobs → Profile (session and declarations); recommended ranking also reads Career (current goal) and CV (selected skills)
 - Full table and rationale: [service boundaries](docs/architecture/service-boundaries.md). Private `/internal/v1` routes are never exposed by the gateway.
 
 Other moving parts: `mongodb` (local container, Mongo 8.2) with one-shot `mongodb-*-init` containers running `infrastructure/mongodb/init-*.js`; `mailpit` (development profile) for captured email. Production DB proposal is MongoDB Atlas, external to containers.

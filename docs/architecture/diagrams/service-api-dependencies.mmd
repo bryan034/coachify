@@ -1,0 +1,25 @@
+flowchart LR
+    Profile[Profile]
+    CV[CV]
+    Career[Career]
+    Assessment[Assessment]
+    Roadmap[Roadmap]
+    Jobs[Jobs]
+    Dashboard[Dashboard API]
+
+    Profile -->|Validate matched CV item, version and skill evidence| CV
+    CV -->|Session, manual evidence and confirmed additions| Profile
+    CV -->|Exact confirmed goal and selection revision| Career
+    Career -->|Session and onboarding| Profile
+    Career -->|Saved CV evidence and versions| CV
+    Assessment -->|Session, background and declarations| Profile
+    Assessment -->|Selected evidence and versions| CV
+    Assessment -->|Goal and owner-linked research| Career
+    Roadmap -->|Session, planning inputs and confirmed practice evidence writes| Profile
+    Roadmap -->|Comparison, context and freshness| Assessment
+    Jobs -->|Session; declarations for recommended ranking| Profile
+    Jobs -->|Current goal for recommended ranking only| Career
+    Jobs -->|Selected CV skills for recommended ranking only| CV
+    Dashboard -->|Session and background validation| Profile
+    Dashboard -->|Passive progress and baseline snapshots| Roadmap
+    Dashboard -->|Passive comparison snapshot| Assessment
