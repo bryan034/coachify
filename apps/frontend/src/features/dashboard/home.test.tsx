@@ -128,6 +128,26 @@ test('See details shows the task’s instructions and what done looks like', asy
  expect(screen.queryByText(/Do task b carefully\./)).not.toBeInTheDocument();
 });
 
+test('completing the next session starts the following session with its details closed', async () => {
+ const overrides = { ...skillsReady, ...withRoadmap([session('b', '2026-11-09', 'scheduled'), session('c', '2026-11-10', 'scheduled')]) };
+ vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  if (url.endsWith('/planner/tasks/status')) {
+   overrides['/roadmaps/workspace'] = withRoadmap([session('b', '2026-11-09', 'completed'), session('c', '2026-11-10', 'scheduled')])['/roadmaps/workspace'];
+   return new Response(JSON.stringify(overrides['/roadmaps/workspace']));
+  }
+  return new Response(JSON.stringify(liveData(url, overrides)));
+ }));
+ render(<ProfileProvider><HomeDashboard /></ProfileProvider>);
+ fireEvent.click(await screen.findByRole('button', { name: 'See details' }));
+ expect(screen.getByText(/Do task b carefully\./)).toBeVisible();
+ fireEvent.click(screen.getByRole('button', { name: 'Mark as done' }));
+ expect(await screen.findByRole('heading', { name: 'Task c' })).toBeVisible();
+ expect(screen.getByRole('button', { name: 'See details' })).toHaveAttribute('aria-expanded', 'false');
+ expect(screen.queryByText(/Do task [bc] carefully\./)).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button', { name: 'See details' }));
+ expect(screen.getByText(/Do task c carefully\./)).toHaveTextContent('Done when: c works');
+});
+
 test('with every planned task finished the hero says all caught up', async () => {
  stub({ ...skillsReady, ...withRoadmap([session('a', '2026-11-06', 'completed')]) });
  render(<ProfileProvider><HomeDashboard /></ProfileProvider>);
