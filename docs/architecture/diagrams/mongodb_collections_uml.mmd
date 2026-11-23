@@ -1,7 +1,7 @@
 classDiagram
 direction TB
 
-class users {
+class users["elo_profile.accounts (logical users)"] {
     +String id [canonical UUID]
     +String owner [existing auth namespace]
     +String name
@@ -157,7 +157,7 @@ career_goals "1" --> "0..1" role_summaries : summarised by
 career_goals "1" --> "0..2" research_briefs : briefed by
 interview_research "0..*" --> "0..*" skill_gap_analyses : referenced by
 
-note for users "Logical authority: existing Profile accounts; no collection rename or auth migration."
+note for users "Logical account/profile projection of the existing Profile authority, not a new users collection. Physical account records are in elo_profile.accounts; profile_versions, auth_flows, auth_limits, auth_sessions, password_resets, profile_mutations and capability_mutations remain Profile-owned. No collection rename or auth migration."
 note for career_goals "One current goal/chat per account; validated saves automatically move the current pointer. Current goals use owner/version CAS edits. Versioned exploration drafts and temporary structured intake records share this collection. Intake promotes the same document into the current goal; no duplicate original-content copy is saved. Draft role/field may be unknown; confirmed role/field are required. Drafts retain adaptive topic context, current focus/question, total_turns and latest 30 turns. Structured progress and bounded evidence only; no raw JD/CV text."
 
 note for interview_prep_suggestions "Private, owner-scoped AI fills for interview questions/preparation the saved research left empty; replaced per goal version and research revision. Labelled as AI-generated; never shared and never stored in interview_research."
@@ -166,7 +166,7 @@ note for role_summaries "Private, owner-scoped AI digest of the About the role c
 
 note for research_briefs "Private, owner-scoped version 2 briefs retained for the existing API; the web app renders interview_research findings directly for both research tabs and never requests these briefs. Replaced per goal version, research revision and format. Never shared and never stored in interview_research."
 
-note for interview_research "Immutable public-context revisions; shared seven-day reuse. Private career_state links constrain user reads. Operational research_contexts holds leases/cache pointers and kind=round_titles one-attempt short-title results; original round names and immutable research remain intact. Brave API adapters acquire evidence. Operational LangGraph checkpoints expire after 24h inactivity; current goals persist. Unavailable acquisition preserves saved goals/research."
+note for interview_research "Immutable public-context revisions; shared seven-day reuse. Private career_state links constrain user reads. Operational research_contexts holds leases/cache pointers and kind=round_titles one-attempt short-title results; original round names and immutable research remain intact. OpenRouter native web search acquires evidence by default, with Brave LLM Context as fallback. Operational LangGraph checkpoints expire after 24h inactivity; current goals persist. Unavailable acquisition preserves saved goals/research."
 
 
 %% career_state.workspace.edit_draft holds a private structured pending edit and latest question (24h workspace expiry); chat_receipts holds bounded idempotency metadata. No raw JD/chat transcript or new collection is added.
@@ -266,13 +266,13 @@ users "1" --> "0..*" cv_conversations : owns private retained history
 cv_conversations --> cvs : optional source reference
 users "1" --> "0..1" career_state : owns current goal metadata
 career_state --> career_goals : exact current goal reference
-note for cvs "Evidence may be a source-supported summary; semantic approval is transient. Bounded source-linked other_information retains uncategorised content; extraction dates are optional hints. CV-owned structured evidence, overlays, interpretation and history. UUID IDs and private temporary originals; public reads expose no path or owner metadata. Transient extraction/repair graph state is not checkpointed; only validated evidence and generation metadata persist. Deleted sources retain content-free receipts, excluded from reads and saved-record quota."
+note for cvs "Evidence may be a source-supported summary; semantic approval is transient. Bounded source-linked other_information retains uncategorised content; extraction dates are optional hints. CV-owned structured evidence, overlays, interpretation and history. UUID IDs and private temporary originals; public reads expose no path or owner metadata. The latest extraction/repair graph checkpoint, including parsed source text, persists separately in cv_extraction_states for restart recovery. Saved evidence and history survive expiry cleanup of the original file. Deletion erases checkpoint content and retains a content-free marker to fence later writes. Deleted sources retain content-free receipts, excluded from reads and saved-record quota."
 note for cv_conversations "Nullable CV permits manual-only entry. Bounded messages/action receipts have separate transcript revisions; no automatic history expiry."
 note for career_state "Automatic goal saving is distinct from explicit CV confirmation. Stamp binds goal ID/version, selection revision and projection hash. Changes invalidate it without another goal record or deleting CV facts."
 note for career_goals "Older UUID reviewed-target documents remain retained history, excluded from canonical ObjectId reads. The stored-shape upgrade drops the retired (user_id, create_key) index; historical documents are kept."
 
-class assessment_workspaces {
-    <<operational Assessment database>>
+class assessment_workspaces["elo_assessment.workspaces"] {
+    <<operational>>
     +String _id [owner UUID]
     +Integer version
     +Object pending [lease and batch checkpoints]
@@ -300,21 +300,14 @@ class roadmaps {
     +Object deadline_outcome? [roadmap-v2]
     +Object[] beyond_deadline? [roadmap-v2]
 }
-class roadmap_workspaces {
-    <<operational Roadmap database>>
-    +Object outline_candidate?
-    +Object outline_active?
-    +Object[] outline_history
-    +Object week_candidate?
-    +Object[] week_blocks
-    +Object[] week_history
-    +Object[] month_blocks [legacy accepted coverage]
+class roadmap_workspaces["elo_roadmap.workspaces"] {
+    <<operational>>
     +String _id [owner UUID]
     +Integer version
     +Object[] messages
     +Object draft [earlier untimed]
     +Object active [earlier untimed]
-    +Object planner [config, candidate, active, confirmations]
+    +RoadmapPlannerState planner [nested outline_week_and_plan_state]
     +Object pending [leased operation]
     +Object[] receipts
 }
@@ -324,6 +317,8 @@ users --> roadmap_workspaces : owner API
 roadmap_workspaces --> roadmaps : automatic or reviewed activation and history
 roadmaps --> skill_gap_analyses : Assessment API snapshot
 note for skill_gap_analyses "Assessment-owned database. UUID results use assessment-v1."
+note for assessment_workspaces "Physical collection: elo_assessment.workspaces; this diagram uses a distinct alias to avoid confusing it with Roadmap workspaces."
+note for roadmap_workspaces "Physical collection: elo_roadmap.workspaces. Outline/week candidates, accepted blocks and histories live under planner, not at the document root. See RoadmapPlannerState in the embedded-object diagram."
 note for roadmaps "Separate Roadmap-owned database with owner-scoped immutable snapshots. Editable tasks retain student changes, status and removals; assignments are a compatibility projection. Earlier records remain readable."
 
 %% Saved-goal question research reuses immutable interview_research.question_findings snapshots.

@@ -1,99 +1,82 @@
 # elo architecture
 
-The implemented slice combines Profile/account access, saved conversational CV review and Career's canonical goal/research workspace. The broader seven-service scaffold remains future context. CV owns factual evidence, correction overlays, source-linked clarification and private resumable messages. Profile owns manual declarations. Career owns one current goal and public-context research; an explicit acknowledgement of its exact goal/version/selection makes it usable for CV clarification.
+The current Compose stack runs Next.js behind NGINX and seven backend services: Profile, CV, Career, Assessment, Roadmap, Jobs and Dashboard. The first six own separate MongoDB databases; Dashboard aggregates through APIs without a database. Review remains a scaffold with no ASGI application, Compose service or gateway route.
 
-Career JD/discovery/research uses the configured model plus OpenRouter model-native web search, with Brave LLM Context as fallback. CV extraction, conversation routing and clarification interpretation use its separate configurable OpenAI-compatible provider. Model output is validated before factual publication. Synthetic checks establish workflow and contract behavior, not live-model quality. Assessment and Roadmap now implement private versioned comparison and a user-directed planning adviser. Shared explicit skill identities are bundled across producers; live semantic quality remains unverified. See their service specifications for remaining scope.
+Profile owns accounts, background and manual declarations. CV owns saved evidence, source corrections, resumable extraction and private conversations. Career owns the canonical goal, its explicit CV confirmation stamp and public research. Assessment owns immutable versioned comparisons; Roadmap owns plans, sessions and progress. Jobs searches employer boards live and stores self-reported application snapshots. Synthetic checks establish workflow and contract behavior, not live-model quality.
 
-## Working design references
+## Architecture diagrams
 
 | File | Purpose |
 |---|---|
-| [MongoDB collections](diagrams/mongodb_collections_uml.mmd) | Supplied skills-service model: users, cvs, career_goals, interview_research and skill_gap_analyses, with ID references. |
-| [Embedded objects](diagrams/mongodb_embedded_objects_uml.mmd) | Supplied CvSkill, TargetSkill, InterviewSkill, ResearchSource and Assessment InputVersions structures embedded in those collections. |
-| [Dockerised CV/JD/roadmap architecture](diagrams/dockerised-mvp.puml) | Scoped MongoDB design for CV ingestion, JD/career/skills analysis and roadmap services, with existing frontend/gateway/Profile dependencies. Expand as more services are designed. |
+| [Deployment and data ownership](diagrams/dockerised-mvp.puml) | Current Compose services, networks, gateway routes, databases, volumes and external providers. |
+| [Service API dependencies](diagrams/service-api-dependencies.mmd) | Caller → callee HTTP dependencies, including conditional Jobs recommendation reads and confirmed Roadmap evidence writes. |
+| [MongoDB collections](diagrams/mongodb_collections_uml.mmd) | Selected domain and operational collections, ownership, references and version metadata. |
+| [Embedded objects](diagrams/mongodb_embedded_objects_uml.mmd) | Evidence, research, assessment and planning structures, including nested Roadmap planner state. |
 
-The Mermaid sources follow the supplied design, with collection naming and
-identity/version/provenance details aligned to the implemented contracts. Open `.mmd` files in a Mermaid
-preview and `.puml` files in a PlantUML preview. These are design references;
-implementation status and detailed API contracts remain in the owning service.
-The skills-service model spans CV and Career responsibilities in the current
-checkout: map collection ownership through Jira contract task SCRUM-310 and the
-[service boundaries](service-boundaries.md), rather than creating duplicate user
-or profile authorities. `users` refers to the existing account authority;
-`[FK]` denotes an application-validated ID reference. Private file retention and
-optional/version/provenance details must be reconciled with the current contracts.
+Open `.mmd` files in a Mermaid preview and `.puml` files in a PlantUML preview. These diagrams describe source structure; detailed schemas and implementation limits remain in the service specifications and [API contracts](../../contracts/api/). Collection UML uses `users` as the logical Profile authority, physically stored in `accounts`. The two workspace aliases refer to separate physical `workspaces` collections in `elo_assessment` and `elo_roadmap`; `[FK]` denotes an application-validated reference, not a MongoDB foreign key.
 
-The supplied PlantUML source was an older six-service PostgreSQL diagram. Its
-[unchanged original](diagrams/reference/dockerised-mvp.puml) is retained for
-traceability. The active sibling diagram uses MongoDB and the requested three
-core services. It does not remove the existing Profile/auth implementation or
-require future dashboard/review services to be built now.
+The [original PostgreSQL diagram](diagrams/reference/dockerised-mvp.puml) is retained unchanged for historical reference. It does not describe the current deployment.
 
-## Broader service boundaries
-
-The overview below preserves the wider six-service plan. It is not the focused
-three-service implementation scope and supersedes the PostgreSQL assumptions in
-earlier `outputs/` documents.
+## Deployment overview
 
 ```mermaid
 flowchart TB
-    Student[Student browser]
-    Auth[Identity provider with Google sign-in]
-    LLM[External LLM provider]
-    Atlas[(MongoDB Atlas: production proposal)]
+    Browser[User browser]
+    External["External providers<br/>Model APIs; Career public research<br/>Jobs employer boards; Profile identity/email"]
 
-    subgraph Deployment[Application deployment: eight containers]
-        Gateway[NGINX gateway]
-        Frontend[Next.js / React / TypeScript / Node.js]
-        Profile[FastAPI profile service]
-        CV[FastAPI CV ingestion service]
-        Career[FastAPI career goal and research service]
-        Assessment[FastAPI private Assessment service]
-        Roadmap[FastAPI roadmap and task service]
-        Dashboard[FastAPI stateless dashboard service]
-        Review[FastAPI review and scheduling service]
-        Uploads[(Private temporary CV volume)]
-        Gateway --> Frontend
-        Gateway --> Profile
-        Gateway --> CV
-        Gateway --> Career
-        Gateway --> Assessment
-        Gateway --> Roadmap
-        Gateway --> Dashboard
-        Gateway --> Review
-        CV --> Uploads
+    subgraph Deployment[Docker Compose: elo-profile]
+        Gateway[NGINX gateway: web and backend networks]
+        subgraph WebNetwork[web network]
+            Frontend[Next.js / React / TypeScript]
+        end
+        subgraph Backend[backend network]
+            APIs["HTTP APIs<br/>Profile / CV / Career<br/>Assessment / Roadmap / Jobs<br/>Dashboard: stateless"]
+            Mailpit[Mailpit: development profile only]
+        end
+        subgraph Database[database network: internal]
+            Mongo[("MongoDB 8.2<br/>elo_profile / elo_ingestion / elo_career<br/>elo_assessment / elo_roadmap / elo_jobs")]
+            Init[One-shot database initialisers]
+        end
+        Data[(profile_data: MongoDB files)]
+        Uploads[(cv_uploads: originals with expiry cleanup)]
+        Budget[(model_budget: shared daily call allowance)]
     end
 
-    Student --> Gateway
-    Student -. Sign in .-> Auth
-    Frontend -. Initial server-side API reads via internal gateway .-> Gateway
-    Profile --> Atlas
-    CV --> Atlas
-    Career --> Atlas
-    Assessment --> Atlas
-    Assessment --> LLM
-    Roadmap --> Atlas
-    Review --> Atlas
-    CV --> LLM
-    Career --> LLM
-    Roadmap --> LLM
+    Browser -->|Pages, assets and API requests| Gateway
+    Gateway -->|Non-API routes| Frontend
+    Gateway -->|/api/v1 routes| APIs
+    APIs -->|Six data owners only| Mongo
+    Init --> Mongo
+    Mongo --> Data
+    APIs -->|CV| Uploads
+    APIs -->|CV, Career, Assessment, Roadmap| Budget
+    APIs -->|Service-specific outbound requests| External
+    APIs -. Profile SMTP when configured .-> Mailpit
 ```
+
+The [detailed deployment diagram](diagrams/dockerised-mvp.puml) expands the API group into individual services and database owners. Model calls use the OpenAI Python SDK with OpenRouter defaults and service-specific overrides. Career public research defaults to OpenRouter native web search, with Brave LLM Context as fallback.
+
+Review is not part of this deployment. The gateway blocks `/internal/` and unknown `/api/` paths. Profile database bootstrap runs through MongoDB's `init-profile.js` mount; the other databases use the one-shot initialisers.
+
+The home dashboard reads Career, CV, Assessment, Roadmap and Jobs through the gateway's domain API routes. It does not use the separate Dashboard aggregation API. Jobs generates search links for Prosple, Huzzle, LinkedIn and Indeed for the browser to open; the server does not fetch those sites or submit applications.
+
+See the [API dependency diagram](diagrams/service-api-dependencies.mmd) and [service boundaries](service-boundaries.md) for HTTP calls. Roadmap currently calls Assessment and Profile, obtaining CV/Career context through Assessment. Jobs additionally calls Career and CV for `sort=recommended`. Compose still injects unused CV/Career URLs into Roadmap and only a Profile URL into Jobs; Jobs uses the shared client's default internal Career/CV hostnames. These diagrams follow the current calls, not unused configuration.
 
 ## Boundaries
 
 - Next.js supplies pages, shared layouts, rendering, and interactive React components. It does not directly write domain records in MongoDB.
-- Browser API calls use the gateway's `/api/v1` routes. Server-side Next.js reads may use an internal gateway URL.
+- Browser API calls use the gateway's `/api/v1` routes. The frontend joins the web network; backend services communicate over HTTP on the backend network.
 - Each backend service owns its data and deploys independently. The dashboard aggregates through APIs and has no independent database.
-- Service-owned databases may share an Atlas deployment with service-scoped credentials. Local development can use one additional MongoDB container.
+- Compose runs one MongoDB container on the internal database network, with a separate database and credentials for each data-owning service. MongoDB Atlas remains a production proposal.
 - CV processing/conversation tasks and Career workflows execute inside their owning services with durable operation state, bounded work and recovery fencing. No separate worker microservice is introduced.
-- The original CV is staged in a private host-backed Docker volume. Extracted and clarified information persists in MongoDB. Successful processing triggers eventual original-file deletion and cleanup.
-- Future task completion/reopening will trigger dashboard refetches; scheduled reviews and authorised revision application remain planned.
+- CV originals use the private `cv_uploads` named volume. The ingestion worker removes expired originals (24-hour default retention) and releases their byte reservations. The latest extraction graph state, including parsed text, is persisted separately in `cv_extraction_states`; saved evidence and history remain in MongoDB.
+- The home dashboard can mark Roadmap tasks complete and refresh its saved views. Scheduled progress reviews remain unimplemented.
 - Planned replanning must preserve completed work and student edits without silently changing goals, deadlines or availability.
-- No additional AI microservice, message broker, or vector database is part of the first scaffold.
+- Model calls and workers run inside the owning services. No separate AI microservice, message broker or vector database is deployed. CV, Career, Assessment and Roadmap share the `model_budget` volume for the daily call allowance.
 
 ## Authentication status
 
-The profile slice supports verified email/password accounts and optional Google. New accounts complete an emailed OTP step before obtaining a revocable 24-hour elo session. Development uses a private Mailpit inbox; production uses authenticated encrypted SMTP. Canonical profile completion controls initial onboarding and workspace access. Session bearers live in tab-scoped sessionStorage and are validated before private data loads. Sign-out/account changes clear other tabs. Set the matching Google Web Client ID on both sides for Google mode. See the [application setup guide](../setup.md) for setup and remaining integration limits.
+The profile slice supports verified email/password accounts and optional Google. New accounts complete an emailed OTP step before obtaining a revocable 24-hour elo session. Development uses a private Mailpit inbox; production uses authenticated encrypted SMTP. Canonical profile completion controls initial onboarding and workspace access. Browser credentials live in a Profile-issued HttpOnly cookie; a matching tab marker and browser header let NGINX forward the owner bearer to services for validation. Sign-out/account changes clear other tabs. Set the matching Google Web Client ID on both sides for Google mode. See the [application setup guide](../setup.md) for setup and remaining integration limits.
 
 See [service boundaries](service-boundaries.md), [API planning](../api/README.md), and [MongoDB guidance](../../infrastructure/mongodb/README.md).
 
@@ -131,4 +114,4 @@ retains paginated history in bounded segments without automatic expiry; a new
 continuation links back to its full segment. See
 [conversation boundaries](service-boundaries.md#conversational-cv-review).
 
-The active Assessment/Roadmap split, shared skill identities and API handoffs supersede older Career-owned assessment notes above. New services use separate databases and service-scoped model credentials; the adviser UI and its versioned source comparison share `/roadmap`.
+Assessment and Roadmap use separate databases and service-scoped model credentials; the adviser UI and its versioned source comparison share `/roadmap`.
