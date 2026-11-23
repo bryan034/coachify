@@ -93,7 +93,6 @@ function NextStep({ step, session, after, workspace, reload, show }: { step: Ste
  const { token } = useProfile();
  const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
  const command = useRef<{ task: string; id: string } | null>(null);
- useEffect(() => { setOpen(false); setError(''); }, [session?.id]);
  async function done() {
   if (!token || !session?.taskId || !workspace || busy) return;
   const taskId = session.taskId;
@@ -360,7 +359,7 @@ export function HomeDashboard() {
   <section className="ws-hero" aria-labelledby="home-hi">
    <div className="ws-hero-head"><div className="ws-eyebrow">{longDay(today)}</div><h1 id="home-hi">Welcome back{firstName ? `, ${firstName}` : ''}.</h1></div>
    {settled && (allSet && planner?.active ? <RoadmapTimeline planner={planner} today={today}/> : <SetupPath states={states}/>)}
-   {settled && !flags.includes('error') && (allSet || step) && <NextStep step={allSet ? null : step} session={allSet ? next : null} after={allSet ? after : null} workspace={workspace} reload={reload} show={show}/>}
+   {settled && !flags.includes('error') && (allSet || step) && <NextStep key={allSet ? next?.id ?? 'caught-up' : step?.href} step={allSet ? null : step} session={allSet ? next : null} after={allSet ? after : null} workspace={workspace} reload={reload} show={show}/>}
    {!settled && <p role="status" className="ws-hero-next ws-sub" style={{ color: '#94a3b8' }}>Checking your progress…</p>}
    {settled && flags.includes('error') && <div className="ws-hero-next ws-sub" style={{ color: '#fcd34d' }} role="alert">Some of your information could not be loaded. Retry it in the cards below.</div>}
   </section>
