@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS dependencies
+FROM node:24.22.3-bookworm-slim AS dependencies
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/frontend/package.json apps/frontend/package.json
@@ -20,7 +20,7 @@ ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID NEXT_TELEMETRY_DISABLED=1
 RUN npm run build --workspace apps/frontend && npm prune --omit=dev
 
-FROM node:24-bookworm-slim AS production
+FROM node:24.22.3-bookworm-slim AS production
 WORKDIR /repo
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 COPY --from=build --chown=node:node /repo /repo

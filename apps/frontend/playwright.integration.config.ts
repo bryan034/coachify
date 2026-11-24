@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import { gmailTestMailbox } from './tests/integration/gmail-inbox';
 
-if (!process.env.MAILPIT_BASE_URL) throw new Error('Set MAILPIT_BASE_URL to the disposable local test inbox.');
+if (!process.env.MAILPIT_BASE_URL) gmailTestMailbox();
 if (!process.env.PROFILE_E2E_BASE_URL) throw new Error('Set PROFILE_E2E_BASE_URL to a disposable local-test gateway. These tests save profile data.');
 export default defineConfig({
   outputDir: './test-results/integration',
@@ -9,6 +10,6 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: 'list',
-  use: { baseURL: process.env.PROFILE_E2E_BASE_URL, trace: 'retain-on-failure' },
+  use: { baseURL: process.env.PROFILE_E2E_BASE_URL },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });

@@ -244,12 +244,9 @@ jobs:
       AI_ENABLED: 'false'
       APP_ENV: development
       AUTH_MODE: local_test
-      COMPOSE_PROFILES: development
-      SMTP_HOST: mailpit
-      SMTP_PORT: '1025'
-      SMTP_SECURITY: plain
-      SMTP_FROM: no-reply@elo.test
-      MAILPIT_PORT: '8026'
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: '587'
+      SMTP_SECURITY: starttls
       GOOGLE_CLIENT_ID: ''
       GATEWAY_PORT: '8081'
       MONGO_ROOT_PASSWORD: ci-only-root-password
@@ -266,31 +263,41 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
         working-directory: apps/frontend
-      - run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml up --build -d
+      - name: Start the browser integration stack
+        env:
+          SMTP_USERNAME: ${{ secrets.ELO_TEST_GMAIL_ADDRESS }}
+          SMTP_FROM: ${{ secrets.ELO_TEST_GMAIL_ADDRESS }}
+          SMTP_PASSWORD: ${{ secrets.ELO_TEST_GMAIL_APP_PASSWORD }}
+        run: |
+          if [[ -z "$SMTP_USERNAME" || -z "$SMTP_PASSWORD" ]]; then
+            echo "Gmail credentials are unavailable. Using the disposable SMTP inbox."
+            export COMPOSE_PROFILES=mailpit
+            export SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_SECURITY=plain
+            export SMTP_FROM=no-reply@elo.test SMTP_USERNAME='' SMTP_PASSWORD=''
+            echo "COMPOSE_PROFILES=mailpit" >> "$GITHUB_ENV"
+            echo "MAILPIT_BASE_URL=http://127.0.0.1:8026" >> "$GITHUB_ENV"
+          fi
+          docker compose --env-file /dev/null -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml up --build -d
       - name: Wait for the gateway and API
         run: curl --fail --silent --show-error --retry 20 --retry-delay 2 --retry-all-errors http://localhost:8081/api/v1/profile/auth-config
       - run: npx playwright test --config playwright.integration.config.ts
         working-directory: apps/frontend
         env:
           PROFILE_E2E_BASE_URL: http://localhost:8081
-          MAILPIT_BASE_URL: http://localhost:8026
-      - name: Upload local integration test artifacts
-        uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: local-ui-integration-results
-          path: apps/frontend/test-results/integration/
-          retention-days: 7
-          if-no-files-found: ignore
+          ELO_TEST_GMAIL_ADDRESS: ${{ secrets.ELO_TEST_GMAIL_ADDRESS }}
+          ELO_TEST_GMAIL_APP_PASSWORD: ${{ secrets.ELO_TEST_GMAIL_APP_PASSWORD }}
       - name: Service logs on failure
         if: ${{ failure() }}
-        run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml logs --tail=100
+        run: docker compose --env-file /dev/null -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml logs --tail=100
       - name: Remove disposable test services
         if: ${{ always() }}
-        run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml down -v
+        run: docker compose --env-file /dev/null -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml down -v
 
   test-gate:
     name: Test gate

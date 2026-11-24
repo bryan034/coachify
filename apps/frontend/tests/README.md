@@ -32,7 +32,7 @@ For the browser suite, set NEXT_PUBLIC_GOOGLE_CLIENT_ID=test-client.apps.googleu
 
 Workspace browser checks cover navigation, validated account sessions, public access pages, session reload/logout, saved background on Home, unavailable service controls, connection failure/retry, and mobile overflow. The week/month and roadmap filters are presentation-only and do not call unfinished services.
 
-Full-stack account tests additionally require `MAILPIT_BASE_URL` for the disposable captured-email inbox. They verify actual SMTP OTP delivery, password sign-in, guarded setup and cross-tab completion.
+Full-stack account tests verify OTP delivery, password sign-in, guarded setup, and cross-tab completion. CI uses a dedicated Gmail test mailbox when credentials are available and a disposable Mailpit inbox otherwise. See the [application testing guide](../../../docs/testing.md#real-mongodb-and-full-stack-checks).
 
 Initial-setup checks cover one-question screens, optional course, unlisted school,
 extended study years, partial saves, lost completion responses, version conflicts,

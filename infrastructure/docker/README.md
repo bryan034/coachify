@@ -1,6 +1,6 @@
 # Docker deployment structure
 
-The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV ingestion/review, canonical Career goal/research, Assessment comparisons, Roadmap adviser chat/plans, live Jobs search, scoped MongoDB users and an optional development Mailpit inbox. Dashboard and Review remain source scaffolds. See [application setup](../../docs/setup.md).
+The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV ingestion/review, canonical Career goal/research, Assessment comparisons, Roadmap adviser chat/plans, live Jobs search, and scoped MongoDB users. Dashboard and Review remain source scaffolds. Profile sends account email through the configured SMTP provider. See [application setup](../../docs/setup.md).
 
 ## Storage and service boundaries
 
@@ -145,9 +145,10 @@ Profile, Dashboard and Review have no active model calls.
 
 ## Disposable Career flow verification
 
-Use `python infrastructure/testing/run-career-flow.py` from repository
-root. It applies `compose.career-test.yaml` only to its own disposable project, uses
-`--env-file /dev/null` and synthetic settings, and cleans up its volumes. The test-only
+Export the [Gmail test account credentials](../../docs/testing.md#real-mongodb-and-full-stack-checks).
+Run `python infrastructure/testing/run-career-flow.py` from the repository root.
+It applies `compose.career-test.yaml` to a disposable project, uses
+`--env-file /dev/null`, and cleans up its volumes. The test-only
 factory provides controlled empty public retrieval and serves finite labelled SDK
 responses over HTTP (`CAREER_LLM_ALLOW_HTTP` is set only in that override). Never apply
 this override to a normal deployment. See [Career test instructions](../../services/career-service/tests/README.md#reproduce-the-complete-career-extraction-journey).

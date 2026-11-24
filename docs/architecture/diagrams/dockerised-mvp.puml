@@ -31,7 +31,6 @@ node "Docker Compose — elo-profile" {
     node "Jobs\n/api/v1/jobs\nLive search and self-reported applications" as Jobs
     node "Socials\n/api/v1/socials\nExpert chats and pilot credits" as Socials
     node "Dashboard\n/api/v1/dashboard\nStateless progress aggregation" as Dashboard
-    node "Mailpit\nDevelopment profile only\nUI at 127.0.0.1:${MAILPIT_PORT:-8025}" as Mailpit
   }
   package "database network — internal: true" {
     node "MongoDB 8.2" as Mongo {
@@ -82,7 +81,6 @@ Roadmap --> Models
 Career --> Research
 Jobs --> Boards
 Profile --> Identity
-Profile ..> Mailpit : Dev SMTP
 
 legend bottom
   Source: compose.yaml, gateway/nginx.conf and service implementations.

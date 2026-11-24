@@ -1,4 +1,9 @@
 services:
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    profiles: [mailpit]
+    ports: ["127.0.0.1:8026:8025"]
+    networks: [backend]
   career-service:
     environment:
       ELO_SYNTHETIC_TEST_FIXTURES: '1'
@@ -15,7 +20,7 @@ services:
     environment:
       ELO_SYNTHETIC_TEST_FIXTURES: '1'
   cv-model-fixture:
-    image: python:3.12-slim
+    image: python:3.12.16-slim-trixie@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
     command: [python, /fixture/cv-model.py]
     user: '10001:10001'
     read_only: true

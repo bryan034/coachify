@@ -21,6 +21,8 @@ def test_every_attempt_is_retained_and_failure_cannot_be_hidden_by_later_success
     monkeypatch.setattr(module,'ROOT',tmp_path)
     monkeypatch.setenv('CAREER_LLM_API_KEY','PRIVATE inherited key')
     monkeypatch.setenv('UNRELATED_SECRET','PRIVATE unrelated secret')
+    monkeypatch.setenv('ELO_TEST_GMAIL_ADDRESS', 'elo.synthetic.test@gmail.com')
+    monkeypatch.setenv('ELO_TEST_GMAIL_APP_PASSWORD', 'synthetic-app-password')
     class Ready:
         status=200
         def __enter__(self):return self
@@ -36,6 +38,9 @@ def test_every_attempt_is_retained_and_failure_cannot_be_hidden_by_later_success
         calls.append((command,kwargs))
         env=kwargs['env']
         assert env['CAREER_LLM_API_KEY']=='synthetic-fixture-key' and 'UNRELATED_SECRET' not in env
+        assert env['SMTP_HOST'] == 'smtp.gmail.com' and env['SMTP_SECURITY'] == 'starttls'
+        assert env['SMTP_USERNAME'] == env['SMTP_FROM'] == env['ELO_TEST_GMAIL_ADDRESS']
+        assert env['SMTP_PASSWORD'] == env['ELO_TEST_GMAIL_APP_PASSWORD']
         if command[0]=='npx':return SimpleNamespace(returncode=next(results))
         if 'logs' in command:
             if kwargs.get('capture_output'):assert '--since' in command
@@ -45,7 +50,7 @@ def test_every_attempt_is_retained_and_failure_cannot_be_hidden_by_later_success
         assert command[:4]==['docker','compose','--env-file','/dev/null']
         return SimpleNamespace(returncode=0)
     monkeypatch.setattr(module.subprocess,'run',execute)
-    args=SimpleNamespace(port=8093,mail_port=8036,no_build=True,skip_boundary=True,repeat=2,keep=False)
+    args=SimpleNamespace(port=8093,no_build=True,skip_boundary=True,repeat=2,keep=False)
     with pytest.raises(RuntimeError,match='Career journey failed'):module.run(args)
     reports=list((tmp_path/'apps/frontend/test-results/career-flow/reports').glob('*.json'))
     assert len(reports)==1

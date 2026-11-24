@@ -122,22 +122,32 @@ duplicate signup, code expiry and guess limits, concurrent resets, authenticatio
 mode isolation, and session/old-password invalidation without losing profile data.
 Frontend recovery coverage is in `password-recovery.test.tsx`.
 
-The `local-ui-integration` job provisions a disposable Docker stack and tests
-browser → gateway → API → MongoDB, including SMTP-to-Mailpit OTP verification, email/password A/B isolation, canonical onboarding, history restoration, logout/replay, cross-tab cleanup and profile/planning saves. For a manually provisioned **disposable** local-test stack on port 8081:
+The `local-ui-integration` job tests OTP delivery, account isolation, onboarding,
+session revocation, and saved profile and planning data. When both
+`ELO_TEST_GMAIL_ADDRESS` and `ELO_TEST_GMAIL_APP_PASSWORD` are available as GitHub
+Actions secrets, Profile sends codes over Gmail SMTP to unique `+elo-…` aliases
+and Playwright reads them over IMAP. Use a dedicated Gmail account with an
+[App Password](https://support.google.com/accounts/answer/185833).
+
+Runs without both secrets use Mailpit on the disposable Compose stack, including
+fork and Dependabot runs. Playwright reads codes through Mailpit's loopback API.
+Integration traces stay disabled to keep verification codes out of artifacts.
+
+For a local run, export the same two variables in your shell and install
+Python 3.12. Start a disposable Compose project with the settings from the
+[CI job](../.github/workflows/ci.yml). Set `SMTP_USERNAME` and `SMTP_FROM` to
+`ELO_TEST_GMAIL_ADDRESS`, and `SMTP_PASSWORD` to
+`ELO_TEST_GMAIL_APP_PASSWORD`. Run Playwright against that project's gateway.
 
 ```sh
 cd apps/frontend
 ELO_TEST_COMPOSE_PROJECT=elo-integration-test \
-  PROFILE_E2E_BASE_URL=http://localhost:8081 MAILPIT_BASE_URL=http://localhost:8026 \
+  PROFILE_E2E_BASE_URL=http://localhost:8081 \
   npx playwright test --config playwright.integration.config.ts
 ```
 
-Use a separate Compose project and database volume. Set `ELO_TEST_COMPOSE_PROJECT`
-to the project name used to start the disposable stack so the Career fixture
-loader finds the matching service. Set
-`GATEWAY_PORT=8081`, `MAILPIT_PORT=8026` and `COMPOSE_PROFILES=development`, with
-SMTP pointed at the disposable Mailpit container as in `.env.example`. This suite writes synthetic data; do not target your personal
-profile. Boundary-fixture browser tests use
+Set `ELO_TEST_COMPOSE_PROJECT` to the disposable project's name so the Career
+fixtures reach the right database. Boundary-fixture browser tests use
 `NEXT_PUBLIC_GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com`, a test-only
 public identifier, when running `npm run test:e2e --workspace apps/frontend`.
 
@@ -165,9 +175,8 @@ Tests inject synthetic settings and mock transports after setup; use an already
 populated `TIKTOKEN_CACHE_DIR` because tokenizer downloads are blocked too.
 Frontend tests cover
 three methods, Unicode, failure recovery, method-switch races and temporary state.
-The full-stack Career browser test uses the usual disposable Compose stack and
-Mailpit variables; no live model key or live website is used. Career imports are rate
-limited at the gateway; use synthetic sources and discard only test-stack data.
+The full-stack Career browser test uses a disposable Compose stack and the same
+Gmail test account settings. Its model and Career sources are synthetic.
 
 ## AI and analysis contracts
 

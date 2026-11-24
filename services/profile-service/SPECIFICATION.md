@@ -261,8 +261,8 @@ truth. The [README](README.md) lists available endpoints, and the
   the access attempt. Changed retries, expired/cancelled/superseded callbacks and
   cross-account verification are rejected. An identical committed request can
   recover its own result without creating another session/account.
-- Email transport uses SMTP. Development-only Mailpit captures messages without
-  forwarding them; only its web inbox is exposed on loopback, not its SMTP port.
+- Email transport uses SMTP. Local development and full-stack browser tests
+  use authenticated Gmail SMTP.
   Production requires an external SMTP host, authenticated STARTTLS/SSL, sender
   address and random `OTP_HASH_SECRET` (at least 32 characters). Neither OTPs nor
   passwords/mail credentials are returned, logged, stored raw in MongoDB or saved
@@ -334,7 +334,7 @@ credentials. New email/password registrations accept any valid email address and
 OTP verification before receiving a session. OTP proves inbox access; the Gmail
 sender does not restrict recipient domains. Synthetic addresses remain supported
 in explicit local-test mode for automated tests.
-Real delivery uses authenticated encrypted Gmail SMTP; Mailpit is capture-only.
+The browser integration suite sends OTPs to aliases of a dedicated Gmail account.
 
 ## Employment and profile summary
 
