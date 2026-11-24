@@ -16,7 +16,6 @@ test('planning preferences persist, detect conflicts, prorate capacity and never
  await prefs.getByRole('button',{name:'Save weekly availability',exact:true}).click();
  await expect(prefs.getByText('Weekly availability saved.',{exact:true})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'What course did you study?'})).toHaveValue('Unsaved education draft');
- // Commit a real write, then lose its HTTP response: the UI must reuse its key.
  const retryKeys:string[]=[];
  page.on('request',r=>{if(r.method()==='PATCH'&&r.postDataJSON()?.weekly_hours===14.25)retryKeys.push(r.headers()['idempotency-key']);});
  await page.route('**/api/v1/profile',async route=>{await route.fetch();await route.abort('failed');},{times:1});

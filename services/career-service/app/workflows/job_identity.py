@@ -15,7 +15,6 @@ async def identify_job(ai,text,owner):
     if is_non_job_request(text):raise CareerScopeError()
     activity('identifying_job')
     def validate(value):
-        # Negative classifications carry no job identity to ground.
         if not value.is_job_description:return
         try:JobIdentity.model_validate(value.model_dump()).check(text)
         except IdentityGroundingError as error:

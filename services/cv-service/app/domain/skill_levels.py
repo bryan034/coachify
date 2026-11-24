@@ -19,7 +19,6 @@ class ReviewedSkillLevel(BaseModel):
     model_config = ConfigDict(extra='forbid')
     item_id: str = Field(min_length=1, max_length=100)
     skill_name: str = Field(min_length=1, max_length=200)
-    # null only when the evidence conflicts or is unverified; missing evidence gets a low level instead.
     level: SkillLevel | None
     rationale: str = Field(min_length=1, max_length=400)
     evidence: list[ReviewQuote] = Field(default_factory=list, max_length=3)
@@ -64,7 +63,6 @@ def review_source(document, item, status=None):
 
 
 def ratable(item):
-    # Every skill the person may have used is rated, even a bare mention (at the bottom of the scale).
     return not item.get('removed') and any(c['attribution'] not in EXCLUDED for c in item.get('skill_claims', []))
 
 
@@ -152,7 +150,6 @@ def apply_skill_level_reviews(document, items):
         if review and source['fingerprint'] == review['fingerprint']:
             levels = {level['skill_id']: level for level in review['levels']}
         elif finished:
-            # After a failed provider call, show conservative assumptions without persisting them.
             levels = {claim['skill_id']: assumed_level(source, claim['skill_id'])
                       for claim in item.get('skill_claims', [])
                       if claim['skill_id'] in source['skills'] and not claim.get('skill_level')}

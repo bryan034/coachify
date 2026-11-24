@@ -1,4 +1,3 @@
-/* Saved-goal briefing. */
 .career-briefing{--briefing-ink:var(--ink);--briefing-muted:var(--slate);--briefing-line:var(--line);--briefing-soft:var(--cloud);--briefing-mint:var(--line);--briefing-green:var(--ink);color:var(--briefing-ink);line-height:1.6;max-width:1180px;padding-bottom:0}
 .career-briefing a:focus-visible, .career-briefing button:focus-visible, .career-briefing summary:focus-visible{outline:3px solid #34d399;outline-offset:4px}
 .briefing-topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:38px;color:var(--briefing-muted);font-size:12px}.briefing-topbar p span{margin:0 9px;color:var(--slate)}

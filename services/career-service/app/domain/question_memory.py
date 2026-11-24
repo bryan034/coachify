@@ -28,7 +28,6 @@ def focused_saved_facts(focus,goal,research,item_refs=()):
         ref=f'f{len(facts)+1}';facts.append({'ref':ref,'kind':kind,'data':data})
         links[ref]=[s for s in research.get('sources',[]) if s.get('source_id') in sources]
     if focus=='location' and goal.get('location'):add('job_details',{'location':goal['location']})
-    # The router selects saved conditions that already state the detail.
     for position,item in enumerate(goal.get('non_skill_requirements',[])):
         if f'c{position}' in item_refs:
             add('job_details',{'value':item['description']})

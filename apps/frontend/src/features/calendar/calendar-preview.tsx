@@ -21,7 +21,6 @@ const longDay = (value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateSt
 const toMinutes = (clock: string) => { const [hour, minute] = clock.split(':').map(Number); return hour * 60 + minute; };
 export type DatedMark = { date: string; label: string; kind: 'deadline' | 'milestone' | 'interview' };
 const weekdayIndex = (value: string) => (new Date(`${value}T12:00:00Z`).getUTCDay() + 6) % 7;
-/** Whole days the user blocked out (no start/end time). */
 const blockedDay = (rules: BlackoutRule[], day: string) => rules.some(rule => !rule.start_time && !rule.end_time && day >= rule.start_date && (!rule.end_date || day <= rule.end_date) && (rule.frequency === 'once' ? day === rule.start_date : blockedOn(rule, weekdayIndex(day))));
 
 function SessionBlock({ item, top, height }: { item: PlanAssignment; top: number; height: number }) {
@@ -30,7 +29,6 @@ function SessionBlock({ item, top, height }: { item: PlanAssignment; top: number
  </Link>;
 }
 
-/** Hours widen beyond 08:00 to 21:00 only when a saved session falls outside them. */
 function TimeGrid({ days, today, sessions, marks, blackouts }: { days: string[]; today: string; sessions: PlanAssignment[]; marks: DatedMark[]; blackouts: BlackoutRule[] }) {
  const visible = sessions.filter(item => days.includes(item.date));
  const start = Math.min(8 * 60, ...visible.map(item => Math.floor(toMinutes(item.start_time) / 60) * 60));

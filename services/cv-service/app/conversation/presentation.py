@@ -24,7 +24,6 @@ def review_reply(text, source_ids=()):
     return re.sub(r' +([,.;:!?])', r'\1', re.sub(r' {2,}', ' ', text)).strip()
 
 
-# Publish only bounded declarative side answers, rejecting requests for new CV evidence.
 _SIDE_REQUEST = re.compile(
     r'\b(?:please|tell|share|provide|describe|clarify|elaborate|submit|supply|'
     r'give|list|write|state|specify|indicate|identify|answer|send|record|'

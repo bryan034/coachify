@@ -8,7 +8,6 @@ from app.domain.review import MAPPING_VERSION
 from app.workflows.opportunity.domain import public_opportunity
 from app.domain.source_scope import verify
 
-# Only v2 records, re-verified here, are served.
 VERIFIED_EVIDENCE='saved-question-evidence-v2'
 
 
@@ -39,7 +38,6 @@ class QuestionMemory:
         if not findings:return
         context=self.context(owner,row);w=row['workspace'];stamp=now()
         goal=context.model_dump(include={'company','role','location'})
-        # Separate public context for focused snapshots.
         focused=context.model_copy(update={'details_fingerprint':fingerprint({'base':context.reuse_key(),'question_focus':focus})})
         pointer_id='question-result:'+fingerprint({'owner':owner,'goal':str(row['goal_id']),'version':w['revision'],'focus':focus})
         for attempt in range(4):
@@ -57,12 +55,10 @@ class QuestionMemory:
                     for sid,quote in zip(finding.source_ids,finding.quotes)):
                     raise GoalError('Question evidence did not match the retrieved public source.',503)
             for finding in findings:
-                # Re-run the employer, role and age checks against the saved goal.
                 if finding.scope!='exact' or any(not (source:=source_map.get(sid)) or not verify(
                         source.url,source.title,quote,goal,published=source.published_date).verified
                         for sid,quote in zip(finding.source_ids,finding.quotes)):
                     raise GoalError('Only verified job evidence can be saved.',422)
-            # Store exact retained passages, not entire pages; merging preserves earlier cited passages.
             retained=[source.model_copy(update={'evidence':'\n'.join(dict.fromkeys(
                 quote for f in kept for sid,quote in zip(f.source_ids,f.quotes) if sid==identifier))})
                 for identifier,source in source_map.items() if identifier in used]

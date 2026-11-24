@@ -228,7 +228,7 @@ def test_all_three_provider_paths_share_the_owner_budget(harness):
     cv, question, answer_path = project_question(harness)
     guard = app.state.service.model_usage
     guard.settings = replace(app.state.settings, model_calls_per_owner_per_day=1)
-    assert count(app.state.repository, 'owner-a') == 1  # extraction
+    assert count(app.state.repository, 'owner-a') == 1
     router = app.state.conversations.provider = Router()
     chat = open_chat(client, cv['id'])
     chat = send(client, chat, 'Why are you asking this question?')
@@ -263,7 +263,7 @@ def test_disabled_chat_interpreter_does_not_consume_an_extra_attempt(harness):
     app.state.interpreter.failure = 'Interpretation is not configured.'
     before = count(app.state.repository)
     chat = send(client, chat, PERSONAL)
-    assert count(app.state.repository) == before + 1  # routing only
+    assert count(app.state.repository) == before + 1
     assert app.state.interpreter.calls == 1
     assert any(action['status'] == 'failed' for message in chat['messages'] for action in message['actions'])
 

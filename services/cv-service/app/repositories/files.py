@@ -19,7 +19,6 @@ class FileStore:
         self._local = local()
 
     def path(self, identifier):
-        # User filenames never participate in filesystem paths.
         UUID(identifier)
         return self.root / identifier
 
@@ -63,7 +62,6 @@ class FileStore:
             if path.exists():
                 if path.read_bytes() != data: raise FileExistsError('Saved original bytes differ.')
                 return
-            # Remove a crashed writer's deterministic temporary.
             temporary.unlink(missing_ok=True)
             descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
@@ -93,7 +91,6 @@ class FileStore:
     def exists(self, identifier): return self.path(identifier).is_file()
 
     def size(self, identifier):
-        # A temporary and final name must never contain separate live copies.
         return sum(path.stat().st_size for path in (self.path(identifier), self.temporary(identifier)) if path.is_file())
 
     def originals(self):

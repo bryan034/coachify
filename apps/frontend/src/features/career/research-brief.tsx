@@ -12,7 +12,6 @@ const useCitations=()=>useContext(CitationContext);
 const reducedMotion=()=>typeof window!=='undefined'&&!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 export const sourceAnchor=(prefix:string,n:number)=>`${prefix}-src-${n}`;
 
-/** Shares the source list between citation chips and the Sources panel: a chip expands the list, scrolls to its source and flashes it. */
 export function CitationProvider({prefix,sources,children}:{prefix:string;sources:BriefSource[];children:ReactNode}){
  const [expanded,setExpanded]=useState(false),[flash,setFlash]=useState<number|null>(null),[target,setTarget]=useState<{n:number}|null>(null);
  const titles=useMemo(()=>new Map(sources.map(source=>[source.index,source.title])),[sources]);
@@ -63,7 +62,6 @@ function ExternalIcon(){
  return <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg>;
 }
 
-/** Sources numbered in citation order, shared with the citation chips. */
 export function SourceList({sources}:{sources:BriefSource[]}){
  const state=useCitations(),id=useId();
  const expanded=!!state?.expanded;

@@ -1,6 +1,3 @@
-/** User-facing wording for failures. */
-
-/** True when a request stopped because the page navigated away or unmounted. Never show these. */
 export function isAbortError(cause: unknown): boolean {
  if (typeof DOMException !== 'undefined' && cause instanceof DOMException && cause.name === 'AbortError') return true;
  if (cause instanceof Error) return cause.name === 'AbortError' || /signal is aborted|operation was aborted|aborted without reason|the user aborted a request/i.test(cause.message);
@@ -9,7 +6,6 @@ export function isAbortError(cause: unknown): boolean {
 
 const NETWORK = /failed to fetch|networkerror|network request failed|load failed|fetch failed/i;
 
-/** Backend codes whose detail describes a model or validation step rather than something the user can act on. */
 const FRIENDLY_CODES: Record<string, string> = {
  assessment_output: 'We couldn’t compare your skills this time. Try again.',
  assessment_failed: 'We couldn’t compare your skills this time. Try again.',
@@ -23,16 +19,12 @@ const FRIENDLY_CODES: Record<string, string> = {
  upstream: 'Part of elo isn’t responding right now. Try again in a moment.',
 };
 
-/** Phrases that are internal validation or plumbing messages and must not reach the page. */
 const TECHNICAL = [/source-scoped/i, /schema/i, /validation failed/i, /traceback/i, /unexpected token/i, /json/i, /interpretation is unavailable/i, /^\s*\d{3}\b/];
 
 export function friendlyCode(code: string | null | undefined): string | null {
  return code ? FRIENDLY_CODES[code] ?? null : null;
 }
 
-/**
- * The message to show for a failure, or null when nothing should be shown (an aborted request).
- */
 export function friendlyError(cause: unknown, fallback: string, code?: string | null): string | null {
  if (isAbortError(cause)) return null;
  const raw = cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : '';
@@ -45,11 +37,9 @@ export function friendlyError(cause: unknown, fallback: string, code?: string | 
  return raw;
 }
 
-/** A failed operation's `{ detail, code }` as one line for the page. */
 export function friendlyOperationError(error: { detail?: string | null; code?: string | null } | null | undefined, fallback: string): string {
  if (!error) return fallback;
  return friendlyError(error.detail ? new Error(error.detail) : null, fallback, error.code) ?? fallback;
 }
 
-/** Same as `friendlyError`, but an empty string for aborted requests so it can feed error state directly. */
 export const errorText = (cause: unknown, fallback: string): string => friendlyError(cause, fallback) ?? '';

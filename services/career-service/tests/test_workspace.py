@@ -300,7 +300,6 @@ def test_async_jd_wait_resumes_the_same_graph_call_and_receipt(flow):
     transport=httpx.AsyncClient(transport=httpx.MockTransport(provider))
     try:
         adapter=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),transport)
-        # Only extraction uses the real adapter; research keeps deterministic fixtures.
         async def generate(request,operation,**kwargs):
             return await (adapter if request.stage=='jd_extraction' else fixture_ai).generate(request,operation,**kwargs)
         client.app.state.ai=SimpleNamespace(generate=generate,settings=fixture_ai.settings)

@@ -20,7 +20,6 @@ def password_source(request: Request):
     peer = request.client.host if request.client else 'unknown'
     forwarded = request.headers.get('x-real-ip')
     if forwarded:
-        # The Compose gateway replaces this header.
         try:
             source = str(ip_address(forwarded))
             if peer in {address[4][0] for address in getaddrinfo('gateway', None)}:

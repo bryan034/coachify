@@ -10,12 +10,10 @@ const Chevron = ({ back = false }: { back?: boolean }) => <svg width="18" height
 const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? '' : 's'}`;
 const dayTitle = (day: string) => `${weekdayName(day)}, ${shortDate(day)}`;
 export const weekRange = (day: string, startDay = 0) => { const first = weekStart(day, startDay), last = addDays(first, 6); return monthKey(first) === monthKey(last) ? `${dayOfMonth(first)}–${dayOfMonth(last)} ${monthName(last)}` : `${shortDate(first)} – ${shortDate(last)}`; };
-/** The plan's own span, so the arrows stop where the plan does. */
 export function planBounds({ plan, sessions, today }: ViewContext) {
  const edges = [plan.config.start_date, plan.config.target_date, today, ...sessions.map(item => item.date), ...plan.milestones.flatMap(item => [item.projected_start, item.projected_end])].filter((value): value is string => !!value).sort();
  return { first: edges[0], last: edges[edges.length - 1] };
 }
-/** The task to do next: the first open, timed task that has not finished yet. */
 export function upNext({ sessions, today, nowMinute }: ViewContext) {
  return [...sessions].sort((a, b) => a.date.localeCompare(b.date) || listOrder(a, b)).find(item => !isDone(item) && !!item.start_time && (item.date > today || (item.date === today && toMinutes(item.start_time) + item.duration_minutes > (nowMinute ?? 0))))?.id ?? null;
 }
@@ -73,7 +71,6 @@ function NextCheckpoint({ context }: { context: ViewContext }) {
  </section>;
 }
 
-/** The day view: one date's to-do list with its timeline, and the week at a glance beside it. */
 export function TodayView({ context, day, editor }: { context: ViewContext; day: string; editor: TaskEditor }) {
  const { sessions, today, go } = context;
  const [fill, setFill] = useState(0);
@@ -116,7 +113,6 @@ export function TodayView({ context, day, editor }: { context: ViewContext; day:
  </div>;
 }
 
-/** The week: a completion ring per day, each day's list, and the backlog to place. */
 export function WeekView({ context, day, editor }: { context: ViewContext; day: string; editor: TaskEditor }) {
  const { sessions, today, plan, go } = context;
  const [unfolded, setUnfolded] = useState<Record<string, boolean>>({});
@@ -173,7 +169,6 @@ const Flag = ({ size = 11 }: { size?: number }) => <svg width={size} height={siz
 const chipState = (session: Session) => isDone(session) ? 'done' : session.missed ? 'miss' : 'up';
 const chipText = (session: Session) => isDone(session) ? `✓ ${session.title}` : session.missed ? `Missed · ${session.title}` : `${session.start_time ? `${session.start_time} ` : ''}${session.title}`;
 
-/** The month as a calendar: tasks as chips, milestones as bars, checkpoints as flags. */
 export function MonthView({ context, day }: { context: ViewContext; day: string }) {
  const { sessions, today, plan, go, actions, frozen } = context;
  const [selected, setSelected] = useState<string | null>(null); const [moving, setMoving] = useState(false); const [message, setMessage] = useState('');

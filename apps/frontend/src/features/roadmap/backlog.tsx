@@ -9,14 +9,12 @@ const range = (start: string, minutes: number) => `${start}–${toClock(toMinute
 const dayLabel = (day: string, today: string) => day === today ? 'Today' : day === addDays(today, 1) ? 'Tomorrow' : `${weekdayName(day)} ${dayOfMonth(day)}${weekStart(day) !== weekStart(today) ? ` ${monthName(day)}` : ''}`;
 const dayText = (day: string, today: string) => day === today ? 'today' : `${weekdayName(day)} ${shortDate(day)}`;
 
-/** Move one task to a free time. Times come from the roadmap service. */
 export function ReschedulePanel({ session, context, onMoved, onClose }: { session: Session; context: ViewContext; onMoved: (message: string) => void; onClose: () => void }) {
  const { actions, today, version, frozen } = context;
  const [days, setDays] = useState<FreeDay[] | null>(null); const [failed, setFailed] = useState(false);
  const [choice, setChoice] = useState<{ date: string; start: string } | null>(null);
  const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
  const chosen = useRef(choice); chosen.current = choice;
- // Recalculate free times whenever the saved schedule changes.
  useEffect(() => {
   let live = true;
   void actions.freeTimes(session.duration_minutes, session.id).then(value => {
@@ -33,7 +31,7 @@ export function ReschedulePanel({ session, context, onMoved, onClose }: { sessio
    }
   });
   return () => { live = false; };
- }, [version, session.id, session.duration_minutes]); // eslint-disable-line react-hooks/exhaustive-deps
+ }, [version, session.id, session.duration_minutes]);
  const pick = (date: string, start: string | undefined) => { setNote(''); setChoice(start ? { date, start } : { date, start: '' }); };
  const day = choice ? days?.find(item => item.date === choice.date) : undefined;
  const valid = !!choice && !!day && day.starts.includes(choice.start);
@@ -79,7 +77,6 @@ export function ReschedulePanel({ session, context, onMoved, onClose }: { sessio
 
 const Grip = () => <span className="rv-grip" aria-hidden="true"><svg width="16" height="20" viewBox="0 0 16 20" fill="currentColor"><circle cx="5" cy="5" r="1.6" /><circle cx="11" cy="5" r="1.6" /><circle cx="5" cy="10" r="1.6" /><circle cx="11" cy="10" r="1.6" /><circle cx="5" cy="15" r="1.6" /><circle cx="11" cy="15" r="1.6" /></svg></span>;
 
-/** Sessions that weren't ticked off on their day. A strip on Today, a panel beside the week. */
 export function Backlog({ context, panel = false, autoOpen = 0 }: { context: ViewContext; panel?: boolean; autoOpen?: number }) {
  const { sessions, actions, today, frozen } = context;
  const items = sessions.filter(item => item.missed);
@@ -87,8 +84,7 @@ export function Backlog({ context, panel = false, autoOpen = 0 }: { context: Vie
  const [proposal, setProposal] = useState<BacklogProposal[] | null>(null);
  const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
  async function propose() { setOpenId(null); setBusy(true); const plan = await actions.backlogPlan(); setBusy(false); if (plan) setProposal(plan.moves); }
- // "Fill the gap with backlog" on the weekly goal asks for the same proposal.
- useEffect(() => { if (autoOpen && items.length) void propose(); }, [autoOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+ useEffect(() => { if (autoOpen && items.length) void propose(); }, [autoOpen]);
  const placed = proposal?.filter(item => item.date && item.start_time) || [];
  async function apply() {
   setBusy(true);

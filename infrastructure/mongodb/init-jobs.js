@@ -1,4 +1,3 @@
-// Add the scoped Jobs user without changing any existing user/password or domain data.
 const root = new Mongo('mongodb://elo_admin:' + encodeURIComponent(process.env.MONGO_ROOT_PASSWORD) + '@mongodb:27017/admin');
 const password = process.env.JOBS_DB_PASSWORD;
 if (!password) throw new Error('Set the Jobs database password.');

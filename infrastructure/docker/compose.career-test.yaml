@@ -1,5 +1,3 @@
-# Only with run-career-flow.py: an isolated project, empty env-file and synthetic settings.
-# Retrieval returns no sources, making coverage limits reproducible.
 services:
   frontend:
     image: elo-career-flow-frontend:verify
@@ -17,7 +15,6 @@ services:
     environment:
       APP_ENV: development
       ELO_SYNTHETIC_TEST_FIXTURES: '1'
-      # The finite fixture model is served over plain HTTP inside this container.
       CAREER_LLM_ALLOW_HTTP: 'true'
       PYTHONPATH: /fixture:/service
     volumes: [../testing/career_fixture.py:/fixture/career_fixture.py:ro]

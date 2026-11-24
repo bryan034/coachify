@@ -68,7 +68,6 @@ def settings_differ(plan,state):
 def completed_sessions(plan):
     if not plan:return []
     if isinstance(plan.get('editable_tasks'),list):
-        # Rebuild assignments from canonical tasks in memory without mutating the snapshot.
         projection={'editable_tasks':plan['editable_tasks'],'milestones':plan.get('milestones',[])}
         assignments=project_assignments(projection)
     else:
@@ -111,7 +110,6 @@ def plan_review(plan,now):
 def learning_view(plan,now):
     """Each skill the active roadmap works on, most important first, with its own progress and next session."""
     if not plan:return {'has_roadmap':False,'roadmap_id':None,'skills_total':0,'skills_started':0,'skills_done':0,'steps':[]}
-    # Rebuild the session view on a copy.
     canonical=isinstance(plan.get('editable_tasks'),list)
     if canonical:
         plan=copy.deepcopy(plan)
@@ -125,9 +123,7 @@ def learning_view(plan,now):
                 source=task.get('source_assignment') or {}
                 refs=task.get('requirement_refs') or []
                 explicitly_linked=bool(refs and task_link_source_is_current(plan,task) and gap.get('requirement_ref') and gap['requirement_ref'] in refs)
-                # An explicit relink or unlink replaces the source assignment's old gap association.
                 if 'requirement_refs' in (task.get('overrides') or []):return explicitly_linked
-                # A manually created task's chosen requirements are explicit; a personal task does not inherit a skill from its milestone.
                 if task.get('origin')=='user':return explicitly_linked
                 if refs:return explicitly_linked
                 if not legacy_inference_source_is_safe(plan,task):return False
@@ -138,12 +134,10 @@ def learning_view(plan,now):
                 return len(matched)==1 and matched[0]==gap['id']
             related=[task for task in plan['editable_tasks'] if task_belongs(task)]
             active=[task for task in related if not task.get('removed')]
-            # Match every projected session to its authoritative task.
             session_ids={slot_id(task,i) for task in active for i,_ in enumerate(task.get('schedule') or [])}
             sessions=sorted((a for a in plan['assignments'] if a['id'] in session_ids),key=lambda a:(str(a['date']),a['start_time']))
         else:
             def belongs(session):
-                # A session names one skill, or else it serves every skill of its milestone.
                 if session.get('gap_id'):return session['gap_id']==gap['id']
                 return gap['id'] in (milestones.get(session['milestone_key']) or {}).get('gap_ids',[])
             sessions=sorted((a for a in plan['assignments'] if belongs(a)),key=lambda a:(str(a['date']),a['start_time']))
@@ -152,14 +146,12 @@ def learning_view(plan,now):
         state='not_scheduled' if not sessions else 'done' if len(done)==len(sessions) else 'in_progress' if done else 'not_started'
         if canonical:
             def still_needs_review(task):
-                # Requirement-only work has no milestone outcome to review.
                 if not task.get('milestone_key'):return False
                 milestone=milestones.get(task.get('milestone_key'))
                 has_active_members=any(not member.get('removed') and member.get('milestone_key')==task.get('milestone_key') for member in plan['editable_tasks'])
                 return removal_needs_review(task,(milestone or {}).get('outcome'),has_active_members)
             removed=any(still_needs_review(task) for task in related)
             finished=bool(active) and all(task['status']=='completed' and not task.get('definition_review_required') for task in active)
-            # A "not demonstrated" self-report acknowledges removed work without completing its outcome.
             reviewed_as_not_demonstrated=any(
                 task.get('removed') and task.get('milestone_key') and not still_needs_review(task)
                 and not ((milestones.get(task.get('milestone_key')) or {}).get('outcome') or {}).get('demonstrated')

@@ -9,9 +9,7 @@ class OutputProblem(Problem):
         super().__init__(detail,502,'assessment_output')
         self.feedback=feedback
 
-# Evaluation requests may hold a full 8,500-character job description on top of the shared default.
 ASSESSMENT_CONTEXT_BYTES=120000+8500*4
-# Leaves room for one repair round.
 MODEL_CONTEXT_BUDGET=ASSESSMENT_CONTEXT_BYTES-30000
 _ONLY_LOCAL=('provenance','evidence')
 
@@ -54,7 +52,6 @@ def group_outcome(items,operator):
     statuses=[]
     for item in items:
         status=item['match_status']
-        # A partially supported AND route can still contain a proven unmet condition.
         if operator=='any' and any(c['status']=='confirmed_shortfall' for c in item['components']):
             status='confirmed_shortfall'
         statuses.append(status)
@@ -72,7 +69,6 @@ def planning_estimate(requirement,outcome,evidence):
     job=requirement.get('kind')=='job_skill'
     have=evidence_level(records,outcome.demonstrated_level) if job else None
     need=role_level(requirement) if job else None
-    # A reviewed CV whose personal part stayed unconfirmed (for example, a skipped topic) keeps the model's level.
     estimated=job and have is None and (have:=reviewed_estimate(records,outcome.demonstrated_level)) is not None
     provisional=have==3 and any(r.get('source_kind') in {'project','experience'} and
         (r.get('attribution')!='personal' or r.get('support_uncertain')) for r in records)
@@ -102,12 +98,10 @@ def validate_batch(output,requirements,evidence):
         if requirement.get('required_proficiency') is not None:required.add('proficiency')
         if requirement.get('required_experience_months') is not None or requirement.get('minimum_months') is not None or requirement.get('maximum_months') is not None:required.add('duration')
         if requirement.get('category')=='qualification' and requirement.get('kind')=='constraint':required.add('qualification')
-        # A dimension the model left out is recorded as not judged ("uncertain").
         for dimension in sorted(required-dimensions):
             outcome.components.append(Component(dimension=dimension,status='uncertain',evidence_refs=[],
                 explanation=f'elo could not judge the {dimension} part of this requirement from your evidence.'))
         for index,component in enumerate(outcome.components):
-            # Drop repeated references.
             component.evidence_refs=list(dict.fromkeys(component.evidence_refs))
             unknown=[ref for ref in component.evidence_refs if ref not in evidence]
             if unknown:

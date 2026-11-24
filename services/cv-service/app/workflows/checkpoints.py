@@ -44,7 +44,6 @@ class LatestStateSaver(BaseCheckpointSaver):
     def put(self, config, checkpoint, metadata, new_versions):
         thread_id = config['configurable']['thread_id']
         saved = {'configurable': {'thread_id': thread_id, 'checkpoint_ns': '', 'checkpoint_id': checkpoint['id']}}
-        # A worker that lost its lease, or a CV deleted mid-run, must not write again.
         if self.may_write():
             self.store.save({'_id': self.cv_id, 'user_id': self.owner, 'thread_id': thread_id, 'checkpoint_id': checkpoint['id'],
                              'checkpoint': self._dump(checkpoint), 'metadata': self._dump(metadata), 'writes': [], 'updated_at': time()})

@@ -21,7 +21,6 @@ from app.ai.metrics import COUNTERS,usage_observer
 IDENTITY=('role','field','company','location','seniority_level','employment_type')
 
 def matches(identity,goal):
-    # Every employer/title/location/position value used in the retrieval query must match.
     def normalized(value):return ' '.join((value or '').casefold().split())
     return all(normalized(getattr(identity,k))==normalized(getattr(goal,k)) for k in IDENTITY if k!='field')
 
@@ -36,14 +35,12 @@ async def prefetch(engine,identity,owner,revision):
         for name,count in counts.items():metrics[name]=metrics.get(name,0)+count
     provider=getattr(engine.source,'provider',None)
     if provider:result['source_provider']=provider
-    # Plan before retrieval while full JD extraction proceeds independently.
     recovery=recover_responses.set(False)
     waiting=quota_progress.set(None)
     activity('planning_research')
     usage=[];observer=usage_observer.set(usage.append)
     try:
         model_settings=getattr(engine.ai,'settings',None)
-        # Planning uses the durable planner's per-call deadline (60s by default).
         seconds=getattr(model_settings,'timeout_seconds',60)
         async with asyncio.timeout(seconds):
             plan=await engine.ai.generate(AIInput(stage='opportunity_plan',context=json.dumps({

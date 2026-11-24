@@ -36,7 +36,6 @@ def run():
     original_client=httpx.Client
     pending={'fixture':None,'stage':None,'result':None}
     def handle(request):
-        # The mock rejects any unexpected target; no provider request is made.
         if request.url.host != 'provider.example':
             raise RuntimeError('Unexpected provider host in synthetic replay.')
         payload=json.loads(request.content)

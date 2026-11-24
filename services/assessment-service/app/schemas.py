@@ -15,7 +15,6 @@ class Component(Contract):
     status:Literal['supported','uncertain','confirmed_shortfall']
     explanation:Text
     evidence_refs:list[str]=Field(max_length=30)
-    # A shortfall needs an explicit limitation/negative declaration, not missing proof.
     limitation_quote:str|None=Field(default=None,max_length=1000)
     support_quote:str|None=Field(default=None,max_length=1000)
 class Interpreted(Contract):
@@ -24,7 +23,6 @@ class Interpreted(Contract):
     recommendation:Text|None=None
     mapping_method:Literal['canonical','semantic','unresolved']
     mapping_reason:Text
-    # Job skills only: the model's whole-number levels on one 0–10 scale (1-3 basic, 4-6 moderate, 7-8 good, 9-10 expert understanding).
     demonstrated_level:int|None=Field(default=None,ge=1,le=10)
     required_level:int|None=Field(default=None,ge=1,le=10)
     score_explanation:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=600)]|None=None
@@ -149,7 +147,6 @@ class Context(Contract):
     inputs:InputVersions|None=None
     research_coverage:str|None=None
     evidence:dict[str,dict]|None=None
-    # Setup state for the evaluate banner; null until a goal and skills source both exist.
     cv_reviewed:bool|None=None
     research_pending:bool|None=None
     model_available:bool

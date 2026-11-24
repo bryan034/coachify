@@ -1,15 +1,12 @@
-# Local operating-system and editor state
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
 
-# Secrets and environment files (examples remain trackable)
 .env
 .env.*
 !.env.example
 
-# Node / Next.js / TypeScript generated output
 node_modules/
 .next/
 out/
@@ -18,7 +15,6 @@ coverage/
 *.tsbuildinfo
 next-env.d.ts
 
-# Python dependencies and generated output
 .venv/
 venv/
 __pycache__/
@@ -30,11 +26,9 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Runtime data and working files
 runtime/
 uploads/
 mongo-data/
-# Database dumps and WiredTiger data files belong outside source control.
 *mongo*backup*.tgz
 *mongo*backup*.tar*
 *mongo*backup*.zip
@@ -47,6 +41,5 @@ logs/
 *.log
 work/
 
-# Browser test artifacts
 playwright-report/
 test-results/

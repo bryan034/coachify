@@ -25,7 +25,6 @@ async def current_account(request: Request, credentials: HTTPAuthorizationCreden
             raise ValueError
     except (ValueError, AttributeError) as exc:
         raise HTTPException(503, 'Account verification is unavailable. Please retry.') from exc
-    # Read Profile's canonical completion marker.
     try:
         response = await request.app.state.profile_client.get('/api/v1/profile',
             headers={'Authorization': 'Bearer ' + credentials.credentials})

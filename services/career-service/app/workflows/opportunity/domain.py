@@ -24,19 +24,16 @@ def public_job_url(value):
     try:
         if not ipaddress.ip_address(host).is_global:return None
     except ValueError:pass
-    # Strip query and fragment.
     return urlunsplit((parsed.scheme,parsed.netloc,parsed.path,'',''))
 
 
 def public_opportunity(goal):
-    # Employment is unknown unless explicitly present in saved role/conditions.
     text=' '.join([goal.role,*[v.description for v in goal.non_skill_requirements]])
     employment=getattr(goal,'employment_type','unknown')
     employment=employment if employment!='unknown' else next((value for pattern,value in [(r'\bintern(?:ship)?\b','internship'),(r'\bfull[ -]time\b','full_time'),(r'\bpart[ -]time\b','part_time'),(r'\bcontract\b','contract')] if re.search(pattern,text,re.I)),'unknown')
     context={'company':goal.company,'role':goal.role,'field':goal.field,'location':goal.location,'seniority_level':goal.seniority_level,
              'employment_type':employment,'job_url':public_job_url(goal.job_url),
              'skill_hints':sorted({s.name for s in goal.skills if s.origin!='user_declaration'})[:60]}
-    # Never send interests, preferences, CV, account details, raw JD or chat to shared research.
     canonical={k:' '.join(v.casefold().split()) if isinstance(v,str) else v for k,v in context.items()}
     canonical['requirements_hash']=fingerprint({'responsibilities':goal.responsibilities,'conditions':[v.model_dump(mode='json') for v in goal.non_skill_requirements]})
     digest=fingerprint(canonical)
@@ -60,7 +57,6 @@ def number_value(token):
     """8k, 8K, 8,000 and 8000 are one amount; years and other plain numbers keep their value."""
     token=token.replace(' ','');scale={'k':1_000,'m':1_000_000}.get(token[-1:].lower(),1)
     digits=token[:-1] if scale>1 else token
-    # A comma followed by exactly three digits groups thousands; otherwise it is a decimal comma.
     digits=re.sub(r',(?=\d{3}(?!\d))','',digits).replace(',','.')
     try:return round(float(digits)*scale,2)
     except ValueError:return None
@@ -91,7 +87,6 @@ def validate_claims(output,category,sources,public=None):
             if ref<0 or ref>=len(sources):raise citation_error(index,'refs','source_index_out_of_range')
             if whitespace(quote) not in whitespace(sources[ref].evidence or ''):
                 raise citation_error(index,'quotes','quote_not_in_source')
-        # New provider claims select a complete passage; legacy claims use the full excerpt.
         evidence='\n'.join(item.quotes if output._passage_bound else [sources[ref].evidence or '' for ref in item.refs])
         numeric_support(item.value,evidence,index)
         values=item.model_dump(exclude={'refs'})
@@ -150,7 +145,6 @@ def validated_skill_levels(output,skills,finding_ids):
         key=' '.join(rated.skill.casefold().split())
         if key not in wanted or key in seen:problems.append({'field':f'levels.{index}.skill','issue':'unknown_or_repeated_skill'});continue
         if any(i not in finding_ids for i in rated.finding_ids):problems.append({'field':f'levels.{index}.finding_ids','issue':'unknown_finding'});continue
-        # A reported example must restate a finding of this report; it is never the model's own claim.
         if any(e.finding_id not in finding_ids for e in rated.reported_examples):problems.append({'field':f'levels.{index}.reported_examples','issue':'unknown_finding'});continue
         seen[key]={'skill':wanted[key],'level':rated.level,
                    'employer_demand':plain_text(rated.employer_demand) if rated.employer_demand else None,
@@ -163,7 +157,6 @@ def validated_skill_levels(output,skills,finding_ids):
 
 
 def summary_input(categories):
-    # Interleave categories in the bounded summary.
     return [{'id':f.finding_id,'category':category,'field':f.field,'value':plain_text(f.value),'confidence':f.confidence,'scope':f.scope,'conflict_group':f.conflict_group}
             for index in range(max((len(result.findings) for result in categories.values()),default=0))
             for category,result in categories.items() if index<len(result.findings)

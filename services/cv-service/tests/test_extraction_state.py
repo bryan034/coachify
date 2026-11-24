@@ -278,7 +278,7 @@ def test_a_temporary_failure_retries_automatically_after_a_delay_and_resumes(har
     waiting = status(client, cv['id'])
     assert waiting['status'] == 'queued' and waiting['error'] is None
     assert waiting['processing_progress']['message'] == 'Hit an error: the model took too long to respond. Retrying shortly (retry 1 of 2).'
-    worker.run_once()  # Not due yet: nothing is called.
+    worker.run_once()
     assert len(attempts) == 1
     make_due(app, cv['id'])
     def retrying_then_flaky(blocks, **kwargs):

@@ -18,16 +18,13 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()).hexdigest()
 
 
-# A hyphen ending a PDF line becomes "word- word" once whitespace collapses.
 _WRAPPED_HYPHEN = re.compile(r'(?<=\w)- (?=\w)')
 
 
 def evidence_matches(excerpt, source):
-    # Preserve words and meaningful punctuation while tolerating PDF line wraps, spacing, case and Unicode forms.
     if excerpt in source: return True
     excerpt, source = normalized_name(excerpt), normalized_name(source)
     if excerpt in source: return True
-    # A quotation may rejoin a line-wrapped hyphenated compound or word.
     excerpt = _WRAPPED_HYPHEN.sub('-', excerpt)
     return excerpt in _WRAPPED_HYPHEN.sub('-', source) or excerpt in _WRAPPED_HYPHEN.sub('', source)
 
@@ -60,7 +57,6 @@ def evidence_requiring_semantic_check(payload, blocks):
                     for quote_index, ref in enumerate(fact['evidence']):
                         _validate_review_quote(ref, source, item_index, review_index, quote_index)
                     if fact.get('evidence'):
-                        # The factual interpretation still needs semantic support.
                         refs.append({'block_id': fact['evidence'][0].get('source_id'), 'excerpt': fact_statement(fact)})
     if isinstance(payload.get('other_information'), list): refs.extend(payload['other_information'])
     pending = []
@@ -84,7 +80,6 @@ def validate_extraction(payload, blocks, cv_id, semantic_support=frozenset()):
     source_text = {key: block['text'] for key, block in source.items()}
     validate_other_information(extraction.other_information, blocks, semantic_support)
     items = []
-    # Item IDs depend on source evidence and section; exact duplicated evidence is rejected.
     for index, item in enumerate(extraction.items):
         evidence = []
         for ref in item.evidence:
@@ -97,12 +92,10 @@ def validate_extraction(payload, blocks, cv_id, semantic_support=frozenset()):
         for name in item.skill_names + ([item.title] if item.kind == 'skill' else []):
             names_by_id.setdefault(skill_id(name), name)
         names = list(names_by_id.values())
-        # A purported explicit skill needs that exact name in its evidence.
         if item.explicit:
             text = normalized_name(' '.join(source[e['id']]['text'] for e in evidence))
             if any(normalized_name(name) not in text for name in names):
                 raise EvidenceValidationError('The model labelled an unsupported skill as explicit. Retry this upload.', 'literal_skill', index)
-        # Keep each date excerpt separate.
         for field in ('start_date', 'end_date'):
             value = getattr(item, field)
             if value and not any(_stated_date(ref['excerpt'], value) for ref in evidence):
@@ -123,7 +116,6 @@ def validate_extraction(payload, blocks, cv_id, semantic_support=frozenset()):
                 raise EvidenceValidationError('Interview evidence is not supported by the CV.',
                                               'review_support', index, review_index=review_index)
         review_facts = unique_facts(review_facts)
-        # Drop a skill level that cannot be tied to a listed skill and a real CV quotation.
         skill_levels = []
         for judged in item.skill_levels:
             level_id = skill_id(judged.skill_name)
@@ -182,7 +174,6 @@ def level_ceiling(item, claim, answered=False):
     if item['kind'] in {'project', 'experience'}:
         personal = claim.get('attribution') == 'personal' or any(
             f['field'] in {'skill_use', 'personal_contribution'} and f.get('attribution') == 'personal' for f in facts)
-        # The person's own review explanation is what shows understanding; the CV text alone does not.
         explained = answered or bool(facts) or (claim.get('skill_level') or {}).get('source') == 'review'
         return MAX_LEVEL if personal and explained else UNEXPLAINED_CEILING
     described = claim.get('proficiency') or claim.get('experience_months') is not None or facts
@@ -204,7 +195,6 @@ def _base_claims(item):
             'experience_months': item.get('experience_months'), 'evidence': deepcopy(item['evidence']),
             'evidence_type': item['provenance'], 'support_uncertain': item.get('support_uncertain', False)}
     for judged in item.get('skill_levels', []):
-        # Omitted, not null, when absent.
         if judged['skill_id'] in result:
             result[judged['skill_id']]['skill_level'] = {'level': judged['level'], 'rationale': judged['rationale'],
                                                           'source': 'cv', 'evidence': deepcopy(judged['evidence'])}
@@ -223,7 +213,6 @@ def _correction_events(document):
             if field in {'_field_sequences', 'provenance'}: continue
             sequence = overlay.get('_field_sequences', {}).get(field)
             if sequence is None:
-                # With no chronology, retain the former correction priority.
                 previous = missing
                 for entry in history:
                     recorded = entry['overlays'].get(identifier, {}).get(field, missing)
@@ -246,7 +235,6 @@ def _apply_correction(item, patch):
         item['_claims'] = {identifier: {**previous[identifier], 'name': claim['name']}
                            if identifier in previous else claim
                            for identifier, claim in _base_claims(item).items()}
-    # A display-name change does not rebuild facts already clarified for the same canonical skill.
     corrected_claim = bool(set(patch) & {'proficiency', 'experience_months', 'support_uncertain'})
     if corrected_claim or ('evidence' in patch and 'skill_ids' not in patch):
         for claim in item['_claims'].values():
@@ -312,11 +300,9 @@ def effective_items(document):
         item['uncertainties'] = [u for u in item.get('uncertainties', []) if u not in resolved]
         for uncertainty in result['remaining_uncertainties']:
             if uncertainty not in item['uncertainties']: item['uncertainties'].append(uncertainty)
-        # A clarified statement supports the item as evidence.
         if result.get('statement_excerpt'):
             item['evidence'] = [e for e in item['evidence'] if e.get('id') != 'answer:' + question['id']] + [
                 {'id': 'answer:' + question['id'], 'location': 'Your clarification', 'excerpt': result['statement_excerpt']}]
-    # Propagate recursively, narrowing only the matching derived skill.
     done = set()
     def propagate(item):
         if item['id'] in done: return
@@ -339,15 +325,12 @@ def effective_items(document):
                 elif parent.get('support_uncertain'):
                     support_states.append('uncertain')
                 else:
-                    # Some non-skill source items substantiate a derived claim;
-                    # retain that explicitly recorded relationship until changed.
                     support_states.append('supported')
             if support_states and 'supported' not in support_states:
                 claim.update(attribution='denied' if all(s == 'denied' for s in support_states) else 'unknown',
                              support_uncertain=True)
         done.add(item['id'])
     for item in items: propagate(item)
-    # Rebuild declined questions from the durable skip receipt.
     for question in document.get('clarifications', []):
         if (question.get('status') != 'skipped' or question.get('reconciliation_required') or question.get('reopened')
                 or question.get('extraction_version') != document.get('extraction_version')): continue
@@ -363,9 +346,7 @@ def effective_items(document):
         active = [claim for claim in claims if claim['attribution'] not in {'team', 'observed', 'denied'}]
         item['skill_ids'], item['skill_names'] = [c['skill_id'] for c in active], [c['name'] for c in active]
         item['support_uncertain'] = any(claim['support_uncertain'] for claim in active)
-        # The user's own explanation or correction resolves an unverified section.
         if item['provenance'] in {'user_clarified', 'user_corrected'}: item.pop('validation_issue', None)
-        # The item-wide legacy fields only describe a single skill unambiguously.
         if len(active) == 1:
             item['proficiency'], item['experience_months'] = active[0]['proficiency'], active[0]['experience_months']
         elif claims:
@@ -391,7 +372,6 @@ def skills_for(items):
                       **{field: claim[field] for field in ('attribution', 'assistance', 'proficiency', 'experience_months', 'evidence')}}
             if claim.get('skill_level'): source['skill_level'] = claim['skill_level']
             skill['sources'].append(source)
-            # Retain source-level uncertainty even when another source supports the same skill.
             if not uncertain:
                 skill['explicit'] = skill['explicit'] or source['explicit']
                 types = {s['evidence_type'] for s in skill['sources'] if not s['support_uncertain']}
@@ -403,7 +383,6 @@ def skills_for(items):
             values = {source[field] for source in skill['sources'] if not source['support_uncertain'] and source[field] is not None}
             skill[field] = next(iter(values)) if len(values) == 1 else None
             if len(values) > 1: skill['conflicting_fields'].append(field)
-        # Report the highest rated source level, preferring the review on a tie.
         judged = [s['skill_level'] for s in skill['sources'] if s.get('skill_level')]
         rated = [j for j in judged if j.get('level') is not None]
         if rated: skill['skill_level'] = max(rated, key=lambda j: (j.get('status') != 'assumed', j['level'], j['source'] == 'review'))
@@ -412,7 +391,6 @@ def skills_for(items):
 
 
 def effective_fingerprint(document):
-    # Only capability facts count, not rewording, retry metadata or receipt state.
     facts = []
     originals = {item['id']: item for item in document.get('original_items', [])}
     for item in effective_items(document):
@@ -465,7 +443,6 @@ def _stated_date(excerpt, value):
         expressions = [day + r'\s+' + month_text + separators + year,
             month_text + r'\s+' + day + separators + year,
             year + separators + month_text + r'\s+' + day]
-    # All stated components must occur in one date expression.
     return any(re.search(r'(?<!\w)' + expression + r'(?!\w)', text) for expression in expressions)
 
 
@@ -500,7 +477,6 @@ def interpretation_semantic_checks(payload, question, item=None):
         fields.append(('review', fact_key(data)))
         previous = [f for f in (item or {}).get('review_evidence', []) if fact_key(f) == fact_key(data) and f['status'] == 'supported']
         if any(f.get('value') != fact.value for f in previous) and fact.status == 'supported':
-            # Also check the new claim's relationship to the earlier claim.
             block_id = str(len(blocks))
             blocks.append({'id': block_id, 'text': 'Earlier supported account: ' + '\n'.join(str(f.get('value')) for f in previous) +
                 '\nLatest user statement: ' + '\n'.join(ref.quote for ref in fact.evidence)})

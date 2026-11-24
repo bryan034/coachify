@@ -1,7 +1,6 @@
 """Discovery-only, evidence-backed readiness checks; no model or network calls."""
 from app.schemas.discovery import DiscoveryAnswer,DiscoveryUnderstanding,Decision
 
-# Seven stored answers, presented as the user's six requested question topics.
 REQUIRED_FIELDS=('field','role_family_or_work','interest','other_interests','avoided_activities','career_stage','work_preferences')
 QUESTIONS = {
     'field': 'Which field and, if possible, specific role would you like to explore? You can keep it broad.',
@@ -39,7 +38,6 @@ def grounded_understanding(proposed, previous, messages, *, changed_field=False,
         for name in ('field','role_family_or_work','interest','skill_ambiguity'):
             setattr(result,name,DiscoveryAnswer())
     user_messages=[m['content'] for m in messages if m['role']=='user']+[current_message]
-    # A quote consisting only of another topic's stated answer cannot express uncertainty.
     answering={' '.join(getattr(proposed,name).value.casefold().split()) for name in DiscoveryUnderstanding.model_fields
                if getattr(proposed,name).status=='known' and getattr(proposed,name).value}
     for name in DiscoveryUnderstanding.model_fields:

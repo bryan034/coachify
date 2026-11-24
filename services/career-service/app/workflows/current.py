@@ -8,7 +8,6 @@ def workspace_revision(repository, owner, session, expected_version):
     async def current():
         try:
             row = await thread(repository.check, owner, session, expected_version)
-            # Also check the active review's canonical goal.
             identifier = row['workspace'].get('review_id')
             if identifier:
                 return str(await thread(repository.reviews.version, identifier, owner))

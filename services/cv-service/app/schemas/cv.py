@@ -134,7 +134,6 @@ class ExtractedItem(StrictModel):
 
     @model_validator(mode='after')
     def valid_dates(self):
-        # Dates are optional extraction hints.
         for field in ('start_date', 'end_date'):
             try:
                 date_bounds(getattr(self, field))
@@ -435,7 +434,6 @@ class ReviewSummary(BaseModel):
 
 
 class CvDetail(CvSummary):
-    # Display categories by skill name, derived on read; see elo_shared.skill_groups.
     skill_groups: dict[str, str] = Field(default_factory=dict)
     skill_subgroups: dict[str,str] = Field(default_factory=dict)
     @model_validator(mode='after')

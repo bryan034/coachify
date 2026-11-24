@@ -12,7 +12,6 @@ def provider_failure(response, stage):
               404: 'not_found', 429: 'rate_limit_or_quota'}.get(status,
                   'provider_unavailable' if status >= 500 else 'http_error')
     parameter = None
-    # Read only the already bounded rejection body.
     try:
         body = response.content
         payload = json.loads(body) if len(body) <= 16 * 1024 else None
@@ -38,7 +37,6 @@ def provider_failure(response, stage):
                 if parameter is None:
                     parameter = next((name for name in sorted(PARAMETERS) if name in text), None)
     except (ValueError, TypeError, RuntimeError):
-        # Malformed/oversized bodies keep a status-only classification.
         pass
     return classified_provider_failure(reason, parameter, stage, status)
 

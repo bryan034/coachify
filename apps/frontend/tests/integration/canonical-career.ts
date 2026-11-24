@@ -6,7 +6,6 @@ type Account=Awaited<ReturnType<typeof createLocalAccount>>;
 export type SyntheticGoal={role:string;field:string;target_type?:'specific_job'|'career_exploration';company?:string;skills:{name:string;evidence?:string}[];conditions?:{description:string;evidence?:string;category?:string}[];goal_id?:string};
 export type SeededGoal={id:string;version:number;selection_version:number};
 
-/** Only the disposable Compose override mounts this script and enables its guard. */
 export async function seedCanonicalGoal(account:Account,input:SyntheticGoal):Promise<SeededGoal>{
  if(!input.role.startsWith('Synthetic '))throw new Error('Canonical goal fixtures must be clearly synthetic.');
  const who=await (await account.get('/api/v1/profile/auth/session')).json();

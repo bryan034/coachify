@@ -37,9 +37,7 @@ MAX_MODEL_NAME = 160
 MAX_REJECTION_BYTES = 16 * 1024
 
 
-# Pages kept per research search.
 OPPORTUNITY_SOURCE_LIMIT=5
-# Largest built-in URLs-per-search (goal research/chat); a configured cap only lowers it.
 MAX_URLS_LIMIT=6
 OPPORTUNITY_URL_LIMIT=10
 OPPORTUNITY_EXCERPT_LIMIT=8000
@@ -55,7 +53,6 @@ def interview_excerpt(value,terms=INTERVIEW_TERMS,budget=600):
     if len(text)<=budget:return text
     starts={0}
     for match in terms.finditer(text):
-        # Keep the sentence prefix when possible.
         boundary=max(text.rfind('. ',0,match.start()),text.rfind('! ',0,match.start()),text.rfind('? ',0,match.start()))
         start=boundary+2 if boundary>=0 and match.start()-boundary<SENTENCE_LOOKBACK else max(0,match.start()-EXCERPT_LEAD)
         starts.add(min(start,max(0,len(text)-budget)))
@@ -83,9 +80,7 @@ def search_evidence(result,focus=None,*,budget=600):
     snippets.sort(key=lambda text:len(terms.findall(text)),reverse=True)
     selected=[];remaining=budget
     for text in snippets:
-        # Stop once the budget is spent.
         if remaining<=0:break
-        # Skip repeated/subsumed snippets.
         if any(text.casefold() in old.casefold() for old in selected):continue
         piece=text[:remaining]
         if not piece:break
@@ -183,7 +178,6 @@ async def charge_search(owner,limit):
     except ModelBudgetUnavailable:
         raise GoalError('Research usage could not be recorded. Retry when the service is available.',503) from None
 
-# Only fixed codes/field names leave this boundary.
 BRAVE_CODES={
     'INTERNAL':'Brave reported an internal API error. Retry shortly.',
     'QUOTA_LIMITED':'Brave API quota was reached. Check the subscription quota.',
@@ -250,12 +244,9 @@ SEARCH_MODEL='openai/gpt-4.1-mini'
 SEARCH_PROVIDERS=('openrouter','brave')
 SEARCH_OUTPUT_TOKENS=1536
 SEARCH_RESPONSE_BYTES=256*1024
-# Total wall-clock budget for one search, including any Brave fallback.
 SEARCH_DEADLINE_SECONDS=28
-# Time kept for a Brave fallback within the deadline.
 MIN_FALLBACK_SECONDS=8
 BRAVE_TIMEOUT_SECONDS=30
-# Prefixed to evidence the search model wrote.
 SUMMARY_LABEL='Search model summary of this page, not a quote: '
 SEARCH_PROMPT=('You are a public web research tool. Use the web search tool to search the public web for the query. '
     'Do not answer from memory. Then list what the sources say as short bullet points, one specific fact per line, '
@@ -278,7 +269,6 @@ def cited_line(text,start,end):
     line=text[first:last if last>=0 else len(text)]
     line=re.sub(r'\(\s*\[[^\]]*\]\([^)]*\)\s*\)','',line)
     line=re.sub(r'\[([^\]]*)\]\([^)]*\)',r'\1',line)
-    # Strip one list marker only ("- ", "* ", "1. ", "2) ").
     return re.sub(r'^\s*(?:[*\-\u2022]|\d{1,2}[.)])\s+','',line).replace('**','').strip()
 
 
@@ -298,7 +288,6 @@ def citation_results(payload):
         citation=item.get('url_citation') if isinstance(item.get('url_citation'),dict) else item
         url=citation.get('url')
         if not isinstance(url,str) or not url.startswith(('https://','http://')):continue
-        # Prefer the search provider's own page excerpt, else the cited answer line labelled as model wording.
         content=citation.get('content')
         if isinstance(content,str) and content.strip() and not error_excerpt(content):snippets=[content]
         else:
@@ -320,24 +309,20 @@ def openrouter_search_key():
 
 
 class SourceAPIs:
-    # Workflow channel identifier persisted in research records and public enums.
     provider='brave'
     def __init__(self,client,*,brave_key='',brave_mode='llm_context',metered=False,searches_per_account=None,max_urls=None,
                  backend,fallback=None,openrouter_key='',search_model=SEARCH_MODEL,max_tool_calls=3,search_timeout=15):
         self.client,self.brave_key,self.brave_mode=client,brave_key,'llm_context'
-        # max_urls caps every workflow's URL count; a None allowance is unlimited.
         self.metered,self.searches_per_account,self.max_urls=metered,searches_per_account,max_urls
         if backend not in SEARCH_PROVIDERS or fallback not in (None,'brave'):raise ValueError('Unsupported research provider.')
         self.backend,self.fallback=backend,fallback if backend=='openrouter' else None
         self.openrouter_key,self.search_model=openrouter_key,search_model
-        # A hard total deadline per OpenRouter attempt.
         self.max_tool_calls=max_tool_calls
         self.search_timeout=min(search_timeout,SEARCH_DEADLINE_SECONDS-MIN_FALLBACK_SECONDS)
         self.sdk=None
 
     @classmethod
     def from_environment(cls,client):
-        # OpenRouter search with a Brave fallback by default; an explicitly blank fallback disables it.
         provider=os.getenv('CAREER_RESEARCH_PROVIDER','').strip() or 'openrouter'
         if provider not in SEARCH_PROVIDERS:raise ValueError('Invalid CAREER_RESEARCH_PROVIDER. Use openrouter or brave.')
         fallback=os.getenv('CAREER_RESEARCH_FALLBACK_PROVIDER','brave').strip() or None
@@ -361,7 +346,6 @@ class SourceAPIs:
 
     @property
     def cache_policy(self):
-        # Each backend has its own cache key.
         if self.backend=='openrouter':return 'public-interview-openrouter-native-v1:'+self.search_model
         return 'public-interview-brave-context-v9:'+self.brave_mode
 
@@ -379,7 +363,6 @@ class SourceAPIs:
         if not self.configured:raise GoalError('The running career service has no research search key. Configure OPENROUTER_API_KEY (or CAREER_RESEARCH_API_KEY for the Brave fallback), recreate the career-service container and retry.',503)
         await self.charge()
         kwargs=self.bounded(kwargs)
-        # Without an OpenRouter key, go straight to the Brave fallback.
         if not self.openrouter_key.strip():return await self.brave_search(query,**kwargs)
         started=time.monotonic()
         try:
@@ -391,7 +374,6 @@ class SourceAPIs:
             if failure.reason=='no_sources':return []
             if failure.reason=='rate_limited':raise SourceRateLimit(failure.retry_after,self.provider)
             raise failure
-        # Only a fixed reason code is logged.
         log.warning('research_search_fallback from=openrouter to=brave reason=%s',failure.reason)
         remaining=SEARCH_DEADLINE_SECONDS-(time.monotonic()-started)
         return await self.brave_search(query,**kwargs,deadline=max(1.0,remaining))
@@ -409,7 +391,6 @@ class SourceAPIs:
         return await self.collect_platform(context,'brave')
 
     async def collect_query(self,context,query):
-        # The model supplies text only; endpoint, credentials and result budget stay fixed.
         return await self.search(query,country=search_country(context.location))
 
     async def collect_question_query(self,context,query):
@@ -420,7 +401,6 @@ class SourceAPIs:
             evidence_chars=OPPORTUNITY_EXCERPT_LIMIT,context_tokens=16384,threshold='lenient',snippets_per_url=12,snippets=60,search_count=50)
 
     async def collect_discovery_query(self,context,query):
-        # Brave ranks up to 50 results before returning at most five contexts.
         return await self.search(query,country=search_country(context.location),focus=query,
             max_sources=MAX_URLS_PER_QUERY,evidence_chars=8000,context_tokens=BRAVE_CONTEXT_TOKENS,search_count=50,threshold='strict',discovery=True)
 
@@ -460,13 +440,11 @@ class SourceAPIs:
         return self.sources(results,focus=focus,evidence_chars=evidence_chars,max_sources=max_sources,discovery=discovery)
 
     def search_payload(self,query,country,max_sources):
-        # The model's provider runs its own search.
         parameters={'engine':'native','max_results':max_sources}
         if country=='SG':parameters['user_location']={'type':'approximate','country':'SG','timezone':'Asia/Singapore'}
         return {'model':self.search_model,'max_tokens':SEARCH_OUTPUT_TOKENS,
             'messages':[{'role':'system','content':SEARCH_PROMPT},{'role':'user','content':'Search query: '+query[:500]}],
             'tools':[{'type':'openrouter:web_search','parameters':parameters}],
-            # Bounds the server-side tool loop; native providers may run their own searches.
             'extra_body':{'max_tool_calls':self.max_tool_calls}}
 
     async def openrouter_search(self,query,*,country='ALL',focus=None,max_sources=6,evidence_chars=2400,discovery=False,**_brave_only):
@@ -475,7 +453,6 @@ class SourceAPIs:
                 timeout_seconds=self.search_timeout),self.client)
         payload=self.search_payload(query,country,max_sources)
         try:
-            # Bound the whole request, including a slowly streamed body.
             async with asyncio.timeout(self.search_timeout):
                 async with completion_response(self.sdk,payload,telemetry={'service':'career','stage':'research_search'}) as response:
                     status=response.status_code
@@ -501,14 +478,12 @@ class SourceAPIs:
             await sdk.close()
 
     def sources(self,results,*,focus,evidence_chars,max_sources,discovery):
-        # OpenRouter citations carry no structured employer field.
         sources=[]
         for value in results:
             evidence=search_evidence(value,focus,budget=evidence_chars)
             if not evidence or error_excerpt(evidence):continue
             try:source=self.source('brave',value['url'],value.get('title') if isinstance(value.get('title'),str) else None,evidence)
             except (ValidationError,ValueError):continue
-            # URL safety and canonicalisation apply before this can count as a result.
             try:
                 normalized=normalize_sources([source])
                 if discovery:

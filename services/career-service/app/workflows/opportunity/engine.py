@@ -49,7 +49,6 @@ def select_evidence(sources,budget):
         return len(encoding.encode(serialized,disallowed_special=()))
     selected=[]
     for index,source in enumerate(sources):
-        # Reserve a fair share for later sources.
         allowance=size(selected)+max(0,(budget-size(selected))//(len(sources)-index))
         low,high=0,len(source.evidence)
         best=None
@@ -82,7 +81,6 @@ def availability_issues(settings,ai,source):
 
 def merge(left,right):return {**left,**right}
 def valid_levels(levels,categories):
-    # A rating may only cite findings that survived into the saved report.
     ids={f.finding_id for result in categories.values() for f in result.findings}
     return [{**level,'finding_ids':[i for i in level.get('finding_ids',[]) if i in ids],
              'reported_examples':[e for e in level.get('reported_examples',[]) if e.get('finding_id') in ids]} for level in levels or []][:60]
@@ -100,7 +98,6 @@ class OpportunityEngine:
         self.tasks={};self.triage_locks={};self.stopping=False;self.slots=asyncio.Semaphore(settings.concurrency)
         source=app.state.research_client
         self.source=source.for_opportunity() if callable(getattr(source,'for_opportunity',None)) else source
-        # 'provider' is the persisted channel id; 'backend' names the search service.
         if self.source.backend!='brave':
             self.store.research.policy+=':'+self.source.cache_policy
         self.availability_issues=availability_issues(settings,ai,self.source)
@@ -120,7 +117,6 @@ class OpportunityEngine:
         return {'results':{k:v for k,v in job['categories'].items() if v['status'] not in ('pending','running')}}
 
     async def generate(self,job,stage,data,validate=None):
-        # Bounded schema repair for this pipeline.
         step=stage+'_'+fingerprint(data)[:24]
         prior=job.get('model_recovery',{}).get(step,{})
         invalids=prior.get('invalid_responses',0)
@@ -241,7 +237,6 @@ class OpportunityEngine:
         async def first(group):
             try:await self.search_group(job['_id'],group)
             except (GoalError,TimeoutError,SourceRateLimit,ValueError) as error:
-                # A failed group search leaves its topics to their own gap searches.
                 logger.warning('group=%s group_search_failed exception_type=%s',group,type(error).__name__)
         await asyncio.gather(*(first(g) for g in dict.fromkeys(TOPIC_GROUP[t] for t in topics)))
         latest=await self.job(state)
@@ -350,13 +345,11 @@ class OpportunityEngine:
         evidence=self.category_evidence(job,category)
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}.status':'running'})
         try:
-            # Round 0 reads the grouped search's pages; each later round runs one gap search per unsettled topic.
             rounds=0 if job.get('evaluation_complete',{}).get(category) else self.settings.topic_searches+1
             for index in range(rounds):
                 job=await self.job(state);read=topic_map(job.get('read'))
                 others,other_sources=self.shared(job,category)
                 evidence=self.category_evidence(job,category)
-                # A backed topic leaves the search list, whichever category found its sources.
                 due=[t for t in own if not settled(t,[*findings,*others],[*evidence,*other_sources]) and len(read.get(t,[]))<policy(t).max_urls]
                 if not due:
                     await thread(self.store.update,job['_id'],job['worker_token'],**{f'evaluation_complete.{category}':True})
@@ -364,7 +357,6 @@ class OpportunityEngine:
                 history=topic_map(job.get('history'))
                 searchable=[t for t in due if index and len(history.get(t,[]))<index]
                 if searchable:
-                    # The first gap round keeps each category within its share of the run's remaining searches.
                     await self.search_gaps(job,searchable,[*findings,*others],self.gap_share(job,category) if index==1 else None)
                     job=await self.job(state);evidence=self.category_evidence(job,category)
                 found={t:pool(topic_map(job.get('evidence')).get(t,[])) for t in due}
@@ -372,7 +364,6 @@ class OpportunityEngine:
                 if unseen:
                     model_calls+=1
                     result=await self.triage(job,due,unseen)
-                    # Without a usable triage, each topic reads its own top-ranked results.
                     if result is None:result={s.source_id:{t for t in due if s.source_id in {f.source_id for f in found[t]}} for s in unseen}
                     for sid,topics in result.items():flags.setdefault(sid,set()).update(topics)
                     triaged.update(s.source_id for s in unseen)
@@ -399,7 +390,6 @@ class OpportunityEngine:
                                 await self.share(job,category,current,selected)
                                 keep_claims=True
                             except AIError as error:
-                                # Record an unusable round and try the next search.
                                 if error.code=='rate_limited':keep_claims=True
                                 if error.code not in ('invalid_output','incomplete_output'):raise
                                 round_error=error.code
@@ -407,7 +397,6 @@ class OpportunityEngine:
                         if not keep_claims:await asyncio.shield(self.release(job,category,fresh))
                     evaluated.update(s.source_id for s in fresh)
                 complete=index+1>=rounds
-                # Findings, triage and read cursors commit together before any next call.
                 await thread(self.store.update,job['_id'],job['worker_token'],**{
                     f'categories.{category}.findings':[f.model_dump(mode='json') for f in findings],
                     f'evaluated.{category}':sorted(evaluated),f'triaged.{category}':sorted(triaged),
@@ -435,7 +424,6 @@ class OpportunityEngine:
                 error_code='source_timeout' if isinstance(error,TimeoutError) else 'source_unavailable'
                 logger.warning('category=%s error_code=%s exception_type=%s',category,error_code,type(error).__name__)
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'gap_complete.{category}':True})
-        # Every round failed validation and nothing was kept: report the round error.
         if round_error and not findings and not error_code and not pending:error_code=round_error
         evidence=self.category_evidence(await self.job(state),category)
         findings,retained=retain_useful(category,findings,evidence,relevant_ids)
@@ -459,12 +447,10 @@ class OpportunityEngine:
         return {'results':{category:result.model_dump(mode='json')}}
 
     async def quality(self,state):
-        # Revalidate persisted branch values.
         job=await self.job(state);categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
         for key,result in categories.items():
             others,other_sources=self.shared(job,key)
             if others:
-                # Findings another category read for this one's topics join its own, under the same per-topic limits.
                 saved=pool([*job.get('retained_sources',{}).get(key,[]),*[s.model_dump(mode='json') for s in other_sources]])
                 kept,retained=retain_useful(key,dedupe_findings(key,[*result.findings,*others]),saved,result.source_ids)
                 job.setdefault('retained_sources',{})[key]=[s.model_dump(mode='json') for s in retained]
@@ -474,7 +460,6 @@ class OpportunityEngine:
                     result.outcome='findings_found'
                     result.warnings=[w for w in result.warnings if w!=NOT_FOUND_WARNING]
                 if kept and result.status=='failed':result.status='partial'
-            # Check each category against its own saved sources only.
             sources=category_sources(job,key)
             valid=[f for f in result.findings if all(s in sources and whitespace(q) in whitespace(sources[s].evidence or '') for s,q in zip(f.source_ids,f.quotes))]
             if len(valid)!=len(result.findings):
@@ -490,7 +475,6 @@ class OpportunityEngine:
         job=await self.job(state);categories={k:CategoryResult.model_validate(v) for k,v in state['results'].items()};facts=summary_input(categories)
         if not facts or any(v.status=='pending' for v in categories.values()):return {'summary':{}}
         await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':'preparing_summary'}})
-        # Display the structuring model's wording verbatim; overview references are selected locally.
         ids=list(dict.fromkeys(f['id'] for f in facts))
         considerations=[f['id'] for f in facts if f['scope']!='exact' or f['confidence'] in ('low','insufficient_evidence') or f['conflict_group']]
         summary=Summary(overview_refs=ids[:3],key_takeaway_refs=ids[3:9],consideration_refs=considerations[:6])
@@ -505,7 +489,6 @@ class OpportunityEngine:
         """
         job=await self.job(state);skills=job.get('skills') or []
         categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
-        # Rebuilding a cached report's summary keeps its saved ratings.
         if not skills or not job.get('requested') or any(v.status=='pending' for v in categories.values()):return {}
         findings=[{k:f[k] for k in ('id','category','field','value','confidence','scope')} for f in summary_input(categories)]
         public=job['public'];ids={f['id'] for f in findings}
@@ -516,7 +499,6 @@ class OpportunityEngine:
                 (AIError,GoalError,TimeoutError,ValueError,PyMongoError))
             levels=validated_skill_levels(output,skills,ids)
         except (AIError,GoalError,TimeoutError,ValueError,PyMongoError,UnexpectedFailure) as error:
-            # Enrichment failures are logged and skipped; cancellation still propagates.
             cause=error.__cause__ if isinstance(error,UnexpectedFailure) else error
             logger.warning('node=opportunity_skill_levels skipped error_code=%s',getattr(cause,'code',type(cause).__name__))
             levels=[]
@@ -587,7 +569,6 @@ class OpportunityEngine:
                 await thread(self.store.update,identifier,token,status='pending',next_attempt_at=now()+timedelta(seconds=5));return
             await thread(self.store.rows.update_one,{'lease.token':cache['token']},{'$set':{'lease.expires_at':now()+timedelta(seconds=self.settings.run_seconds+60)}})
             await thread(self.store.update,identifier,token,cache=cache)
-            # A restarted job can reconstruct from its durable per-category results, even after TTL checkpoint expiry.
             config={'configurable':{'thread_id':identifier+':'+token},'recursion_limit':20,'callbacks':[]}
             with tracing_context(enabled=False):
                 async with asyncio.timeout(self.settings.run_seconds):

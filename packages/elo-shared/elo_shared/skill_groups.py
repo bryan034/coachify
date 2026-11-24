@@ -12,7 +12,6 @@ def _words(*terms):
     return re.compile(r'(^|[^a-z0-9+#])(' + '|'.join(terms) + r')($|[^a-z0-9+#])')
 
 
-# Order matters: the first match wins, so specific groups come before broad ones.
 _GROUPS = (
     ('AI & ML', _words('ai', 'artificial intelligence', 'generative ai', 'gen ?ai', 'llms?', 'large language models?',
                        'rag', 'retrieval[- ]augmented generation', 'vector (search|databases?|stores?|embeddings?)',
@@ -53,9 +52,7 @@ _GROUPS = (
                                   'market research', 'strategy', 'operations', 'procurement', 'seo', 'budgeting',
                                   'consulting'), re.compile(r'business|finance|marketing')),
 )
-# Every display category, in display order; model-assigned categories must be one of these.
 GROUP_NAMES = tuple(group for group, _, _ in _GROUPS) + (OTHER_SKILLS,)
-# Short names that would match inside ordinary phrases, so they must be the whole name.
 _EXACT_CODING = {'c', 'r', 'go', 'matlab'}
 
 

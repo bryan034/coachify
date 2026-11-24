@@ -14,7 +14,6 @@ def main():
         resource.setrlimit(resource.RLIMIT_CPU,(12,12))
         resource.setrlimit(resource.RLIMIT_FSIZE,(8*1024*1024,8*1024*1024))
     try:
-        # One renderer per service container.
         with open('/tmp/elo-browser-preview.lock','a') as lock:
             try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError:raise ValueError('Another JavaScript preview is loading. Try again shortly, paste the description or upload a document.') from None

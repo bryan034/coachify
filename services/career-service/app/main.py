@@ -88,11 +88,8 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
             except PyMongoError:
                 if mongo is not None: mongo.close()
                 raise RuntimeError('Career storage could not connect. Check database setup.') from None
-        # Model egress needs the deployment proxy/CA; internal API clients below
-        # stay direct.
         model_settings=AISettings.from_env() if ai is None else None
         async with httpx.AsyncClient(trust_env=True, follow_redirects=False) as ai_client:
-            # One configured model serves every reasoning/extraction/chat stage.
             primary=ai or AIAdapter(model_settings,ai_client,reserve_call=reserve_provider_call)
             context=primary if ai is None else context_ai
             app.state.ai=ModelRouter(primary,context) if context is not None else primary
@@ -105,7 +102,6 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
             opportunity_ai=opportunity_models(primary,context,model_settings,opportunity_settings,ai_client)
             app.state.opportunities=OpportunityEngine(app,db,opportunity_settings,opportunity_ai) if db is not None else None
             app.state.discovery=DiscoveryEngine(app,db,opportunity_ai,app.state.opportunities.source) if db is not None else None
-            # Chat and research share the model; provider waits remain resumable.
             app.state.chat_ai=opportunity_ai if getattr(opportunity_ai,'context_enabled',False) else app.state.ai
             async with httpx.AsyncClient(base_url=os.getenv('CV_SERVICE_URL','http://cv-service:8000'),
                     timeout=5, trust_env=False, follow_redirects=False) as cv_http:
@@ -227,7 +223,6 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     async def health(): return {'status':'ok'}
 
     if dev_reset_enabled():
-        # Development only: delete the caller's goal, chats and research.
         @app.post('/api/v1/career/dev/reset', include_in_schema=False)
         async def dev_reset(request: Request, owner: str = Depends(authenticated)):
             store = request.app.state.goal_store

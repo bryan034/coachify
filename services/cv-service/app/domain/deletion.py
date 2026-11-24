@@ -16,7 +16,6 @@ class CvDeletion:
             if previous is None: raise Missing()
             if not previous.get('deletion'):
                 if previous['version'] != mutation.expected_version: raise Conflict()
-                # CAS scrubs personal content and fences every in-flight worker/editor before cleanup.
                 previous = self.repository.replace(previous, {
                     '_id': identifier, 'user_id': owner, 'upload_key': previous['upload_key'],
                     'revision': previous['revision'] + 1, 'version': previous['version'] + 1,
@@ -57,11 +56,9 @@ class CvDeletion:
                     record = self.repository.get_for_deletion(candidate['user_id'], candidate['_id'])
                     if record and record.get('deletion'): self._finish(record)
             except Exception:
-                # Keep the scrubbed tombstone and charged capacity for retry.
                 continue
 
     def recover_checkpoints(self):
-        # Scan only identifiers and flags for leftover parsed text.
         states = self.repository.extraction_states
         page = states.page(self.checkpoint_cursor, 10)
         self.checkpoint_cursor = page[-1]['_id'] if len(page) == 10 else None
@@ -73,7 +70,6 @@ class CvDeletion:
             try:
                 with self.files.lock(identifier, blocking=False) as acquired:
                     if not acquired: continue
-                    # Recheck under the upload lock before removing orphan data.
                     parent = self.repository.capacity_record(identifier)
                     if parent is None: states.delete(identifier)
                     elif parent.get('deletion'): states.erase(identifier)

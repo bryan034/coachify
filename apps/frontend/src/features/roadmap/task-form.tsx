@@ -4,7 +4,6 @@ import { NotesEditor } from './notes-editor';
 import { clashWith, nextFree, shortLength, timeRange, toClock, toMinutes } from './roadmap-day';
 import type { NewSession, NotesDocument, PlannerConfig, Session, SessionChanges } from './types';
 
-/** One layout for an opened task and a new one. Everything stays a draft until Save or Add task. */
 export type TaskDraft = { title: string; doneWhen: string; skills: string[]; time: string | null; minutes: number; notes: NotesDocument; confidence: number | null; difficulty: number | null };
 export type SkillOption = { name: string; group: string };
 const DURATIONS = [15, 30, 45, 60, 90, 120, 150];
@@ -15,7 +14,6 @@ export const blankDraft = (time: string | null): TaskDraft => ({ title: '', done
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 export const isDirty = (draft: TaskDraft, base: TaskDraft) => !same(draft, base);
 
-/** What changed, in the words the unsaved-changes dialog uses. */
 export function changedParts(draft: TaskDraft, base: TaskDraft) {
  const parts: string[] = [];
  if (draft.title !== base.title) parts.push('the task name');
@@ -26,7 +24,6 @@ export function changedParts(draft: TaskDraft, base: TaskDraft) {
  if (draft.confidence !== base.confidence || draft.difficulty !== base.difficulty) parts.push('your ratings');
  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0] || 'this task';
 }
-/** Only the fields that differ are sent. Returning to elo's wording is sent as a restore. */
 export function changesOf(draft: TaskDraft, base: TaskDraft, session: Session): SessionChanges {
  const changes: SessionChanges = {};
  const title = draft.title.trim(), doneWhen = draft.doneWhen.trim();

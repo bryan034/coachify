@@ -38,9 +38,9 @@ def test_supported_cv_level_reaches_claim_and_skill():
 
 
 @pytest.mark.parametrize('bad', [
-    judged(skill_name='SQL'),                                   # not a skill on this item
-    judged(evidence=[{'source_id': 'b1', 'quote': 'invented'}]),  # not in the CV
-    judged(evidence=[{'source_id': 'zz', 'quote': 'x'}]),       # unknown block
+    judged(skill_name='SQL'),
+    judged(evidence=[{'source_id': 'b1', 'quote': 'invented'}]),
+    judged(evidence=[{'source_id': 'zz', 'quote': 'x'}]),
 ])
 def test_unsupported_level_is_dropped_without_losing_the_item(bad):
     items = validate_extraction(extraction([bad]), BLOCKS, 'cv-1')
@@ -90,12 +90,12 @@ def test_review_answer_can_set_a_level():
 
 
 @pytest.mark.parametrize('change', [
-    {'attribution': 'team'},                                    # not the user's own work
-    {'skill_level_rationale': None},                            # unexplained
-    {'evidence_excerpt': None},                                 # no answer evidence
-    {'skill_level': None},                                      # declared but absent
-    {'changed_fields': ['attribution', 'assistance']},          # supplied outside declared changes
-    {'skill_level': 11},                                  # not a level
+    {'attribution': 'team'},
+    {'skill_level_rationale': None},
+    {'evidence_excerpt': None},
+    {'skill_level': None},
+    {'changed_fields': ['attribution', 'assistance']},
+    {'skill_level': 11},
 ])
 def test_unsupported_review_level_is_rejected(change):
     payload = level_payload(**change)

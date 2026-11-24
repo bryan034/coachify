@@ -20,7 +20,6 @@ import { ReviewComplete, ReviewNotFinished, useReviewTopics } from './skills-sta
 const labels: Record<string, string> = {education:'Education',work:'Work and internships',project:'Projects',interest:'Interests'};
 const cvKind = (kind: string) => kind === 'work' ? 'experience' : kind;
 const readable = (value: string) => value.replaceAll('_', ' ');
-// Skills taken from the role and from answered review questions, never the answers themselves.
 export const skillsUsed = (cv: CvDetail, item: CvDetail['items'][number]) => {
  const names = [
   ...cv.skills.filter(skill => skill.item_ids.includes(item.id)).map(skill => skill.name),
@@ -74,7 +73,6 @@ export function SkillsProfileSummary({token, title, profile, cv, recentReview, d
  ].filter(Boolean).join(' ') : null;
  const notFinished = Boolean(cv && cv.status === 'ready' && !reviewed && !firstUpload);
  const reviewTopics = useReviewTopics(token, notFinished ? cv!.id : null, `${cv?.effective_version}:${cv?.updated_at}:${pending}`);
- // A finished review rates the new skills: let the automatic skill-gap update see it.
  const reviewedKey = reviewed ? `${cv?.id}:${cv?.effective_version}` : '';
  useEffect(() => { if (reviewedKey) announceInputsChanged(); }, [reviewedKey]);
  if (notFinished && cv) return <div className="skills-home skills-unfinished-page"><header className="skills-hero skills-hero-compact"><div className="skills-hero-copy is-stacked">{title}<p className="skills-hero-line">Your skills appear here once your CV review is finished.</p></div></header>

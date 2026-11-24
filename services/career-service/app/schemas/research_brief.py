@@ -14,7 +14,6 @@ Citations=Annotated[list[Annotated[int,Field(ge=1)]],Field(max_length=6)]
 Tone=Literal['positive','mixed','negative']
 Level=Literal['easy','average','difficult']
 Tab=Literal['role','interview']
-# Bumped when the saved shape or generation rules change, so older briefs are regenerated.
 FORMAT=1
 
 WORD_LIMITS={

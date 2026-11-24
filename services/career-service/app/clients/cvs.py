@@ -50,7 +50,6 @@ def saved_snapshot(row, owner):
         if not isinstance(evidence, list): raise ValueError('Invalid source evidence.')
         excerpts = [item['excerpt'] for item in evidence]
         joined = '\n'.join(excerpts)
-        # Keep full excerpts separately when the compact field cannot represent them.
         skills.append({**{key: skill[key] for key in ('skill_id', 'name', 'category', 'experience_months',
             'context', 'evidence_type', 'explicit', 'item_ids', 'sources', 'conflicting_fields')},
             'proficiency': proficiency if proficiency in {'beginner', 'intermediate', 'advanced', 'expert'} else None,
@@ -68,7 +67,6 @@ class CvClient:
         self.client = client
 
     async def read(self, path, token, *, budget=None):
-        # Bound bytes before JSON decoding, including chunked responses.
         async with self.client.stream('GET', path, headers={'Authorization': token}, follow_redirects=False) as response:
             if response.status_code != HTTPStatus.OK: return response.status_code, None
             size = response.headers.get('content-length')

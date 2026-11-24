@@ -6,9 +6,6 @@ export type SkillMatch = typeof statuses[number] | 'covered';
 type Outcome = { ref?: unknown; match_status?: unknown };
 type Group = { operator?: unknown; match_status?: unknown; requirement_refs?: unknown };
 
-/**
- * How the saved comparison rates each job skill, keyed by the goal skill's item_id. Null when no fresh comparison exists or it could not be read.
- */
 export async function currentSkillMatches(token: string, signal: AbortSignal): Promise<Record<string, SkillMatch> | null> {
  try {
   const response = await fetch(`${base}/assessments/current`, browserRequest({ cache: 'no-store', signal }, token));
@@ -27,7 +24,6 @@ export async function currentSkillMatches(token: string, signal: AbortSignal): P
  } catch { return null; }
 }
 
-/** Owner-scoped commands retain UUID and expected revision on ambiguous transport failures. */
 export async function assessmentApi<T>(path: string, token: string, body?: unknown, signal?: AbortSignal): Promise<T> {
  const response = await fetch(`${base}/assessments${path}`, browserRequest({method: body === undefined ? 'GET' : 'POST', cache: 'no-store', signal,
  headers: {'Content-Type': 'application/json'}, ...(body === undefined ? {} : {body: JSON.stringify(body)})}, token));
@@ -38,7 +34,6 @@ export async function assessmentApi<T>(path: string, token: string, body?: unkno
  }
  return value as T;
 }
-/** The full comparison outcome for each goal skill, keyed like skillMatches. */
 export function skillOutcomes(result: Assessment): Record<string, Assessment['job_skill_gaps'][number]> {
  return Object.fromEntries(result.job_skill_gaps.map(item => [item.ref.slice(4), item]));
 }
@@ -58,7 +53,6 @@ export const rateSkill = (token: string, body: { expected_version: number; name:
 export type ReevaluatedSkill = { version: number; skill: { name: string; canonical_skill_id: string | null; competence_score: number | null; required_score: number | null; relevance: string; explanation: string } };
 export const reevaluateSkill = (token: string, body: { name: string; canonical_skill_id: string | null }, signal?: AbortSignal) =>
  assessmentApi<ReevaluatedSkill>('/skills/reevaluate', token, body, signal);
-/** The same identity the backend keys ratings by: registry id, else the case-folded name. */
 export const ratingKey = (skill: { canonicalId?: string | null; name: string }) => skill.canonicalId || skill.name.trim().toLowerCase();
 
 /** Derived by Assessment from the saved result and live source revisions. */

@@ -21,7 +21,6 @@ type Flag = boolean | 'loading' | 'error';
 export type StopState = 'done' | 'next' | 'later' | 'checking' | 'unavailable';
 const flag = <T,>(section: Section<T>, test: (data: T) => boolean): Flag => section.status === 'ready' ? test(section.data) : section.status;
 
-/** The set-up steps, in the order the pages build on each other. */
 const stops = [
  { name: 'Background', href: '/profile', x: 6, y: 84 },
  { name: 'Career goal', href: '/career-goal', x: 28, y: 61 },
@@ -30,7 +29,6 @@ const stops = [
 ];
 const stateWords: Record<StopState, string> = { done: 'Done', next: 'Up next', later: 'Later', checking: 'Checking', unavailable: 'Not available' };
 
-/** The first unfinished stop is only named once every stop is known. */
 export function journeyStates(flags: Flag[]): StopState[] {
  const settled = flags.every(value => value !== 'loading');
  const next = settled ? flags.indexOf(false) : -1;
@@ -41,7 +39,6 @@ function Unavailable({ message, retry, label }: { message: string; retry: () => 
  return <div className="ws-error" role="alert"><p>{message}</p><button type="button" className="ws-mini" onClick={retry}>Retry {label}</button></div>;
 }
 
-/* ---------- Hero ---------- */
 type Step = { label: string; when: string; title: string; chips: string[]; go: string; href: string; after: string };
 
 function SetupPath({ states }: { states: StopState[] }) {
@@ -88,7 +85,6 @@ function RoadmapTimeline({ planner, today }: { planner: NonNullable<Workspace['p
  </div>;
 }
 
-/** Marks the next session done through the same Roadmap command the Roadmap page uses. */
 function NextStep({ step, session, after, workspace, reload, show }: { step: Step | null; session: HomeSession | null; after: HomeSession | null; workspace: Workspace | null; reload: () => void; show: (message: string) => void }) {
  const { token } = useProfile();
  const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -131,7 +127,6 @@ function NextStep({ step, session, after, workspace, reload, show }: { step: Ste
  </div><p className="ws-after">{step.after}</p></div>;
 }
 
-/* ---------- Cards ---------- */
 const matchWords = { supported: 'Have', covered: 'Have', partial: 'Partial', confirmed_shortfall: 'Gap', uncertain: 'Unknown' } as const;
 const matchPill = { supported: 'have', covered: 'have', partial: 'part', confirmed_shortfall: 'gap', uncertain: 'unk' } as const;
 const isEssential = (priority?: string) => priority === 'required' || priority === 'preferred';
@@ -139,7 +134,6 @@ const importanceLabel = (priority?: string) => isEssential(priority) ? 'Essentia
 const priorityRank = (priority?: string) => isEssential(priority) ? 0 : 1;
 const Pencil = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>;
 
-/** Goal match from the same saved comparison as Career Goal. */
 function GoalMatch({ section, skills, retry, comparison }: { section: Section<CurrentGoal>; skills: Section<SkillsSummary>; retry: () => void; comparison: ReturnType<typeof useComparison> }) {
  const goal = section.status === 'ready' ? section.data.goal : null;
  const matches = comparison.matches;
@@ -272,16 +266,13 @@ function ComingUp({ applications, goal, today, retry }: { applications: Section<
  </article>;
 }
 
-/* ---------- Daily tip and practice question ---------- */
 type Daily = { text: string; source: string; cta: string; href: string; external: boolean };
 const tipCategories = ['internship_insights', 'company_intelligence', 'career_progression', 'conversion_outcomes'] as const;
 const dayIndex = (today: string) => Math.floor(Date.parse(`${today}T00:00:00Z`) / 86400000);
 const usable = (finding: IntelligenceFinding) => finding.value.trim().length > 20 && finding.value.length < 400 && finding.confidence !== 'insufficient_evidence';
 
-/** Research text may carry **bold** markers; show them as bold instead of literal asterisks. */
 const boldMarks = (text: string) => text.split(/\*\*(.+?)\*\*/g).map((part, index) => index % 2 ? <strong key={index}>{part}</strong> : part);
 
-/** One cited tip and one interview question from the saved research on the goal. Reading never starts research. */
 function DailyCard({ goal, today }: { goal: Section<CurrentGoal>; today: string }) {
  const { token } = useProfile();
  const goalId = goal.status === 'ready' ? goal.data.goal?._id : undefined, role = goal.status === 'ready' ? goal.data.goal?.role : undefined;
@@ -316,7 +307,6 @@ function DailyCard({ goal, today }: { goal: Section<CurrentGoal>; today: string 
  </section>;
 }
 
-/* ---------- Page ---------- */
 export function HomeDashboard() {
  const { profile, loading, account, token, configError, loadError } = useProfile();
  const comparison = useComparison(token);
@@ -339,7 +329,6 @@ export function HomeDashboard() {
  const reload = useCallback(() => { roadmap.retry(); }, [roadmap]);
  const reviewNeeded = skills.state.status === 'ready' && skills.state.data.reviewNeeded;
 
- // While set-up is unfinished the hero names the one step still open; afterwards it shows the next planned session.
  const open = states.indexOf('next');
  const step: Step | null = (() => {
   const base = { label: 'Finish setting up', when: `Step ${open + 1} of ${stops.length}`, chips: [] as string[], after: 'Once your roadmap is accepted, your daily tasks will appear here.' };

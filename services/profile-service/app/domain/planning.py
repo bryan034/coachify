@@ -78,7 +78,6 @@ def planning_inputs(profile, zone, start=None, end=None):
         issues.append({"field": "application_date", "message": "The saved application date is today or earlier. Update it before generating a new roadmap."})
     if base is None:
         issues.append({"field": "weekly_hours", "message": "Set your normal weekly availability."})
-    # Only applicable dates block planning.
     cutoff = max(capacity_today, start) if start else capacity_today
     conflicts = [row["id"] for row in rows if row["end_date"] >= cutoff.isoformat()
                  and (end is None or row["start_date"] <= end.isoformat())

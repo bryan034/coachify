@@ -8,7 +8,6 @@ import { Icon } from '@/components/ui/icon';
 import { DevReset } from '@/features/dev/dev-reset';
 import { useProfile } from '@/features/profile/profile-provider';
 import { statuses, studyYearLabel } from '@/features/profile/types';
-/** The journey order: background → goal → skills → roadmap → applications. */
 const nav = [
  { href: '/dashboard', label: 'Home', icon: 'home' },
  { href: '/career-goal', label: 'Career Goal', icon: 'brief' },
@@ -16,19 +15,16 @@ const nav = [
  { href: '/roadmap', label: 'Roadmap', icon: 'road' },
  { href: '/jobs', label: 'Search Jobs', icon: 'search' },
 ];
-/** Supporting pages sit below a divider. */
 const more = [
  { href: '/chats-socials', label: 'Chats & Socials', icon: 'chat' },
  { href: '/calendar', label: 'Calendar', icon: 'cal' },
 ];
-/** Short labels for the phone tab bar; same destinations and order as the sidebar. */
 const tabLabels: Record<string, string> = { '/dashboard': 'Home', '/career-goal': 'Goal', '/cv': 'Skills', '/roadmap': 'Roadmap', '/jobs': 'Jobs' };
 export function pageTitle(pathname: string) {
  if (pathname.startsWith('/settings')) return 'Settings';
  if (pathname === '/profile' || pathname.startsWith('/profile/')) return 'My profile';
  return [...nav, ...more].find(item => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label ?? 'elo';
 }
-/** The top page of the section the user is in. */
 export function sectionHome(pathname: string) {
  if (pathname.startsWith('/settings')) return '/settings';
  if (pathname === '/profile' || pathname.startsWith('/profile/')) return '/profile';
@@ -40,7 +36,6 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
  const menuButton = useRef<HTMLButtonElement>(null);
  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
  const home = sectionHome(pathname);
- // Inside one of the section page's views: clear the view through a history entry, like the browser's Back button.
  const goHome = (event: MouseEvent<HTMLAnchorElement>) => {
   if (pathname !== home || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();

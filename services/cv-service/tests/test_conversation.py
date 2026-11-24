@@ -409,7 +409,6 @@ def test_late_failure_cannot_overwrite_successful_action_receipt(harness):
     app.state.conversations.provider = Router()
     chat = send(client, chat, 'Why?')
     action = actions(chat, 'route')[-1]
-    # Execute through TestClient's event loop, matching a delayed worker callback.
     client.portal.call(app.state.conversations.fail, 'owner-a', chat['id'], action['id'], None, 'Late failure', 'stale')
     after = client.get(PREFIX + '/' + chat['id']).json()
     assert actions(after, 'route')[-1]['status'] == 'saved'

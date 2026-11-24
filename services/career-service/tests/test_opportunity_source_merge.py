@@ -11,7 +11,6 @@ def source(text,url=URL):
 
 
 def long_text(marker,size):
-    # The marker sits at the end, where a cut at the excerpt limit would remove it.
     return ('filler words '*size)[:size-len(marker)-1]+' '+marker
 
 

@@ -32,7 +32,6 @@ MAX_SEGMENTS = 100
 
 
 def at_capacity(document):
-    # Reserve both user and assistant messages plus room for this turn's bounded action receipts.
     return len(document['messages']) + 2 > MAX_MESSAGES or len(BSON.encode(document)) >= 6 * 1024 * 1024
 
 
@@ -201,7 +200,7 @@ class ConversationService:
         previous = self.repository.latest(owner, mutation.cv_id)
         if previous and not at_capacity(previous): return previous
         if previous and has_outstanding(previous):
-            return previous  # Finish/cancel recoverable actions before rolling over.
+            return previous
         if self.repository.count(owner, mutation.cv_id) >= MAX_SEGMENTS:
             raise Conflict('This CV conversation has reached its history capacity. Saved history remains available.')
         document = {'_id': str(uuid4()), 'user_id': owner, 'cv_id': mutation.cv_id,
@@ -248,7 +247,6 @@ class ConversationService:
                 error = 'Career context is unavailable. Your conversation is saved; retry to prepare relevant questions.'
         document = self.cv.get(account['id'], previous['cv_id']) if previous['cv_id'] else None
         def transform(current):
-            # Only reconcile the captured revision.
             if current['revision'] != previous['revision']: return
             active = current.get('active_question')
             if current.get('purpose') == 'skills_profile':
@@ -312,7 +310,6 @@ class ConversationService:
             if receipt['fingerprint'] != fingerprint: raise Conflict('This message key was already used for different text.')
             return previous
         if previous.get('purpose') == 'skills_profile':
-            # A second turn cannot overtake an uncommitted interpretation.
             if any(a['status'] == 'pending' for m in previous['messages'] for a in m.get('actions', [])):
                 raise Conflict('Your previous answer is still processing. Wait or retry its saved action first.')
         profile_version = None
@@ -365,7 +362,6 @@ class ConversationService:
     def routing_payload(self, owner, conversation, route):
         document = self.cv.get(owner, conversation['cv_id']) if conversation['cv_id'] else None
         items = effective_items(document) if document else []
-        # Only a deliberately focused source gets its fuller context.
         summaries = [{'id': i['id'], 'kind': i['kind'], 'title': i['title'],
             'description': i['description'][:120], 'skill_names': [n[:60] for n in i['skill_names'][:4]]}
             for i in items if not i['removed']]
@@ -416,7 +412,6 @@ class ConversationService:
             payload = await run_in_threadpool(self.routing_payload, owner, conversation, route)
             result, metadata = await run_in_threadpool(self.route, owner, payload)
             result = ConversationRoute.model_validate(result)
-            # Validate the whole response before any mutation or confirmation card.
             allowed_ids = {item['id'] for item in payload['items']}
             source_document = self.cv.get(owner, conversation['cv_id']) if conversation['cv_id'] else None
             items = {item['id']: item for item in effective_items(source_document) if not item['removed']} if source_document else {}
@@ -532,7 +527,6 @@ class ConversationService:
         expected = deepcopy(route['_snapshot'])
         document = self.cv.get(owner, conversation['cv_id']) if conversation['cv_id'] else None
         if document and any(key(route['id'] + suffix) in document['receipts'] for suffix in (':skip', ':prepare')):
-            # Only receipts for this guided turn may advance its CV snapshot.
             expected['cv_version'] = document['version']
         await self.check_snapshot(app, account, conversation, expected)
         active = conversation.get('active_question')
@@ -618,7 +612,6 @@ class ConversationService:
             applied = bool(cv_document and key(action_id + ':apply') in cv_document['receipts'])
             created = bool(cv_document and key(action_id + ':question-create') in cv_document['receipts'])
             if applied or created:
-                # Recover only an exact durable operation belonging to this action.
                 expected['cv_version'] = cv_document['version']
                 question_id = original.get('_saved_question_id') or key(action_id + ':question')
                 if any(q['id'] == question_id for q in cv_document['clarifications']):
@@ -659,7 +652,6 @@ class ConversationService:
                     error_code=question.get('interpretation_error_code') if pending else None, _token=None, _lease_until=0)
                 current_action['_snapshot']['cv_version'] = saved['version']
                 current['last_item_id'] = item['id']
-                # Only our acknowledged write may advance sibling action snapshots.
                 for message in current['messages']:
                     for other in message.get('actions', []):
                         if other.get('_turn_id') == action['_turn_id'] and other['id'] != action_id and other.get('_snapshot') == original['_snapshot']:
@@ -667,7 +659,6 @@ class ConversationService:
                 if current.get('active_question') and current['active_question']['item_id'] == item['id']:
                     q = next((q for q in saved['clarifications'] if q['id'] == current['active_question']['id']), None)
                     if q and q['status'] in {'answered', 'skipped'}: current['active_question'] = None
-                # Publish the pending continuation with the saved answer.
                 if current.get('purpose') == 'skills_profile':
                     turn = action_message(current, action_id)
                     parent = next((a for a in turn.get('actions', []) if a['kind'] == 'route'), None)
@@ -678,7 +669,6 @@ class ConversationService:
                                       _token=None, _lease_until=now() + LEASE_SECONDS)
             await run_in_threadpool(self.update, owner, identifier, completed)
         except Conflict as exc:
-            # Recovery reuses the stored exact mutation payload.
             latest_token = action_in(self.get(owner, identifier), action_id).get('_token')
             await self.fail(owner, identifier, action_id, token if latest_token == token else original.get('_token'), exc.detail, 'stale')
         except Exception as exc:
@@ -743,7 +733,6 @@ class ConversationService:
 
             def interpret(self, *args):
                 result = app.state.interpreter.interpret(*args)
-                # Verify the session again before returning facts.
                 asyncio.run_coroutine_threadsafe(coordinator.authenticate(app, account), loop).result(timeout=8)
                 return result
             def __getattr__(self, name):
@@ -778,7 +767,6 @@ class ConversationService:
         if any(q['item_id'] == item['id'] and q.get('interpretation_status') in {'pending', 'failed'}
                 and not q.get('reconciliation_required') for q in document['clarifications']):
             raise Conflict('An earlier explanation for this source still needs interpretation. Finish or retry it first; this new message remains saved.')
-        # An appended statement is a separate source-bound event; its interpretation changes only named fields.
         if not recovered_unanswered and (not question or question['status'] != 'unanswered' or action['kind'] == 'correct'):
             parent = question or next((q for q in reversed(document['clarifications']) if q['item_id'] == item['id'] and not q.get('reconciliation_required')), None)
             question_id = key(action['id'] + ':question')
@@ -857,7 +845,6 @@ class ConversationService:
                 body['cv_match'] = {'cv_id': conversation['cv_id'], 'item_id': decision.item_id, 'cv_version': doc['version']}
             else: raise CvError('Choose one of the matching sources before attaching this capability.')
         if action.get('_manual_body'):
-            # Lost response recovery repeats exactly the same body and idempotency key.
             body = action['_manual_body']
         def claim(document):
             candidate = action_in(document, action['id'])
@@ -915,7 +902,6 @@ class ConversationService:
                     action['status'] = 'awaiting_confirmation' if action['kind'] in {'correct', 'remove'} else 'pending'
                 if action['kind'] == 'route':
                     action.update(status='pending', _token=token, _lease_until=now() + LEASE_SECONDS, error=None)
-                    # A stale route is reparsed from its retained original message.
                     if not (action.get('_guided_skip') or action.get('_guided_prepare')):
                         action['_snapshot'] = self.snapshot(owner, document, context)
                     document['context'] = context

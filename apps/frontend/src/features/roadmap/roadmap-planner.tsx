@@ -55,7 +55,6 @@ function Planner({ token }: { token: string }) {
  useEffect(() => { mounted.current = true; return () => { mounted.current = false; sequence.current++; }; }, []);
  function receive(value: Workspace) {
   if (!mounted.current) return;
-  // Return from settings when a generated roadmap or preview arrives.
   const candidateId = value.planner.outline_candidate?.id || value.planner.candidate?.id;
   if ((candidateId && candidateId !== (latest.current?.planner.outline_candidate?.id || latest.current?.planner.candidate?.id)) || (value.planner.active?.id && value.planner.active.id !== latest.current?.planner.active?.id)) {
    setConfiguring(false); setHelperOpen(false);
@@ -68,7 +67,7 @@ function Planner({ token }: { token: string }) {
   try { const value = await roadmapApi<Workspace>(workspacePath(), token, undefined, signal); if (mounted.current && order === sequence.current) { receive(value); setError(''); if (pendingRef.current && value.operation?.id === pendingRef.current.mutation_id) { pendingRef.current = null; setPending(null); } } }
   catch (failure) { if (mounted.current && !signal?.aborted && order === sequence.current) setError(explanation(failure)); }
  }
- useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort();  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+ useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort();  }, []);
  useEffect(() => {
   const refresh = () => { if (document.visibilityState !== 'hidden' && idle.current && !saving.current && !draftRef.current && !latest.current?.operation?.retry_after && !['pending','running'].includes(latest.current?.operation?.status ?? '')) void load(); };
   window.addEventListener('focus', refresh);
@@ -91,7 +90,6 @@ function Planner({ token }: { token: string }) {
  const running = workspace?.operation?.status === 'pending' || workspace?.operation?.status === 'running';
  const settled = !busy && !running && !error && !unknown && !pending && !workspace?.operation?.retry_after;
  idle.current = settled;
- // Saves quietly, without freezing the form.
  function persist(draft: PlannerConfig) {
   const previous = saving.current;
   const task = (async () => {
@@ -111,8 +109,7 @@ function Planner({ token }: { token: string }) {
   if (!draft || settings.calculating || settings.previewError || !settled) return;
   const timer = setTimeout(() => void persist(draft), 400);
   return () => clearTimeout(timer);
- }, [settings.draft, settings.calculating, settings.previewError, settled]); // eslint-disable-line react-hooks/exhaustive-deps
- // Edits still waiting on that delay are sent as the page closes or the user moves to another page.
+ }, [settings.draft, settings.calculating, settings.previewError, settled]);
  useEffect(() => {
   const flush = () => {
    const draft = draftRef.current;
@@ -135,18 +132,16 @@ function Planner({ token }: { token: string }) {
    } catch (failure) { if (mounted.current && order === sequence.current) setError(explanation(failure)); }
   }, 1500);
   return () => clearTimeout(timer);
- }, [workspace, running]); // eslint-disable-line react-hooks/exhaustive-deps
+ }, [workspace, running]);
  const failedMessageId = workspace?.operation?.status === 'failed' && workspace.retry_request ? workspace.operation.id : null;
  useEffect(() => { if (failedMessageId) setHelperOpen(true); }, [failedMessageId]);
  function closeHelper() { helperDismissed.current = true; setHelperOpen(false); requestAnimationFrame(() => launcher.current?.focus()); }
  function openHelper() { helperTakesFocus.current = true; helperDismissed.current = false; setHelperOpen(true); }
- // Before a roadmap is shown the helper stays docked beside the planner, unless the user closed it.
  const current = workspace?.planner; const currentReview = current?.candidate ? current.candidate_review : current?.active_review;
  const planning = !!workspace && !((current?.outline_candidate || current?.outline_active || ((current?.candidate || current?.active) && currentReview)) && !configuring);
  useEffect(() => {
   const wide = window.matchMedia?.('(min-width: 1101px)');
   if (!planning || !wide) return;
-  // On narrow screens the helper only stays open if the user opened it.
   const fit = () => {
    if (helperDismissed.current) return;
    if (wide.matches) { helperTakesFocus.current = false; setHelperOpen(true); }
@@ -186,7 +181,6 @@ function Planner({ token }: { token: string }) {
   catch (failure) { if (mounted.current) { setError(explanation(failure)); if (!request && failure instanceof RoadmapError && failure.status < 500) { setText(current => current || value.message); setPending(null); pendingRef.current = null; } } }
   finally { if (mounted.current) setBusy(false); }
  }
- // The bar shows from the click (saving your settings, then the request), and the service's stage takes over once the work starts.
  const [starting, setStarting] = useState(false);
  async function generate() {
   setStarting(true);
@@ -207,7 +201,6 @@ function Planner({ token }: { token: string }) {
  const review = preview ? planner.candidate_review : planner.active_review;
  const showOutline = !!(planner.outline_candidate || planner.outline_active) && !configuring;
  const showRoadmap = !!plan && !!review && !configuring;
- // Without both an extracted CV and a Career goal, only the checklist is shown.
  const blocked = !context.ready && context.availability !== 'unavailable' && !showRoadmap && !showOutline;
  const activeView = showRoadmap && !preview;
  const signals = planner.signals.filter(signal => !sourceChanged || signal.kind !== 'evidence');
@@ -219,7 +212,6 @@ function Planner({ token }: { token: string }) {
   addSession: (session, allowOverlap) => change('/planner/sessions/add', { session, allow_overlap: allowOverlap }),
   move: moves => change('/planner/sessions/move', { moves }),
   skip: id => change('/planner/sessions/skip', { session_id: id }),
-  // Reads: free times and elo's proposal are recalculated by the service from the saved schedule.
   freeTimes: (minutes, sessionId) => roadmapApi<FreeTimes>('/planner/sessions/free-times', token, { duration_minutes: minutes, ...(sessionId ? { session_id: sessionId } : {}) }).catch(() => null),
   backlogPlan: sessionIds => roadmapApi<BacklogPlan>('/planner/sessions/backlog-plan', token, sessionIds ? { session_ids: sessionIds } : {}).catch(() => null),
   recordOutcome: (milestone, demonstrated, note) => void change('/planner/milestones/outcome', { milestone_id: milestone.id, demonstrated, note: note || null }),
@@ -269,7 +261,6 @@ function Planner({ token }: { token: string }) {
 }
 
 const stages = [['assessing', 'Comparing your skills with your goal', 30], ['writing', 'Writing your weekly objectives', 50], ['scheduling', 'Scheduling your first week', 75], ['correcting', 'Fixing what the schedule check found', 88]] as const;
-/** Stage-based progress: it only moves when the service reports a new stage. */
 export function generationProgress(stage?: string) {
  const index = stages.findIndex(([key]) => key === stage);
  if (index < 0) return { percent: 8, label: 'Starting', step: 0 };

@@ -43,7 +43,6 @@ class ResearchStore:
         result=[]
         for identifier in linked:
             meta=metadata.get(identifier,{})
-            # Only an unchanged first revision without a revision stamp is current.
             if meta.get('goal_version',1)!=goal.version:continue
             context_key=meta.get('context_key')
             if context_key is None:

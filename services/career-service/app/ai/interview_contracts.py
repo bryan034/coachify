@@ -18,7 +18,6 @@ def evidence_items(request):
     items=[]
     for source in request.sources:
         if source.evidence:
-            # Split saved retrieval on text boundaries before token selection, retaining exact substrings and provenance.
             remaining=source.evidence
             while remaining:
                 end=min(EXCERPT_CHARS,len(remaining))
@@ -37,7 +36,6 @@ def evidence_items(request):
             if ids:
                 items.append({'ref':f'e{len(items)+1}','origin':'brave_summary','text':claim.text,
                     'source_ids':ids,'summary_id':summary.summary_id})
-    # Preserve complete excerpts and attribution.
     unique=[];seen=set()
     for item in items:
         key=(item['origin'],re.sub(r'\s+',' ',item['text']).strip().casefold())
@@ -48,7 +46,6 @@ def evidence_items(request):
         sent=[{k:v[k] for k in ('ref','origin','text')} for v in values]
         return len(encoding.encode(json.dumps(sent,ensure_ascii=False,separators=(',',':')),disallowed_special=()))
     if cost(unique)<=RESEARCH_EVIDENCE_TOKENS:return unique
-    # Under pressure, prioritise process evidence over generic snippets.
     ranked=sorted(enumerate(unique),key=lambda pair:len(re.findall(
         r'interview|rounds?|stages?|assessments?|screening',pair[1]['text'],re.I)),reverse=True)
     chosen=[]

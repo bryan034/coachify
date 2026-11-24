@@ -55,7 +55,6 @@ class DiscoverySections:
                 continue
             annotation=field.rebuild_annotation()
             limit=(3 if name=='open_questions' else 6) if model==ConversationMemory else 60 if name=='excluded_skills' else 30 if name=='requested_skills' else None
-            # Research items are sections too; collection size stays bounded.
             args=get_args(field.annotation)
             if (get_origin(field.annotation)==list and args and hasattr(args[0],'model_fields')
                 and isinstance(raw,list) and len(raw)<=item_schema.get('maxItems',len(raw))):
@@ -66,7 +65,6 @@ class DiscoverySections:
                 continue
             section=Section(path,TypeAdapter(annotation),item_schema,limit)
             if raw is MISSING and not field.is_required() and not (self.stage=='discovery_extract' and name=='question_refs' and data.get('question')):
-                # Omitted optional updates preserve existing state.
                 continue
             self._section(section,raw)
 
@@ -161,7 +159,6 @@ class DiscoverySections:
                 data['action']='ANSWER'
                 data['scope']=self.context.get('scope')
         if self.stage=='discovery_assess':
-            # Missing assessments stay rejected; valid assessments remain untouched.
             found={value.ref for value in data['sources']}
             data['sources']=[*data['sources'],*[{'ref':ref,'relevant':False,'score':0,'quote':None}
                 for ref in range(len(self.context.get('sources',[]))) if ref not in found]]

@@ -56,7 +56,6 @@ class QuestionStore:
         if topic in ('interview_skills','preparation','overview'):fields['skills']=1
         if include_evidence and topic in ('interview_skills','preparation','overview'):
             fields.update({'sources.evidence':1,'summaries.summary_id':1,'summaries.claims':1})
-        # Parent projection subsumes nested skill fields.
         if 'skills' in fields:
             fields={k:v for k,v in fields.items() if not k.startswith('skills.')}
         research=self.research.records.database.interview_research.find_one({'_id':ObjectId(identifier)},fields)
@@ -65,6 +64,5 @@ class QuestionStore:
         if research.get('intelligence'):
             categories={k:CategoryResult.model_validate(v) for k,v in research['intelligence']['categories'].items()}
             skills,process=interview_projection(categories)
-            # In-memory question projection only; all citations still resolve through linked research.
             research.update(skills=[s.model_dump(mode='json') for s in skills],process=process.model_dump(mode='json'))
         return supplemented(research)

@@ -353,7 +353,7 @@ def test_retained_question_recovers_after_target_prepare_changes_policy_or_ledge
         if len(args) > 3 and args[3] == 'interview-question' and fail['once']:
             fail['once'] = False
             if not publication.startswith('unissued'):
-                original(*args, **kwargs)  # write succeeded, reply was lost
+                original(*args, **kwargs)
             raise CvError('Synthetic interrupted publication.', 503)
         return original(*args, **kwargs)
     monkeypatch.setattr(service.cv, 'mutate', interrupted)
@@ -376,8 +376,6 @@ def test_retained_question_recovers_after_target_prepare_changes_policy_or_ledge
         saved['memory']['review_policy'] = old
         saved['question']['_interview_policy'] = old
         if publication.startswith('unissued'):
-            # An older conversation remembers two questions even though the
-            # retained proposal did not reach the CV receipt ledger.
             current['interview_memory'] = deepcopy(current.get('interview_memory') or saved['memory'])
             current['interview_memory']['question_counts'] = {planned['item_id']: 2}
     service.update('owner-a', chat['id'], legacy_conversation)
@@ -397,7 +395,6 @@ def test_retained_question_recovers_after_target_prepare_changes_policy_or_ledge
     before_retry = service.cv.get('owner-a', cv['id'])
     assert before_retry['review_policy_snapshot'] == CURRENT
     if publication.endswith('_changed'):
-        # A different source changes after the question was staged.
         unrelated = next(item for item in before_retry['original_items'] if item['kind'] == 'skill')
         response = client.patch(f"/api/v1/cv/{cv['id']}/items/{unrelated['id']}",
                                 json=mutation(before_retry['version'], action='update', title='Synthetic SQL reporting'))
@@ -446,8 +443,6 @@ def test_target_prepare_upgrades_legacy_snapshot_and_replays_without_duplicate_q
     context = {'id': 'target-a', 'version': 1, 'type': 'specific_job', 'confirmed': True,
                'skill_ids': ['skill:python', 'skill:sql']}
 
-    # Produce valid saved receipts, then emulate an existing v1 review where
-    # only one project consumed the old shared allowance.
     for _ in range(2):
         current = service.get('owner-a', cv['id'])
         request = PrepareMutation.model_validate(mutation(current['version'], career_target_id='target-a', career_target_version=1))

@@ -57,7 +57,6 @@ test('logout failure stays locked across reload and rejects an old retry without
 test('another tab signing out clears private UI and drafts', async ({ page, context }) => {
  await createLocalAccount(page,'Synthetic multi-tab');
  const other = await context.newPage();
- // Simulate opening a same-account tab.
  const stored = await page.evaluate(() => sessionStorage.getItem('elo.session'));
  await other.goto('/');
  await other.evaluate(value => sessionStorage.setItem('elo.session',value!),stored);

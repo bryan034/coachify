@@ -1,4 +1,3 @@
-/** Validate the fields used by the JD workspace before they reach React. */
 type Check=(value:unknown)=>boolean;
 type RecordValue=Record<string,unknown>;
 export const record=(value:unknown):value is RecordValue=>typeof value==='object'&&value!==null&&!Array.isArray(value);
@@ -79,8 +78,6 @@ const research=shape({available:boolean,job_id:nullable(text),career_target_id:n
 export const careerPreview=shape({kind:oneOf('url','document'),text:value=>nonempty(value)&&Array.from(value as string).length<=20_000,
  source_name:nonempty,source_url:optional(nullable(text)),notices:strings});
 
-/** Operation envelopes are validated here; their completed result is validated
- * again against the originating endpoint by careerOperation. */
 export function validCareerResponse(path:string,value:unknown):boolean{
  const route=path.split('?')[0];
  if(route.startsWith('/workspace/operations/'))return operation(value);

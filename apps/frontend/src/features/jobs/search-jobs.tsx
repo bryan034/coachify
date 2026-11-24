@@ -41,7 +41,6 @@ export function SearchJobs(){
 function JobSearch({accountId,token}:{accountId:string;token:string}){
  const {profile}=useProfile();
  const [sort,setSort]=useState<'recommended'|'newest'>('recommended');
- // Nothing is searched until Search is pressed. `applied` is the search that was last run; edits to the box, filters and sort only change the draft.
  const [applied,setApplied]=useState<{keywords:string;choices:Choices;sort:'recommended'|'newest'}|null>(null);
  const defaultsApplied=useRef(false),filtersTouched=useRef(false);
  const [draft,setDraft]=useState('');
@@ -261,7 +260,6 @@ function Tracker({items,onStatus,onRemove,onSaveLink,onSaved,onDetails}:{onDetai
   setMessage(items.some(other=>other.id===item.id)?`${item.snapshot.title} is already in your saved jobs.`:`Saved ${item.snapshot.title}.`);
   onSaved(item);close();
  }
- // Closed only appears once a job is rejected or withdrawn.
  const columns=COLUMNS.filter(column=>column.name!=='Closed'||items.some(item=>column.statuses.includes(item.status)));
  return <section className="job-board" id="saved-jobs" aria-labelledby="job-board-title">
   <header><h2 id="job-board-title">Saved jobs</h2><span>{items.length} tracked</span><button ref={opener} type="button" className="btn pri" aria-expanded={adding} onClick={()=>{setMessage('');setAdding(value=>!value);}}>+ Save a job</button></header>

@@ -53,6 +53,5 @@ class InterviewDecision(StrictModel):
     targets: list[InterviewTarget] = Field(default_factory=list, max_length=3)
     coverage: list[InterviewCoverage] = Field(default_factory=list, max_length=160)
     estimates: list[SkillEstimate] = Field(default_factory=list, max_length=20)
-    # Only for ask: short noun phrases the answer can cover, and one plain sentence on why it is asked.
     answer_hints: list[Annotated[str, Field(min_length=1, max_length=90)]] = Field(default_factory=list, max_length=4)
     reason: str | None = Field(default=None, min_length=1, max_length=300)

@@ -45,7 +45,6 @@ def revise_profile(previous: dict | None, patch: ProfilePatch) -> dict:
         current["no_previous_education"] = patch.no_previous_education
     elif status == "student" or category is not None:
         current["no_previous_education"] = False
-    # A status change must never infer previous employment from retained work details.
     if status == "unemployed" and status != original.get("occupational_status"):
         current["previously_employed"] = None
     if "previously_employed" in fields:
@@ -125,7 +124,6 @@ def revise_profile(previous: dict | None, patch: ProfilePatch) -> dict:
 
 
 def complete_onboarding(previous: dict | None, patch: ProfilePatch) -> dict:
-    # Completion is an explicit atomic field in the same immutable profile snapshot.
     if previous and previous.get("onboarding_complete") is True:
         return previous
     current = deepcopy(revise_profile(previous, patch))

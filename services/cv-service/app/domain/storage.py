@@ -58,7 +58,6 @@ class UploadCapacity:
                 entries[identifier] = {'owner': owner, 'record': True,
                     'bytes': self.files.size(identifier), 'generation': str(uuid4()),
                     'state': 'published', 'key': '', 'fingerprint': '', 'at': time()}
-            # Orphans get durable identities too; overflow stays charged and blocks admission.
             untracked = 0
             for path in self.files.storage_files():
                 identifier = self.files.stored_identifier(path)
@@ -210,7 +209,6 @@ class UploadCapacity:
                 if self.files.exists(identifier):
                     self.commit(identifier, entry['generation'])
                     return
-                # Never credit a committed original before its durable removal.
             self.files.remove(identifier)
             if record is not None: self.commit(identifier, entry['generation'])
             self.release_bytes(identifier, entry['generation'])
@@ -228,7 +226,6 @@ class UploadCapacity:
             self.recovery_cursor = identifier
             try: self.recover_one(identifier)
             except Exception:
-                # Leave the reservation charged. Advance to other owners' records.
                 continue
 
     def cleanup_orphans(self, before):

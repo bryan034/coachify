@@ -30,6 +30,5 @@ def map_legacy_counts(document, source):
         for choice in entry.get('choices', []):
             old, target = choice.get('item_id'), choice.get('target_item_id')
             if target and old != target and old in counts:
-                # Explicitly mapped sources converging on one item reserve both allowances, capped at two.
                 counts[target] = min(2, counts.get(target, 0) + counts.pop(old))
     return counts

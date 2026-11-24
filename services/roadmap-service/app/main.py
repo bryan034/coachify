@@ -72,7 +72,6 @@ def create_app(store=None,upstream=None,model=None,clock=None):
                 except Problem as error:
                     planner_state(row)['outline_candidate']['first_week_error']=error.detail
                 return row
-            # Previews are written to a working copy that is published only once the outline and first week validate.
             state={**planner_state(row)}
             await prepare_outline(app,row,account,assessment,context,into=state)
             week_prepared=await prepare_week(app,row,account,context,initial=True,into=state)
@@ -88,7 +87,6 @@ def create_app(store=None,upstream=None,model=None,clock=None):
             if planning_source_changed(source,fresh):
                 raise Problem('Your inputs changed during creation. Retry creating your roadmap.',409,'inputs_changed')
             active=state['active']
-            # A new lease never reuses a failed attempt's tasks.
             active['id']=str(uuid5(NAMESPACE_URL,account['id']+':roadmap:'+row['pending']['id']+':'+row['pending']['token']))
             active.update(pace_baseline_id=active['id'],updated_at=stamp(),request_hash=row['pending']['hash'])
             state['active']=await thread(app.state.store.save_result,account['id'],active)
@@ -118,7 +116,6 @@ def create_app(store=None,upstream=None,model=None,clock=None):
 
     @app.get('/api/v1/roadmaps/dashboard-source',response_model=DashboardSource)
     async def dashboard_source(request:Request,account=Depends(authenticated)):
-        # This read never resumes pending work or queries other source services.
         row=await thread(app.state.store.load,account['id'])
         active=copy.deepcopy(planner_state(row)['active'])
         if not active:return {'version':row['version'],'active':None,'active_review':None,'task_readiness':{}}
@@ -137,7 +134,6 @@ def create_app(store=None,upstream=None,model=None,clock=None):
 
     async def mutate(body,account,action,operation=None,mark_baseline=False):
         row=await thread(app.state.store.load,account['id']);payload=body.model_dump(mode='json');key=payload['mutation_id']
-        # New task actions include their operation in the fingerprint.
         fingerprint=digest({'operation':operation,'payload':payload}) if operation else digest(payload)
         prior=next((r for r in row['receipts'] if r['id']==key),None)
         if prior:
@@ -148,7 +144,6 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         if len(row['receipts'])>=1000:raise Problem('This workspace reached its retained-operation capacity.',413,'workspace_capacity')
         source=await context(account,tolerate_unavailable=True)
         updated=action(copy.deepcopy(row),source)
-        # Authoritative account and input checks immediately before committing.
         fresh_account=await app.state.upstream.account(account['token'])
         if fresh_account['id']!=account['id']:raise Problem('Your account changed during saving.',401,'session')
         fresh=await context(fresh_account,tolerate_unavailable=True)

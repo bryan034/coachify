@@ -33,7 +33,6 @@ def bump(document, visible=True, *, operational=False):
     document['revision'] += 1
     if visible: document['version'] += 1
     document['updated_at'] = now()
-    # Fail before Mongo's document-size limit without truncating history or inputs.
     maximum = HISTORY_LIMIT_BYTES + (OPERATIONAL_ALLOWANCE_BYTES if operational else 0)
     size = len(BSON.encode(document))
     if size > maximum:
@@ -81,7 +80,6 @@ def summary(document):
 def detail(document):
     items = effective_items(document)
     for item in items: item['source_fingerprint'] = source_fingerprint(item)
-    # Review-time skill levels are overlaid after fingerprints, so they never alter evidence identity.
     apply_skill_level_reviews(document, items)
     return {**summary(document),
         'skill_estimates': visible_baseline_estimates(baseline_estimates(items)),
@@ -152,7 +150,6 @@ class CvService:
         def transform(document):
             for question in document['clarifications']:
                 if question['item_id'] == item_id and question['status'] == 'skipped': question['reopened'] = True
-            # The review is open again, so the CV is no longer reviewed until it is finished and saved.
             document['profile_reviewed_effective_version'] = None
         current = self.get(owner, identifier)
         return self.mutate(owner, identifier, Mutation(expected_version=current['version'], mutation_id=mutation_id),
@@ -177,7 +174,6 @@ class CvService:
                 return self._upload(owner, profile_version, name, file_type, data, mutation_id,
                                     cv_id, expected_version, source_hash, fingerprint, identifier)
             except Exception:
-                # An uncertain database commit must not delete its original.
                 try: self.capacity.recover_one(identifier)
                 except Exception: pass
                 raise
@@ -288,14 +284,12 @@ class CvService:
                     patch['support_uncertain'] = True
                     patch['evidence'] = [{'id': 'correction:' + item_id, 'location': 'Your correction', 'excerpt': patch['description'][:500]}]
                 if item['kind'] == 'skill' and 'title' in patch:
-                    # Claim identity stays fixed; explicit renaming updates its canonical label.
                     patch['skill_ids'] = [skill_id(patch['title'])]
                     patch['skill_names'] = [patch['title']]
                     patch['evidence'] = [{'id': 'correction:' + item_id, 'location': 'Your correction', 'excerpt': patch.get('description', patch['title'])[:500]}]
             overlay = document['overlays'].setdefault(item_id, {})
             overlay.update(patch)
             overlay.setdefault('_field_sequences', {}).update({field: document['version'] + 1 for field in patch})
-            # Text/identity/removal changes affect the source; narrow factual edits do not.
             broad_change = bool(set(patch) & {'description', 'removed'}) or (
                 'title' in patch and normalized_name(patch['title']) != normalized_name(item['title']))
             affected_uncertainties = set()
@@ -327,7 +321,6 @@ class CvService:
         document['operation'].update(status='queued', attempt=0, lease_until=0, lease_token=None, error=None, auto_retries=0)
         document['operation'].pop('retry_at', None)
         document['operation'].pop('retry_reason', None)
-        # An explicit retry is a new bounded attempt.
         document['operation'].pop('model_call_attempts', None)
         document['receipts'][key] = fingerprint
         bump(document)

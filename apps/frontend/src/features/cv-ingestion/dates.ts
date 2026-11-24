@@ -1,4 +1,3 @@
-/** Preserve the precision supplied by the user; a year is not an exact date. */
 export function partialDateBounds(value: string): [number, number] | null {
  if (!/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/.test(value)) return null;
  const [year, month, day] = value.split('-').map(Number);
@@ -18,7 +17,6 @@ export function dateInputError(start: string, end: string, ongoing: boolean): st
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const parts = (value: string) => { const [year, month] = value.split('-'); return {year, month: month ? MONTHS[Number(month) - 1] : null}; };
-/** "Jun – Aug 2026 · 3 months": only what the CV states, month count only when both ends have months. */
 export function dateSpan(start?: string | null, end?: string | null, ongoing?: boolean): string | null {
  if (!start && !end) return null;
  const from = start && partialDateBounds(start) ? parts(start) : null, to = end && partialDateBounds(end) ? parts(end) : null;

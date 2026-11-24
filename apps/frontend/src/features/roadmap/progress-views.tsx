@@ -9,7 +9,6 @@ import type { Confirmation, PlanGap, PlanMilestone, Planner } from './types';
 const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? '' : 's'}`;
 const answers: [Confirmation['answer'], string][] = [['have_experience', 'Yes'], ['some_experience', 'Somewhat'], ['no_experience', 'No'], ['not_sure', 'Not sure']];
 
-/** elo's experience questions. An answer only shapes the plan; it never edits the Skills Profile. */
 export function GapQuestions({ gaps, confirmations, frozen, confirm }: { gaps: PlanGap[]; confirmations: Planner['confirmations']; frozen: boolean; confirm: (gap: PlanGap, answer: Confirmation['answer']) => void }) {
  const asked = gaps.filter(gap => gap.resolution === 'confirm_experience' && gap.confirmation_question);
  if (!asked.length) return null;
@@ -43,7 +42,6 @@ function Checkpoints({ milestone, context, readOnly }: { milestone: PlanMileston
  </li>)}</ol>;
 }
 
-/** The route to the goal, the milestone in hand with its checkpoints, and what the plan adds up to. */
 export function MilestonesView({ context, planner }: { context: ViewContext; planner: Planner }) {
  const { plan, sessions, today, actions, frozen } = context;
  const { list, current, allReached } = currentMilestone(plan);
@@ -115,7 +113,6 @@ export function MilestonesView({ context, planner }: { context: ViewContext; pla
  </>;
 }
 
-/** Tasks and hours against the plan: this week's figures, a chart, the pace and time by skill. */
 export function ProgressView({ context }: { context: ViewContext }) {
  const { plan, sessions, today, go } = context;
  const [measure, setMeasure] = useState<'tasks' | 'hours'>('tasks'); const [group, setGroup] = useState<'day' | 'week'>('day');

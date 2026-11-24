@@ -79,7 +79,6 @@ class ModelUsage:
                 document = deepcopy(previous)
                 if today > previous['day']:
                     document.update(day=today, total=0, owners={})
-                # A backwards clock never resets or rewinds a consumed window.
             count = document['owners'].get(owner_hash, 0)
             if count >= self.settings.model_calls_per_owner_per_day: raise ModelAdmissionError(OWNER_DAILY)
             if not count and len(document['owners']) >= MAX_OWNER_ENTRIES: raise ModelAdmissionError(UNAVAILABLE)
@@ -100,7 +99,6 @@ class ModelUsage:
             try: self._consume(owner_hash)
             except ModelAdmissionError: raise
             except Exception as exc:
-                # A write may have committed: never refund or call the provider.
                 raise ModelAdmissionError(UNAVAILABLE) from exc
             with budget_owner(owner):
                 return callback(*args)

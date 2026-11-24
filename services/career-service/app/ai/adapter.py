@@ -402,7 +402,6 @@ class AIAdapter:
     async def _generate(self, request: AIInput, operation: Operation, *,
                         current_revision: Callable[[], str | Awaitable[str]], validate_output: Callable | None):
         try:
-            # Snapshot mutable caller state before any awaits.
             try:
                 request = AIInput.model_validate(request.model_dump(mode='python'))
             except ValueError:
@@ -440,7 +439,6 @@ class AIAdapter:
                             quota_reason.set({'limit_scope':error.limit_scope,'provider':error.provider})
                             progress(delay)
                             try:
-                                # Recheck staleness during a long provider cooldown without issuing provider calls.
                                 waiting = delay
                                 while waiting > 0:
                                     pause = min(5, waiting)
@@ -451,7 +449,6 @@ class AIAdapter:
                                 deadline += self.clock() - started
                                 budget.reschedule(asyncio.get_running_loop().time() + remaining)
                                 progress(None)
-                # JD extraction compatibility calls retain one bounded correction.
                 attempts = 2 if request.stage == 'jd_extraction' and not recover_responses.get() else 1
                 for attempt in range(attempts):
                     try:
@@ -534,7 +531,6 @@ class AIAdapter:
                             'Correct the listed check; use faithful JD interpretations, use each skill name once, and supply every required field. '
                             'Keep JSON compact; use short evidence/context sentences without losing requirements. '
                             'Do not invent facts. Safe validation feedback: '+json.dumps(feedback)}]}
-            # No awaits between this last stale check and returning.
             await self._current(operation, current_revision)
             operation.status = 'succeeded'
             return Generated(output, Generation(provider=self.settings.provider, model=self.settings.model,
@@ -595,7 +591,6 @@ class AIAdapter:
             strict = mode == 'json_schema_strict'
             response_format = {'type': 'json_schema', 'json_schema': {'name': request.stage,
                 'strict': strict, 'schema': strict_schema(schema) if strict else schema}}
-        # Native output carries the schema; JSON Object mode puts it in the prompt.
         if request.stage=='goal_summary':
             instructions=SUMMARY_PROMPT
         elif request.stage=='interview_prep':
@@ -634,21 +629,18 @@ class AIAdapter:
         if mode == 'json_object':
             instructions += '\nJSON schema: ' + json.dumps(schema, separators=(',', ':'))
         schema_bytes = len(json.dumps(response_format, separators=(',', ':')).encode())
-        # Each stage's own cap is a safety ceiling; AI_MAX_OUTPUT_TOKENS can only lower it.
         output_tokens = STAGE_OUTPUT_TOKENS.get(request.stage, DEFAULT_OUTPUT_TOKENS)
         if self.settings.max_output_tokens is not None:
             output_tokens = min(self.settings.max_output_tokens, output_tokens)
         if request.stage=='discovery_extract':
             output_tokens=EXTRACTION_OUTPUT_TOKENS
         request = compact_request(request)
-        # Without a configured context window the full request is sent; the provider enforces its own limit.
         if self.settings.context_tokens is not None:
             safety_margin = max(1024, self.settings.context_tokens // 10)
             input_budget = self.settings.context_tokens - output_tokens - safety_margin
             if input_budget <= 0:
                 raise AIError('context_limit')
             if request.stage in DISCOVERY_PROMPTS:
-                # Actual token estimates for Discovery.
                 input_budget=min(input_budget,32768)
             request = self._fit_request(request, instructions, schema_bytes, input_budget,response_format=response_format)
         messages = [{'role': 'system', 'content': instructions},
@@ -664,13 +656,11 @@ class AIAdapter:
 
         def fits(candidate):
             messages = messages_for(candidate)
-            # JD admission counts the full provider prompt and grammar against the input budget.
             size = input_tokens({'messages':messages,'response_format':response_format}) if request.stage in DISCOVERY_PROMPTS or request.stage in JD_OUTPUT_TOKENS or request.stage in ('goal_summary','interview_prep','role_summary','role_brief','interview_brief','opportunity_structure','opportunity_triage') else sum(len(message['content'].encode()) for message in messages) + schema_bytes
             return size <= input_budget, size
 
         current = request
         if request.stage == 'discovery_turn':
-            # History has its own 8K allowance within the full request budget.
             _, base_size = fits(request.model_copy(update={'conversation': request.conversation[-1:]}))
             input_budget = min(input_budget, base_size + 8192)
         while True:
@@ -678,13 +668,11 @@ class AIAdapter:
             if fits_budget:
                 return current
             if current.stage == 'discovery_turn' and len(current.conversation) > 1:
-                # Prefer complete exchanges and keep the newest user input intact.
                 remove_count = TURN_PAIR if len(current.conversation) > TURN_PAIR and current.conversation[0].role == 'user' and current.conversation[1].role == 'assistant' else 1
                 current = current.model_copy(update={'conversation': current.conversation[remove_count:]})
                 continue
             if current.stage in ('goal_edit','goal_summary','interview_prep','role_summary','role_brief','interview_brief','opportunity_structure','opportunity_triage') or current.stage in DISCOVERY_PROMPTS:raise AIError('context_limit')
             if len(current.conversation) > 1:
-                # The last message is the current user input; keep it intact.
                 remove_count = TURN_PAIR if len(current.conversation) > TURN_PAIR else 1
                 current = current.model_copy(update={
                     'conversation': current.conversation[remove_count:],
@@ -754,7 +742,6 @@ class AIAdapter:
         return json.dumps(value, ensure_ascii=False, separators=(',', ':'))
 
     async def _rejection(self, response):
-        # Only fixed codes/field names leave this boundary.
         data=bytearray()
         async for chunk in response.aiter_bytes():
             data.extend(chunk)
@@ -818,12 +805,10 @@ class AIAdapter:
             if message.get('tool_calls') or message.get('refusal') or not isinstance(message['content'], str):
                 raise AIError('invalid_output', True, reason='response_envelope')
             content=message['content'].strip()
-            # Remove only an enclosing Markdown fence.
             if content.startswith('```') and content.endswith('```'):
                 lines=content.splitlines()
                 if len(lines)>=FENCED_MIN_LINES and lines[0].strip().casefold() in ('```','```json') and lines[-1].strip()=='```':
                     content='\n'.join(lines[1:-1]).strip()
-            # Reject duplicate fields before Pydantic's JSON decoder.
             json.loads(content, object_pairs_hook=strict_object,
                        parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
             return content

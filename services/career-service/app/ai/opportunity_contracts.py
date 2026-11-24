@@ -10,14 +10,11 @@ MAX_EXAMPLE_TEXT = 600
 PASSAGE_CHARS = 600
 MIN_PASSAGE_BREAK = 300
 
-# Characters of page text shown during triage, alongside the title, URL and date.
 TRIAGE_PREVIEW=300
 MAX_TRIAGE_PAGES=60
 
 SearchQuery=Annotated[str,StringConstraints(strip_whitespace=True,min_length=3,max_length=180)]
-# Provider wording shown directly to users.
 FindingText=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=240)]
-# Interview findings hold one question or action each and cover every round.
 MAX_FINDINGS=20
 MAX_FINDINGS_BY_CATEGORY={'interview_intelligence':MAX_FINDINGS}
 DEFAULT_MAX_FINDINGS=12
@@ -25,7 +22,6 @@ DEFAULT_MAX_FINDINGS=12
 ShortReason=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=300)]
 
 class RatedExample(Model):
-    # One thing people reported about the skill, restated from the finding it cites.
     finding_id:str
     text:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=240)]
 
@@ -76,7 +72,6 @@ class StructuredFindings(Model):
 class ReferencedClaim(Model):
     field:str=Field(max_length=40)
     value:FindingText
-    # Bad or excessive **bold** is shown as plain text rather than rejected.
     _tidy=field_validator('value')(lambda cls,v:tidy_bold(v))
     evidence_ref:int=Field(strict=True,ge=0)
     confidence:Confidence
@@ -233,7 +228,6 @@ def triage_schema(context):
     return schema
 
 
-# Meanings of the persisted JSON field names, not additional output fields.
 FIELD_GUIDANCE={
  'interview_intelligence':{
   'candidate_experience':'Actual candidate-reported interview experience and interactions, retaining role, location and year. Write one observation per finding.',

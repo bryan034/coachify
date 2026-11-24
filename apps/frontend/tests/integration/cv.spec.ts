@@ -4,7 +4,6 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { createLocalAccount } from './account-helpers';
 
-/** Attaches a CV once the workspace and any saving form have settled, then uploads it. */
 async function uploadCv(page: Page, files: Parameters<ReturnType<Page['getByLabel']>['setInputFiles']>[0]) {
  await expect(page.locator('.cv-workspace')).toHaveAttribute('aria-busy', 'false');
  await expect(page.locator('form[aria-busy="true"]')).toHaveCount(0);
@@ -49,7 +48,6 @@ test('saved CVs retain corrections, keep the active CV and compose manual inputs
  await expect(editor).not.toBeVisible();
  await page.reload();await openCvReviewTools(page);
  await expect(page.getByRole('region', { name: 'Projects', exact: true }).locator('.cv-copy')).toHaveText('I wrote SQL queries; another teammate implemented the Python application.');
- // Exercise the real Profile -> CV -> Profile authenticated reference check.
  await page.getByLabel('Capability name', { exact: true }).fill('Python');
  await page.getByLabel('Capability description', { exact: true }).fill('I used Python in a separate synthetic exercise.');
  await page.getByRole('radio', { name: /Attach to CV evidence: Python/ }).check();
@@ -99,7 +97,6 @@ test('saved CVs retain corrections, keep the active CV and compose manual inputs
  expect((await (await account.get(`/api/v1/cv/${cvId}/clarifications`)).json()).deferred).toBe(true);
 
  await openCvReviewTools(page);
- // Use the real paged API with a small page so the selected older CV is absent from page one.
  await page.route(/\/api\/v1\/cv(?:\?.*)?$/, route => {
   const url = new URL(route.request().url()); url.searchParams.set('limit', '1');
   return route.continue({url:url.toString()});

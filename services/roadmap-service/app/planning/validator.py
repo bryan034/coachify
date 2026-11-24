@@ -43,7 +43,6 @@ def check_milestones(draft,capacity,completed,retained):
         state[key]='done'
         return cyclic
     if any(visit(key) for key in list(lookup)):errors.append(issue('prerequisite_cycle','Milestone prerequisites contain a cycle.'))
-    # Test every window against the milestones wholly inside it.
     found=[]
     for first in sorted({m.projected_start for m in draft.milestones}):
         for last in sorted({m.projected_end for m in draft.milestones}):
@@ -91,7 +90,7 @@ def check_gaps(draft,assessment,confirmations,instruction,authorized_exclusions=
             elif not gap.resolution:errors.append(issue('unresolved_material_unknown',f'{label} could change the plan, so it needs a diagnostic or a confirmation question.'))
     by_ref={g.requirement_ref:g for g in draft.gaps if g.requirement_ref}
     for ref in assessment.get('priorities',[]):
-        if ref in uncovered_requirements:continue  # Server-recorded partial coverage, shown before acceptance.
+        if ref in uncovered_requirements:continue
         gap=by_ref.get(ref)
         if ref not in excluded and (not gap or gap.id not in placed):errors.append(issue('priority_not_covered',f"Priority requirement '{ref}' must appear in a milestone or in beyond_deadline."))
     fits=draft.deadline_outcome.fits_in_runway

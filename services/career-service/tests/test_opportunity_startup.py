@@ -73,7 +73,7 @@ def test_startup_enables_research_with_keys_independently_of_legacy_modes(monkey
 def test_unavailability_identifies_the_failed_gate_without_exposing_credentials(changes,expected):
     ai=SimpleNamespace(settings=SimpleNamespace(enabled=changes.get('primary',True)),context_enabled=changes.get('gemini',True))
     source=SourceAPIs(None,brave_key=changes.get('key','PRIVATE_SYNTHETIC_KEY'),brave_mode=changes.get('mode','llm_context'),backend='brave')
-    if 'mode' in changes:source.brave_mode=changes['mode']  # Simulate an incompatible injected adapter.
+    if 'mode' in changes:source.brave_mode=changes['mode']
     issues=availability_issues(OpportunitySettings(enabled=changes.get('enabled',True)),ai,source)
     assert issues==expected and 'PRIVATE' not in str(issues)
 

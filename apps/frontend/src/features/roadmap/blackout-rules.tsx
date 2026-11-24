@@ -11,7 +11,6 @@ const weekdayOf = (value: string) => (new Date(`${value}T12:00:00Z`).getUTCDay()
 export const newBlockedTime = (start_date: string): BlackoutRule => ({ frequency: 'weekly', start_date, end_date: null, interval: 1, weekdays: [0], start_time: '18:00', end_time: '20:00' });
 export const dailyBlackout = (start_date: string, end_date: string): BlackoutRule => ({ frequency: 'daily', start_date, end_date, interval: 1, weekdays: [], start_time: null, end_time: null });
 
-/** The rule in words. */
 export function describeBlackout(rule: BlackoutRule) {
  const every = rule.interval > 1 ? `Every ${rule.interval} ${units[rule.frequency]}s` : `Every ${units[rule.frequency]}`;
  const day = Number(rule.start_date.slice(8));
@@ -28,7 +27,6 @@ function withFrequency(rule: BlackoutRule, frequency: BlackoutFrequency): Blacko
  return { ...rule, frequency, interval: 1, end_date: frequency === 'once' ? null : rule.end_date, weekdays: frequency !== 'weekly' ? [] : rule.weekdays.length ? rule.weekdays : [weekdayOf(rule.start_date)] };
 }
 
-/** Which day of the week grid shows this rule. One-day and monthly rules have no fixed weekday, so they sit under the grid. */
 export const blockedOn = (rule: BlackoutRule, day: number) => rule.frequency === 'daily' || (rule.frequency === 'weekly' && rule.weekdays.includes(day));
 export const blockedHours = (rule: BlackoutRule) => rule.start_time && rule.end_time ? `${rule.start_time}–${rule.end_time}` : 'All day';
 export const blockedRepeat = (rule: BlackoutRule) => rule.interval > 1 ? `Every ${rule.interval} ${units[rule.frequency]}s` : rule.frequency === 'daily' ? 'Daily' : 'Weekly';

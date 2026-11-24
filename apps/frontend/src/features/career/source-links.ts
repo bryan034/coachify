@@ -1,4 +1,3 @@
-/** Only saved, public HTTP URLs may become citations. No inferred source domains. */
 export function sourceLink(value:string){
  try{const url=new URL(value);if(!['https:','http:'].includes(url.protocol)||url.username||url.password)return null;
   return {url:url.href,domain:url.hostname.replace(/^www\./i,'')};

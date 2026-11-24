@@ -13,7 +13,6 @@ def extraction_schema():
         if '$ref' in value:
             value = {**definitions[value['$ref'].removeprefix('#/$defs/')],
                      **{key: item for key, item in value.items() if key != '$ref'}}
-        # Strip annotations only on schema nodes, never on the properties mapping itself.
         result = {}
         for key, item in value.items():
             if key in ('default', 'title'): continue
@@ -21,7 +20,6 @@ def extraction_schema():
                            if key == 'properties' else normalize(item))
         if result.get('type') == 'object':
             result['additionalProperties'] = False
-            # Every property is required; unknown optional scalars are nullable.
             result['required'] = list(result.get('properties', {}))
         return result
 

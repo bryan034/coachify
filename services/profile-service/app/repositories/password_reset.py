@@ -39,14 +39,12 @@ class PasswordResetRepository:
                 'message': 'If an email/password account exists for this address, we sent a password reset code.'}
 
     def complete(self, data, settings):
-        # Count every guess atomically before checking it.
         record = self.resets.find_one_and_update(
             {'_id': digest(data.challenge_id), 'auth_mode': settings.mode, 'delivered': True,
              'expires_at': {'$gt': now()}, 'attempts': {'$lt': 5}},
             {'$inc': {'attempts': 1}}, return_document=ReturnDocument.AFTER)
         if not record or not compare_digest(record['code_hash'], keyed(settings.otp_secret, data.challenge_id, data.code)):
             raise HTTPException(400, 'Reset code incorrect, expired or exhausted. Request a new code if needed.')
-        # The password hash is the credential generation: only one concurrent reset can win.
         changed = self.accounts.update_one(
             {'id': record['account_id'], 'password_hash': record['password_hash'],
              'email_verified': True},

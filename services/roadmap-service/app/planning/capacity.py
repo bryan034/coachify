@@ -298,7 +298,6 @@ class Placer:
             begin=-(-max(low,self.earliest[1] if day==self.earliest[0] else 0)//STEP)*STEP
             while begin+minutes<=high:
                 if self.clear(day,begin,minutes):return begin
-                # Jump directly beyond conflicting sessions.
                 conflicts=[high+session_break(high-low,self.config) for low,high in self.busy.get(day,[])
                     if begin<high+session_break(high-low,self.config) and begin+minutes+session_break(minutes,self.config)>low]
                 begin=-(-max([begin+STEP,*conflicts])//STEP)*STEP

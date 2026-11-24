@@ -51,11 +51,11 @@ def test_supported_rating_is_kept_from_an_answer_or_the_cv():
 
 
 @pytest.mark.parametrize('bad', [
-    rating(skill_name='Rust'),                                                  # not on this source
-    rating(item_id='other'),                                                    # another source
-    rating(evidence=[]),                                                        # unexplained
-    rating(evidence=[{'source_id': 'answer:q1', 'quote': 'I am a world expert'}]),  # invented quotation
-    rating(evidence=[{'source_id': 'zz', 'quote': 'fixed production failures'}]),   # unknown source
+    rating(skill_name='Rust'),
+    rating(item_id='other'),
+    rating(evidence=[]),
+    rating(evidence=[{'source_id': 'answer:q1', 'quote': 'I am a world expert'}]),
+    rating(evidence=[{'source_id': 'zz', 'quote': 'fixed production failures'}]),
 ])
 def test_missing_or_unsupported_rating_assumes_the_worst(bad):
     source = review_source(document(), item())

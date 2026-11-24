@@ -75,7 +75,6 @@ class Upstream:
         if profile.get('onboarding_complete') is not True: raise Problem('Finish your profile setup before planning.',403,'onboarding')
         return {**account, 'profile': profile, 'token':token}
 
-# Default per-request input ceiling.
 MAX_CONTEXT_BYTES=120000
 
 class Model:
@@ -84,7 +83,6 @@ class Model:
         self.client, self.prefix, self.max_context_bytes = client, prefix, max_context_bytes
         self.base_url=os.getenv(prefix+'_LLM_BASE_URL','https://openrouter.ai/api/v1').rstrip('/')
         parsed=urlsplit(self.base_url)
-        # Plain HTTP is only for synthetic fixture providers in development.
         development_http=parsed.scheme=='http' and os.getenv('APP_ENV')=='development' and os.getenv(prefix+'_LLM_ALLOW_HTTP')=='true'
         if (parsed.scheme!='https' and not development_http) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError(prefix+'_LLM_BASE_URL requires HTTPS or explicitly enabled development HTTP, without credentials, query or fragment.')
@@ -276,7 +274,6 @@ def application(title,prefix,*,store=None,upstream=None,model=None,max_context_b
     @app.get('/health')
     async def health(): return {'status':'ok'}
     if dev_reset_enabled():
-        # Development only: wipe the caller's own data.
         path={'ASSESSMENT':'assessments','ROADMAP':'roadmaps','JOBS':'jobs'}.get(prefix,prefix.lower())
         @app.post(f'/api/v1/{path}/dev/reset',include_in_schema=False)
         async def dev_reset(account=Depends(authenticated)):
@@ -339,7 +336,6 @@ async def run_operation(app,owner,token,worker):
             working=copy.deepcopy(row)
             with operation_scope(pending['id']), budget_owner(owner):
                 updated=await asyncio.wait_for(worker(working,account),timeout=worker_seconds)
-            # Revalidate the bearer before publication.
             account=await app.state.upstream.account(token)
             if account['id']!=owner: raise Problem('The account changed.',401,'session')
             current=await run_in_threadpool(app.state.store.load,owner)
@@ -364,7 +360,6 @@ def launch(app,owner,token,worker):
     if existing is None or existing.done():
         if len(app.state.tasks)>=12:return
         task=asyncio.create_task(run_operation(app,owner,token,worker)); app.state.tasks[owner]=task
-        # Consume failures without logging private context or retaining tracebacks.
         def completed(done):
             if app.state.tasks.get(owner) is done: app.state.tasks.pop(owner,None)
             if not done.cancelled(): done.exception()

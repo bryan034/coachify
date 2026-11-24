@@ -44,7 +44,6 @@ def topic_discussed(memory, item_id):
 
 
 def review_group(item, policy):
-    # Group by the structured source kind, never by editable CV headings.
     kind = item.get('kind')
     if policy.get('scope') == 'item' and kind in {'project', 'experience'}:
         return 'item:' + item['id']
@@ -81,10 +80,8 @@ def durable_review_questions(document):
         candidate = entry.get('candidate') or {}
         source_cv = candidate.get('source_cv_id', cv_id)
         mapping = {choice['item_id']: choice.get('target_item_id') for choice in entry.get('choices', [])}
-        # These belong to the CV being updated, including archived skips.
         for question in entry.get('clarifications', []):
             retain(question, cv_id)
-        # Imported sources only contribute questions for explicitly mapped items.
         for question in candidate.get('clarifications', []):
             if source_cv == cv_id or mapping.get(question['item_id']):
                 retain(question, source_cv)
@@ -123,7 +120,6 @@ def target_availability(item, memory, field, skill_name=None, *, max_attempts=MA
     """One target-admission policy shared by planner context and validation."""
     if review_target_skipped(item, field, skill_name): return 'declined'
     if topic_question_count(memory, item['id']) >= MAX_TOPIC_QUESTIONS: return 'topic_limit'
-    # Answered and skipped ownership intents cannot be reopened.
     ownership = {'personal_contribution', 'responsibilities'}
     for q in memory.get('intent_history', []):
         if q.get('item_id') != item['id'] or q.get('status') != 'skipped' and q.get('resolution') != 'resolved':
@@ -196,19 +192,14 @@ def reconcile_memory(conversation, document):
     signatures = {i['id']: digest({'source': source_fingerprint(i), 'review': i.get('review_evidence', [])}) for i in items}
     same_generation = old.get('extraction_version') == document['extraction_version']
     estimates = baseline_estimates(items)
-    # Evidence progress, rather than wording, resets repetition protection.
     originals = {i['id']: digest({'original': i, 'overlay': document.get('overlays', {}).get(i['id'])}) for i in document.get('original_items', []) if i['id'] in signatures}
     stable_sources = {i for i in originals if same_generation and old.get('input_sources', {}).get(i) == originals[i]}
-    # Topic completion records navigation; only source edits or a new extraction reopen completed topics.
     coverage = {i: value for i, value in old.get('coverage', {}).items() if i in stable_sources}
     if old.get('status') not in {'reviewed', 'reviewed_with_gaps'}:
         coverage.pop(old.get('focus_item_id'), None)
     attempts = {k: v for k, v in old.get('attempts', {}).items() if any(k.startswith(i + ':') for i in stable_sources)}
-    # A reopened skip can be answered, but its issued question still consumes a slot.
     answers = {q['id']: 'reopened' if q.get('reopened') else q['status'] for q in document['clarifications'] if not q.get('reconciliation_required')}
-    # Rebuild from durable CV questions, not the bounded recent-memory window.
     policy = effective_policy(document.get('review_policy_snapshot') or old.get('review_policy'))
-    # Include original and removed sources when rebuilding historical receipts.
     source_items = {i['id']: i for i in document.get('original_items', [])}
     source_items.update({i['id']: i for i in items})
     item_groups = {i: review_group(item, policy) for i, item in source_items.items()}
@@ -220,13 +211,11 @@ def reconcile_memory(conversation, document):
         intent_history.append({'item_id': q['item_id'], 'status': q['status'],
                                'targets': q.get('_interview_targets', []), 'resolution': q.get('resolution'), 'question': q.get('question', '')})
         if q['status'] in {'answered', 'skipped'}: discussed_topics.add(q['item_id'])
-    # Preserve legacy per-item counts if an older memory knows more than the surviving receipts.
     for source in (map_legacy_counts(document, document.get('review_legacy_counts')),
                    map_legacy_counts(document, old.get('question_counts'))):
         for item_id, count in source.items():
             if item_id in signatures and type(count) is int and count >= 0:
                 if count > question_counts.get(item_id, 0): question_counts[item_id] = min(count, MAX_TOPIC_QUESTIONS)
-    # Sum known item counts for shared sections; never reduce durable counts.
     reconstructed = {}
     for item_id, count in question_counts.items():
         group = item_groups.get(item_id)
@@ -278,7 +267,6 @@ def build_context(conversation, document, memory, *, focus_id=None, recall_ids=(
                       and topic_question_count(memory, i['id']) < MAX_TOPIC_QUESTIONS), None)
     if focus is None and items: focus = items[0]
     index = {}
-    # Retain both ledgers and answer indexes while closing the prior topic.
     focused_id = focus['id'] if focus else None
     scoped_items = [item for item in items if item['id'] in (focused_id, memory.get('focus_item_id'))]
     scoped_ids = {item['id'] for item in scoped_items}
@@ -286,7 +274,6 @@ def build_context(conversation, document, memory, *, focus_id=None, recall_ids=(
         for fact in evidence_for(item):
             ref = 'fact:' + digest({'item': item['id'], 'fact': fact})[:24]
             index[ref] = {'item_id': item['id'], **fact}
-    # Keep exact answers out of the ordinary context until requested.
     answers = [{'id': 'answer:' + q['id'],
                 **({'item_id': q['item_id']} if q['item_id'] != focused_id else {}),
                 'resolution': q.get('resolution'), 'interpretation_status': q.get('interpretation_status'),
@@ -325,7 +312,6 @@ def build_context(conversation, document, memory, *, focus_id=None, recall_ids=(
         'topic_question_budget': {'asked': topic_question_count(memory, focus['id']) if focus else 0,
             'remaining': max(0, MAX_TOPIC_QUESTIONS - topic_question_count(memory, focus['id'])) if focus else 0},
         'limits': {'max_questions_per_topic': MAX_TOPIC_QUESTIONS, 'max_unproductive_attempts_per_target': memory.get('max_target_attempts', MAX_TARGET_ATTEMPTS)}}
-    # Never silently truncate a factual answer or pretend an omitted source was reviewed.
     if len(json.dumps(context, ensure_ascii=False).encode()) > MAX_CONTEXT_BYTES:
         raise ValueError('This review context is too large to process safely. Your conversation and evidence are saved.')
     return context
@@ -342,7 +328,6 @@ def migrate_snapshot(document, previous, legacy_counts=None):
         document.setdefault('review_policy_migrations', []).append({
             'from': deepcopy(previous), 'to': deepcopy(current),
             'question_count': len(ids), 'receipt_basis': digest(ids)})
-    # Carry only bounded numeric legacy counts into the CV aggregate.
     if legacy_counts:
         known = {item['id'] for item in document.get('original_items', [])}
         counts = document.setdefault('review_legacy_counts', {})

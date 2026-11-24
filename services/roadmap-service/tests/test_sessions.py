@@ -152,7 +152,7 @@ def test_a_full_study_block_offers_times_after_it_and_two_backlog_items_spread_o
     clock = Clock()
     two = draft(assignments=[assignment(title='First', duration_minutes=45), assignment('a2', title='Second', start_time='19:45', duration_minutes=45)])
     with client_for(Scripted([two]), clock=clock) as client:
-        state = missed_plan(client, clock, break_minutes_per_hour=0)  # two 45-minute sessions back to back
+        state = missed_plan(client, clock, break_minutes_per_hour=0)
         moves = client.post(PREFIX + '/sessions/backlog-plan', headers=H, json={}).json()['moves']
         assert [(m['title'], m['date'], m['start_time']) for m in moves] == [('First', '2030-01-14', '19:00'), ('Second', '2030-01-16', '19:00')]
         state = save(client, '/sessions/move', state, moves=[{'session_id': m['session_id'], 'date': '2030-01-16', 'start_time': t} for m, t in zip(moves, ('19:00', '19:45'))])

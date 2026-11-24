@@ -68,8 +68,6 @@ def record_edit(task,previous):
     task.setdefault('history',[]).append({'at':stamp(),'event':'edited','fields':list(previous),'previous':previous})
     task['overrides']=sorted(set(task.get('overrides',[]))|set(previous))
 
-# Skills
-
 def known_skills(plan,source):
     """Skills a task may name: this plan's gaps, then the Skills Profile as assessed and as currently saved."""
     found={}
@@ -101,8 +99,6 @@ def link_own_task(plan,task):
     task['milestone_key']=next((m['key'] for gap in linked[:1] for m in plan.get('milestones',[]) if gap['id'] in m.get('gap_ids',[])),None)
     validate_links(plan,task)
     if before!=task['milestone_key']:mark_membership_review(plan,[before,task['milestone_key']])
-
-# Time
 
 def busy_on(plan,day,skip=None,extra=()):
     """Scheduled time of every current task on a day, except the one session being placed, plus extra (title, slot) reservations."""
@@ -212,8 +208,6 @@ def backlog_plan(plan,now,session_ids=None):
             'date':choice[0].isoformat() if choice else None,'start_time':to_clock(choice[1]) if choice else None})
     return moves
 
-# Writes
-
 def skip_session(plan,capacity,session_id):
     task,index=locate(plan,session_id)
     if task['status']=='completed' or task_day(task,index)>=capacity.today.isoformat():
@@ -268,7 +262,6 @@ def save_session(plan,capacity,source,session_id,changes,allow_overlap=False):
             place(task,index,day,new_start,new_minutes,update_estimate='duration_minutes' in changes and new_minutes!=minutes)
     record_edit(task,previous)
     if had_original and not task.get('original'):
-        # Back to the generated wording.
         task['overrides']=[name for name in task.get('overrides',[]) if name not in ('title','completion_outcome')]
     if 'notes' in changes and changes['notes'] is not None and task.get('notes')!=changes['notes']:
         task['notes']=changes['notes'];task['notes_updated_at']=stamp()

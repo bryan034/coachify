@@ -1,8 +1,6 @@
-/** Display of the backend's `skill_groups` map. The backend decides every category. */
 export const OTHER_SKILLS = 'Other skills';
 export type SkillGroupMap = Record<string, string>;
 
-/** Bigger categories first, Other last. Skills keep the order the caller gave them. */
 export function groupSkills<T>(items: T[], nameOf: (item: T) => string, groups: SkillGroupMap = {}) {
  const grouped = new Map<string, T[]>();
  for (const item of items) {

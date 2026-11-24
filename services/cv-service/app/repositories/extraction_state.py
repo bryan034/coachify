@@ -9,7 +9,6 @@ class ExtractionStateStore:
         return self.collection.find_one({'_id': identifier, 'erased': {'$ne': True}})
 
     def save(self, document):
-        # The marker and the checkpoint share one MongoDB document.
         self.collection.update_one({'_id': document['_id']}, [{'$replaceWith': {
             '$cond': [{'$eq': ['$erased', True]}, '$$ROOT', {'$literal': document}]
         }}], upsert=True)

@@ -37,7 +37,6 @@ def clarification_context(item, facts=None, *, include_baseline=True):
     for uncertainty in item.get('uncertainties', []):
         for field in _UNCERTAINTY_FIELDS.get(uncertainty, ()):
             add(field)
-    # Team wording identifies an ambiguity, never an inferred personal skill.
     source = ' '.join(e['excerpt'] for e in item.get('evidence', []))
     if re.search(r'\b(team|collaborated|collaboration|jointly)\b', source, re.I):
         if 'personal_contribution' not in general:

@@ -5,11 +5,8 @@ compares the two. What is not stated or explained is assumed not to be understoo
 """
 SCALE_VERSION = 'understanding-1-10-v2'
 MIN_LEVEL, MAX_LEVEL = 1, 10
-# Moderate understanding (4-6) is the midpoint: enough to explain the concepts.
 MODERATE_LEVEL = 5
-# Evidence of use alone, without the person explaining the subject, shows at most little understanding.
 UNEXPLAINED_CEILING = 3
-# A skill that is only named, with no described use.
 MENTION_CEILING = 2
 
 ANCHORS = {

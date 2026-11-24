@@ -184,7 +184,6 @@ def interview_fixture(value):
     if source.get('title') not in known:
         raise ValueError('Unknown synthetic interview source')
     if value['task'] == 'cv_interview_plan':
-        # Follow the backend's projected options.
         options = value.get('question_options', [])
         choice = next(((option.get('skill_name'), field) for option in options
                        for field in option.get('open_fields', [])), None)

@@ -53,7 +53,6 @@ export function PlanningPreferences() {
   } catch(e) { setSnapshotError((e as Error).message); }
   return () => controller.abort();
  }, [profile, token, snapshotRetry]);
- // Recheck elapsed deadlines after a long-open tab crosses midnight or changes zone.
  useEffect(() => {
   const timer = window.setInterval(refreshSnapshot, 60_000);
   window.addEventListener('focus', refreshSnapshot);

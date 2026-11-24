@@ -8,7 +8,6 @@ def review_summary(document, items):
     """Counts and per-skill notes. Nothing is stored; the answers and corrections are the source."""
     answered = [q for q in document.get('clarifications', [])
                 if q.get('status') == 'answered' and not q.get('reconciliation_required')]
-    # The same CV with no review answers or corrections applied: what the extraction alone said.
     before = {s['skill_id']: s for s in skills_for(effective_items(
         {**document, 'clarifications': [], 'overlays': {}, 'history': []}))}
     after = {s['skill_id']: s for s in skills_for(items)}

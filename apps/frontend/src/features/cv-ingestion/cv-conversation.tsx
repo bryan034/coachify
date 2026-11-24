@@ -55,10 +55,7 @@ function ActionCard({action, busy, readOnly, decide, review = false}: {review?: 
  </article>;
 }
 
-/** An assistant reply that only repeats the failure shown by its recovery card. */
 
-
-/** Plain status for a review topic; the current topic shows its question position when known. */
 export function topicStatus(topic: InterviewTopic, question?: ActiveQuestion | null) {
  if (topic.status === 'deferred') return 'Skipped · CV used as written';
  if (topic.status === 'reviewed') return 'Done';
@@ -86,9 +83,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
  const [error, setError] = useState(''), [busy, setBusy] = useState(''), [loading, setLoading] = useState(true), [historyLoading, setHistoryLoading] = useState(false), [announcement, setAnnouncement] = useState('');
  const [unconfirmedMessage, setUnconfirmedMessage] = useState<ConversationInput | null>(null);
  const [checkingReturn, setCheckingReturn] = useState(false);
- // Skip confirmations: one topic in the rail, all remaining topics, or the composer shortcut in the chat.
  const [skipping, setSkipping] = useState<{scope: 'topic' | 'all' | 'chat'; id?: string} | null>(null);
- // Topics rail width: drag the divider or use the arrow keys; the choice is remembered in this browser.
  const [railWidth, setRailWidth] = useState(() => {try {const saved = Number(window.localStorage.getItem('elo-cv-rail-width')); return saved >= RAIL_MIN && saved <= RAIL_MAX ? saved : RAIL_DEFAULT;} catch {return RAIL_DEFAULT;}});
  const resizeRail = useCallback((width: number) => {const next = Math.min(RAIL_MAX, Math.max(RAIL_MIN, Math.round(width))); setRailWidth(next); try {window.localStorage.setItem('elo-cv-rail-width', String(next));} catch {}}, []);
  const lifetime = useRef(new AbortController()), openKey = useRef(crypto.randomUUID()), newestId = useRef<string | null>(null), scrollArea = useRef<HTMLDivElement>(null), chatPanel = useRef<HTMLElement>(null), composer = useRef<HTMLTextAreaElement>(null), nearBottom = useRef(true);
@@ -109,7 +104,6 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
   const valid = () => !controller.signal.aborted && displayedId.current === id;
   const covered = new Set(value.messages.map(message => message.id));
   let pages = 1;
-  // Full segments must reveal older outstanding work before offering continuation.
   while (valid() && current.current?.id === id && current.current.read_only && id === newestId.current && current.current.next_before !== null && pages < maxHistoryPages) {
    const before = current.current.next_before;
    const page = await cvApi.conversation(id, token, controller.signal, before); pages++;
@@ -282,7 +276,6 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
  const unfinished = conversation?.messages.some(hasOutstandingAction) ?? false;
  const hasReviewHistory = Boolean(started || conversation?.interview || conversation?.previous_conversation_id || conversation?.next_before != null);
  const [reopening, setReopening] = useState(false);
- // Reviewing a skipped topic reopens a finished review at once, before the server answers.
  const reviewComplete = !reopening && Boolean(conversation?.interview && ['reviewed','reviewed_with_gaps'].includes(conversation.interview.status));
  const autoStarted = useRef(false);
  useEffect(() => {
@@ -304,11 +297,9 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
  const activeWork = Boolean(busy || unfinished || unconfirmedMessage);
  useEffect(()=>{onActivityChanged?.(activeWork);},[onActivityChanged,activeWork]);
  useEffect(()=>()=>onActivityChanged?.(false),[onActivityChanged]);
- // The first automatic turn owns the composer until its request starts.
  const awaitingFirstQuestion = uploadedReview && autoReview && !autoStarted.current && !hasReviewHistory &&
   !conversation?.active_question && !unfinished && !error && conversation?.purpose !== null;
  const blocked = Boolean(busy || unavailable || resumeBlocked || awaitingFirstQuestion || unconfirmedMessage || !conversation || conversation.read_only || historical);
- // A message sent while elo is working is held and sent once it is free.
  const [queued, setQueued] = useState(false);
  const working = Boolean(busy) || pending || awaitingFirstQuestion;
  const canType = !(unavailable || resumeBlocked || !conversation || conversation.read_only || historical || unconfirmedMessage);
@@ -352,7 +343,6 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    {skipped && uploadedReview && !historical && <button type="button" className="cv-skip-link" disabled={blocked || pending} aria-label={`Review ${topic.title} instead`} onClick={() => void send(`Review ${topic.title} instead.`, 'review_topic', topic.id)}>Review</button>}
    {confirming && confirmSkip('Skip this topic?', 'elo will use your CV as written and won’t ask about it. You can review it later.', 'Skip topic', () => skipTopic(topic.id))}
   </li>;})}</ol></div> : progressBlock;
- // What changed in the profile, read from the actions that were saved during the review.
  const savedActions = (kind: ConversationAction['kind']) => (conversation?.messages ?? []).flatMap(message => message.actions).filter(action => action.kind === kind && action.status === 'saved').map(action => action.item_title ?? action.title);
  const changes: [string, string[], boolean][] = [['Added', savedActions('add_capability'), false], ['Corrected', savedActions('correct'), false], ['Removed', savedActions('remove'), true]];
  const lastAssistant = [...(conversation?.messages ?? [])].reverse().find(message => message.role === 'assistant');

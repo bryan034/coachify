@@ -251,7 +251,6 @@ class CareerWorkflow:
     async def publish(self,state):
         await self.valid(state)
         record=await thread(self.app.state.research_store.records.get_research,state['research_id'])
-        # Only public, source-validated research reaches the explanation gate.
         if not record or record.research_status not in ('succeeded','no_findings'):raise GoalError('Interview research needs retry.',503)
         await thread(self.app.state.research_store.attach,state['owner'],state['goal_id'],state['selection'],state['run'],state['run'],record,goal_version=state['revision'],reused=state.get('cache',{}).get('reused',False))
         await thread(self.workspaces.phase,state['owner'],state['session'],state['run'],'ready',coverage=state.get('coverage',[]),research_id=record.id,error=None,error_code=None,retry_after=None)
@@ -266,7 +265,6 @@ class CareerWorkflow:
             if not replace:return
             old.cancel()
         async def start():
-            # Research owns its own quota-wait handling.
             quota_progress.set(None)
             validation_progress.set(None)
             if old and not old.done():await asyncio.gather(old,return_exceptions=True)
@@ -294,7 +292,6 @@ class CareerWorkflow:
                 return
         config=self.config(owner,w);session=w['session_id'];run=w['run_id']
         lease_seconds=180
-        # A database lease prevents duplicate graph execution by API replicas.
         leased=await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run,'$or':[{'workspace.worker_until':{'$exists':False}},{'workspace.worker_until':{'$lt':now()}}]},
             {'$set':{'workspace.worker_until':now()+timedelta(seconds=lease_seconds)}})
         if not leased.matched_count:return
@@ -310,7 +307,6 @@ class CareerWorkflow:
             value=None if state.values and state.next else {'owner':owner,'session':session,'run':run,'goal_id':str(row['goal_id']),'revision':w['revision'],'selection':row['version'],'sources':[],'summaries':[],'coverage':[]}
             async def repairing(feedback):
                 if feedback is None:return
-                # Keep both leases alive and reject superseded work before each corrective call.
                 latest=await thread(self.workspaces.check,owner,session,w['revision'])
                 if latest['workspace']['run_id']!=run:raise GoalError('A newer goal replaced this work.')
                 if latest['workspace'].get('expires_at',now())<=now():raise GoalError('Temporary workflow expired.')
@@ -347,7 +343,6 @@ class CareerWorkflow:
                 if quota:
                     await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},{'$set':{'workspace.worker_until':now()+timedelta(seconds=retry+lease_seconds)}})
                     await asyncio.sleep(retry)
-                    # Release lease before resuming the saved failed node.
                     await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},{'$unset':{'workspace.worker_until':''}})
                     return not self.stopping
                 else:
@@ -358,7 +353,6 @@ class CareerWorkflow:
             except GoalError:pass
         finally:
             if asyncio.current_task().cancelling() and not self.stopping:
-                # Cancellation can also arrive inside the quota-wait handler.
                 try:
                     checkpoint=await self.graph.aget_state(config)
                     token=(checkpoint.values.get('cache') or {}).get('token')
@@ -367,7 +361,6 @@ class CareerWorkflow:
                         if old_goal:await thread(self.app.state.research_store.fail,context_for(old_goal),token,'unavailable')
                 except (GoalError,PyMongoError,ValueError):pass
             await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},{'$unset':{'workspace.worker_until':''}})
-            # Refresh replacement JD may have arrived while the older run was active.
             latest=await thread(self.workspaces.row,owner)
             if not self.stopping and latest.get('workspace',{}).get('run_id')!=run:
                 if self.tasks.get(owner) is asyncio.current_task():

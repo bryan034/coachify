@@ -52,7 +52,6 @@ class CareerTargetProvider:
 
     async def _read(self, path, authorization, params=None, allow_none=False):
         try:
-            # The timeout covers the entire streamed read, including slow chunked responses.
             async with asyncio.timeout(5):
                 async with self.client.stream('GET', path, params=params,
                                               headers={'Authorization': authorization}) as response:

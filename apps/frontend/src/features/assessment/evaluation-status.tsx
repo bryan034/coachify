@@ -12,7 +12,6 @@ const reasons: Record<string, string> = {
  inputs_not_ready: 'Your CV or career goal is not ready.',
 };
 
-/** Status and explicit commands for the same saved evaluation used by Skills Profile and Roadmap. */
 export function EvaluationStatusPanel({ comparison: c, actions = false, disabled = false }: { comparison: Comparison; actions?: boolean; disabled?: boolean }) {
  const status = c.current?.evaluation;
  if (!status) return c.error && actions ? <section className="roadmap-notice" role="alert"><p>Unable to verify your skill evaluation.</p><button className="btn" onClick={c.retry}>Check evaluation</button></section> : null;

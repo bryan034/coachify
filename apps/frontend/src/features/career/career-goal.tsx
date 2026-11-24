@@ -20,17 +20,14 @@ const methods = [
 type Method = typeof methods[number]['id'];
 type Draft = { text: string; preview?: CareerPreview };
 const MAX_TEXT = 8_000, MAX_FILE = 10 * 1024 * 1024;
-// Career returns this message whenever a website refuses or blocks automated reading.
 const BLOCKED_SITE = 'could not be extracted from this website';
 const GENERIC_BLOCKED_ADVICE = 'Copy and paste the job description instead.';
-// Site-specific guidance Career appends after the shared blocked sentence, if any.
 const blockedGuidance = (error:string) => {
  const advice = error.slice(error.indexOf(BLOCKED_SITE)+BLOCKED_SITE.length).replace(/^\.\s*/,'').trim();
  return advice && advice !== GENERIC_BLOCKED_ADVICE ? advice : 'Open the job listing, copy its description and paste it instead.';
 };
 const empty = (): Record<Method,Draft> => ({text:{text:''},url:{text:''},document:{text:''}});
 
-// Pending extraction request (body + idempotency key), remembered per tab and account to reconnect to the same server-side operation.
 const PENDING='elo-career-extraction', PENDING_TTL=2*60*60*1000;
 type PendingExtraction={owner:string;body:string;key:string;method:Method;draft:Draft;at:number};
 export function pendingExtraction(owner:string):PendingExtraction|null{
@@ -62,7 +59,6 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
  const hasWork=Boolean(url||file||Object.values(drafts).some(d=>d.text));
  const work = useRef(hasWork); work.current=hasWork&&!extracting;
  useEffect(()=>()=>{request.current++;controller.current?.abort();extractController.current?.abort();},[]);
- // Reconnect once per mount to an extraction started before the user left.
  useEffect(()=>{if(resume&&token)void runExtraction(resume.body);},[token]);
  useEffect(()=>{
   const warning='Your Career Goal preview is temporary. Leave this page and discard it?';

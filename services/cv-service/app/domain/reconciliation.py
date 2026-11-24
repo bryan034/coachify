@@ -73,7 +73,6 @@ def resolve(service, owner, identifier, mutation):
         raise Conflict('Wait for processing to finish before resolving this comparison.')
     if previous['operation']['status'] == 'failed' and previous['operation'].get('error', {}).get('code') != 'reconciliation_required':
         raise Conflict('Resolve the processing failure before changing the source.')
-    # A candidate from another CV must be compared explicitly.
     if mutation.action == 'accept_candidate' and candidate['source_cv_id'] != identifier:
         source = service.get(owner, candidate['source_cv_id'])
         if source['version'] != candidate['source_version']:

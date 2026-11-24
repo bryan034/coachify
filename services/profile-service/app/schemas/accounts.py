@@ -41,9 +41,7 @@ class AccountView(BaseModel):
     email_verified: bool
     provider: Literal['google', 'local_test', 'email']
     expires_at: datetime
-    # Every account has the same item scope; server-owned fields for CV service consumers.
     cv_review_scope: Literal['item'] = 'item'
-    # Item scope keeps its v1 wire contract.
     cv_review_policy_version: Literal[1] = 1
 
 class PendingVerification(BaseModel):

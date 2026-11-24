@@ -85,7 +85,6 @@ def post(client,path,state,**body):
     assert response.status_code==200,response.text
     return response.json()
 def configure(client,state=None,**changes):
-    # Ten-minute breaks, as a new account has.
     return post(client,'/config',state or read(client),config=settings(**{'break_minutes_per_hour':10,**changes}))
 def generate(client,state,allow_partial=False):
     """Outline and first week in one operation."""
@@ -110,7 +109,7 @@ def accepted(client,**changes):
     state=generate(client,configure(client,**changes));assert state['operation']['status']=='succeeded',state['operation']
     return accept_outline(client,state)
 
-SUNDAY=NOW+timedelta(days=4)  # 2030-01-13 08:00 in Singapore: the last day of the first week.
+SUNDAY=NOW+timedelta(days=4)
 def task(key,title,minutes=60,**changes):
     return assignment(key,title=title,task=title+'.',duration_minutes=minutes,**changes)
 def long_draft(**changes):
@@ -121,8 +120,6 @@ def schedule_of(state,key):
     return [(s['date'],s['start_time'],s['duration_minutes']) for s in found['schedule']]
 def carry_all(action='carry',**extra):
     return lambda context:[{'task_id':t['task_id'],'action':action,'reason':'Still the next step.',**extra} for t in context['progress']['unfinished']]
-
-# One generation, one acceptance
 
 def test_one_generation_previews_the_whole_outline_and_the_first_week_and_one_acceptance_publishes_both():
     model=Scripted([long_draft()])
@@ -194,8 +191,6 @@ def test_three_rejected_weeks_fail_without_touching_saved_work():
         assert state['planner']['active']==active and state['planner']['week_candidate'] is None
         assert state['planner']['retry_week']['week_start']=='2030-01-07'
 
-# Planning the next week
-
 def test_next_week_opens_on_the_planning_day_or_once_every_task_is_done():
     clock=Clock()
     with client_for(Scripted([long_draft()]),clock=clock) as client:
@@ -214,7 +209,7 @@ def test_next_week_opens_on_the_planning_day_or_once_every_task_is_done():
         assert (planning['available'],planning['reason'],planning['week_done'])==(True,'week_done',True)
     with client_for(Scripted([long_draft()]),clock=clock) as client:
         clock.now=NOW
-        state=accepted(client,plan_day=4)  # Friday
+        state=accepted(client,plan_day=4)
         assert state['planner']['week_planning']['plan_day']=='2030-01-11' and not state['planner']['week_planning']['available']
         clock.now=NOW+timedelta(days=2)
         assert read(client)['planner']['week_planning']['available']
@@ -385,7 +380,7 @@ def test_a_missed_planning_window_plans_the_current_week_from_today():
     late=lambda context:week_draft([task('b1','Add a second endpoint',80),task('b2','Validate request bodies',160)],carryover=carry_all('defer')(context))
     with client_for(Scripted([long_draft()],weeks=[week_draft([assignment()]),late]),clock=clock) as client:
         state=accepted(client)
-        clock.now=NOW+timedelta(days=7)  # Wednesday of the next week; nobody planned it on Sunday.
+        clock.now=NOW+timedelta(days=7)
         state=read(client);planning=state['planner']['week_planning']
         assert (planning['action'],planning['week_start'],planning['available'],planning['reason'])==('plan_this','2030-01-14',True,'week_unplanned')
         state=plan_week(client,state,'2030-01-14')
@@ -394,14 +389,11 @@ def test_a_missed_planning_window_plans_the_current_week_from_today():
         assert preview['start_date']=='2030-01-16' and all(s['date']>='2030-01-16' for t in preview['tasks'] for s in t['schedule'])
         assert 'saved_work' not in [r['code'] for r in preview['target']['reasons']] and preview['target']['target_minutes']<300
 
-# Compatibility with saved work
-
 def test_saved_backup_blocks_months_and_legacy_previews_stay_readable():
     store=CleanableStore()
     with TestClient(create_app(store,Sources(),Scripted([long_draft()]),clock=lambda:NOW)) as client:
         state=accepted(client)
         row=store.data[OWNER];planner=row['planner']
-        # As saved before weekly planning: a month block, a month preview, a legacy preview and backup settings.
         planner['week_blocks']=[]
         planner['month_blocks']=[{'id':'m-1','month':'2030-01','status':'accepted','start_date':'2030-01-09','end_exclusive':'2030-01-28','task_ids':[t['id'] for t in planner['active']['editable_tasks']],'outline_id':'x','config_hash':'h'}]
         planner['month_candidate']={'id':'m-2','month':'2030-02'};planner['candidate']={'id':'legacy'}
@@ -442,8 +434,6 @@ def test_a_saved_plan_or_settings_holding_old_fields_is_rejected_on_read():
         plan=accepted(client)['planner']['active']
     for field,value in {'buffer_percent':20,'checkin_day':4,'checkin_time':'18:00','blackout_dates':['2030-02-01']}.items():
         with pytest.raises(ValidationError):PlannedRoadmap.model_validate({**plan,'config':{**plan['config'],field:value}})
-
-# Settings, chat, sources and saved evaluation
 
 def restarted(store,model=None,sources=None):
     return TestClient(create_app(store,sources or Sources(),model or Scripted(),clock=lambda:NOW))

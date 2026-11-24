@@ -1,5 +1,3 @@
-# Opt-in development override; combine with compose.yaml.
-# Mount source folders only, never the repository/service roots or .env files.
 services:
   frontend:
     build:

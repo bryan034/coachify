@@ -23,7 +23,6 @@ def normalize_citations(reply, sources, *, strict_markers=True):
         if identifier is None:raise citation_error('unapproved_source_url')
         return '['+identifier+']'
 
-    # Parse balanced Markdown destinations.
     pattern=re.compile(r'\[[^\]\n]*\]\(')
     position=0
     while match:=pattern.search(reply,position):
@@ -58,7 +57,6 @@ def normalize_citations(reply, sources, *, strict_markers=True):
     cited = set()
 
     def marker(match):
-        # Prefer a complete known ID before interpreting commas as separators.
         refs = [match[1]] if match[1] in sources else re.split(r'\s*[,;]\s*', match[1].strip())
         if any(ref not in sources for ref in refs):
             if not strict_markers:
@@ -110,7 +108,6 @@ def fact_citations(reply,references,links,*,max_length=4000):
     normalized,cited=normalize_citations(reply,sources,strict_markers=False)
     reply=render_citations(normalized,sources)
     cited_urls={sources[identifier] for identifier in cited}
-    # Answers lacking inline markers: retain only uncited sources.
     remaining=[]
     for identifier,url in sources.items():
         if url not in cited_urls:

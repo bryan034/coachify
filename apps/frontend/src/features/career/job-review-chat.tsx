@@ -134,7 +134,6 @@ export function JobReviewChat(){
   setMessage(current=>current.trim()===input?'':current);
   setQueueRevision(value=>value+1);
  }
- // A starter prompt fills the composer; Enter then sends it like a typed message.
  function choosePrompt(prompt:string){setMessage(prompt);requestAnimationFrame(()=>{const box=composer.current;if(box){box.focus();box.setSelectionRange(prompt.length,prompt.length);}});}
  function removeQueued(id:string){queue.current=queue.current.filter(item=>item.id!==id);failedJobs.current.delete(id);setTurns(current=>current.filter(turn=>turn.id!==id));setQueueRevision(value=>value+1);}
  const isQueued=(turn:{id:string;reply:string|null;failed?:boolean})=>turn.reply===null&&!turn.failed&&turn.id!==pendingTurn;

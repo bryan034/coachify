@@ -47,7 +47,6 @@ def qualification_terms(description):
         end=match.end()
     flush()
     nouns=[word for word in ('degree','diploma','bachelor','master','phd','certificate','certification') if word in text.casefold()]
-    # Derived search phrases are bounded.
     return list(dict.fromkeys(subjects))[:7] or nouns or [description]
 
 

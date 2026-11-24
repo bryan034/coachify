@@ -1,4 +1,3 @@
-// Safe for an existing volume: create missing service users; never reset passwords.
 const rootUri = 'mongodb://elo_admin:' + encodeURIComponent(process.env.MONGO_ROOT_PASSWORD) + '@mongodb:27017/admin';
 const adminConnection = new Mongo(rootUri);
 for (const item of [

@@ -56,12 +56,10 @@ async def assessment_status(request: Request, account=Depends(owner)):
     try:
         if cv_client is None:raise GoalError('CV service unavailable.',503)
         token=request.headers.get('authorization','')
-        # Saved-CV summaries are scoped by the forwarded session; detail reads below verify the exact owner.
         rows=[cv for cv in (await cv_client.list(token))[:50] if cv.user_id in (None,account)]
         uploaded=bool(rows)
         if not rows:return AssessmentStatus(status='no_cv',cv_uploaded=False,skills_evaluated=False)
         ready=[cv for cv in rows if cv.extraction_status=='succeeded']
-        # Inspect at most four snapshots concurrently, without returning their private evidence.
         failed=False
         for offset in range(0,len(ready),4):
             snapshots=await asyncio.gather(*(cv_client.get(cv.id,token,account) for cv in ready[offset:offset+4]),return_exceptions=True)
@@ -149,13 +147,11 @@ async def answer(draft_id: str, body: SendAnswer, request: Request, account=Depe
         ai_request=AIInput(stage='exploration',context=json.dumps(payload,ensure_ascii=False),conversation=messages)
         op=Operation(account,str(body.expected_version),'exploration')
         result=await exploration_turn(lambda:request.app.state.ai.generate(ai_request,op,current_revision=lambda:str(body.expected_version)))
-        # Check mutable external CV inputs again before committing.
         if draft.cv.mode=='saved':
             latest=await selected_cv(request,draft.cv.cv_id,account)
             if latest.version!=draft.cv.version or latest.extraction_version!=draft.cv.extraction_version or latest.profile_version!=draft.cv.profile_version:
                 raise GoalError('Your CV changed while generating. Please start a fresh exploration.')
         output=result.data
-        # Each context update must cite the current human message.
         for update in output.context_updates:
             if body.skip or update.quote not in (body.answer or ''):
                 raise AIError('invalid_output',True)

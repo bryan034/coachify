@@ -2,7 +2,6 @@
 import os
 from pydantic import BaseModel,ConfigDict,Field
 
-# Fixed Discovery-only request ceilings, not desired response lengths.
 MAX_URLS_PER_QUERY = 5
 BRAVE_CONTEXT_TOKENS = 16384
 EXTRACTION_OUTPUT_TOKENS = 8192

@@ -81,7 +81,6 @@ class ReviewStore:
         origins = {f:draft.metadata_origins.get(f,'extracted') if getattr(content,f)==getattr(draft.content,f) else 'user' for f in METADATA}
         changed = content != draft.content or needs_review != draft.requirements_need_review
         receipt = {'key':key,'hash':digest,**({'chat_hash':chat_receipt['hash']} if chat_receipt else {})}
-        # The selected goal is edited in place with owner/version CAS. No review fork.
         if row.get('record_type') != 'requirement_review':
             selected=self.state.find_one({'_id':owner}) or {}
             if selected.get('goal_id')!=ObjectId(identifier):raise GoalError('This goal is no longer current.')
@@ -101,7 +100,6 @@ class ReviewStore:
         values = {'content':content.model_dump(mode='python'),'metadata_origins':origins,'requirements_need_review':needs_review}
         if changed: values.update(version=draft.version+1,updated_at=now())
         try:
-            # Validate the whole resulting document before writing.
             RequirementReview.model_validate({**draft.model_dump(mode='python'),**values})
         except ValidationError:
             raise GoalError('This review is too large or inconsistent. Shorten the edited context and retry.',422) from None
@@ -153,7 +151,6 @@ class ReviewStore:
         if existing:return self.get(identifier,owner)
         stamp=now()
         prepared=prepare(content,extracted=True)
-        # Restore trusted server-aggregated source URLs.
         for old,new in zip(content.skills,prepared.skills):new.source_urls=old.source_urls
         for old,new in zip(content.non_skill_requirements,prepared.non_skill_requirements):new.source_urls=old.source_urls
         review=RequirementReview(_id=identifier,user_id=owner,version=1,skill_mapping_version=MAPPING_VERSION,

@@ -13,8 +13,6 @@ from elo_shared.competence_scale import MIN_LEVEL, MAX_LEVEL
 from app.schemas.analysis import CompetenceTarget, TargetExample
 from app.repositories.goals import now
 
-# --- Ranking tables: edit these to re-rank targets -------------------------------------------
-# Baseline by seniority, matched in order against the seniority level, then the role title.
 SENIORITY_BASE = (
     (r'\b(principal|distinguished|fellow|director|vp|vice president|head of)\b', 9, 'principal or director role'),
     (r'\b(lead|staff|manager)\b', 8, 'lead role'),
@@ -23,21 +21,17 @@ SENIORITY_BASE = (
     (r'\b(junior|jr|graduate|entry|entry.level|associate|trainee|fresh)\b', 5, 'entry-level role'),
     (r'\b(intern|internship|attachment|placement)\b', 5, 'internship'),
 )
-# Used when neither the seniority level nor the title names a band.
 EMPLOYMENT_BASE = {'internship': (5, 'internship'), 'full_time': (5, 'full-time role'), 'part_time': (5, 'part-time role'),
                    'contract': (5, 'contract role'), 'unknown': (5, 'role')}
 PRIORITY_WEIGHT = {'required': (2, 'essential to the role'), 'preferred': (2, 'essential to the role'),
                    'unspecified': (1, 'nice to have'), 'suggested': (1, 'nice to have'), 'conflicting': (0, None)}
-# (minimum months, weight); the first row the stated months reach applies.
 EXPERIENCE_WEIGHT = ((37, 3), (13, 2), (0, 1))
 BREADTH_SOURCES, BREADTH_WEIGHT = 3, (1, 'discussed across {n} public sources')
 INTERVIEW_WEIGHT = (1, 'probed in reported interviews')
-# Stated employer wording: floors raise the score, the ceiling caps it.
 STATED_FLOORS = ((r'\b(expert|expertise|mastery|authoritative)\b', 'expert', 9),
                  (r'\b(advanced|proficient|proficiency|complex|in.depth)\b', 'advanced', 7),
                  (None, 'intermediate', 5))
 STATED_CEILING = (r'\b(beginner|basic|exposure)\b', 'beginner', 3)
-# -------------------------------------------------------------------------------------------------
 
 INTERVIEW_CATEGORY='interview_intelligence'
 
@@ -152,7 +146,6 @@ def target_for(skill, research=None, goal=None):
     floor,ceiling=stated_bounds(skill);bound=None
     if floor and level<floor: level,bound=floor,f'The job description asks for at least {floor}.'
     if ceiling and level>ceiling: level,bound=ceiling,f'The job description asks only for basic understanding ({ceiling}).'
-    # Research rated it: the model's own reason. Otherwise the role facts the estimate rests on, without weights.
     reason=_fit(rating.rationale,600) if rating else None
     facts=[f for f in (_plain_reason(r) for r in reasons) if f!='role']
     summary=reason or ('Research hasn’t rated this skill yet, so elo estimated it from '+(f"the role: {'; '.join(facts)}." if facts else 'the role.'))
