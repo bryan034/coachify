@@ -35,7 +35,7 @@ Service-to-service dependencies (through APIs only, forwarding the owner's revoc
 - Socials → Profile (session and onboarding), Career (current goal for expert recommendations)
 - Full table and rationale: [service boundaries](docs/architecture/service-boundaries.md). Private `/internal/v1` routes are never exposed by the gateway.
 
-Other moving parts: `mongodb` (local container, Mongo 8.2) with one-shot `mongodb-*-init` containers running `infrastructure/mongodb/init-*.js`; `mailpit` (development profile) for captured email. Production DB proposal is MongoDB Atlas, external to containers.
+MongoDB 8.2 runs locally with one-shot `mongodb-*-init` containers that run `infrastructure/mongodb/init-*.js`. Production DB proposal is MongoDB Atlas, external to containers.
 
 AI: all model calls use the OpenAI Python SDK, routed to OpenRouter by default (shared `OPENROUTER_API_KEY`/`OPENROUTER_MODEL`, per-service overrides `CAREER_/CV_/ASSESSMENT_/ROADMAP_LLM_*`). Career public research uses OpenRouter model-native web search (`CAREER_RESEARCH_*`), with Brave LLM Context as fallback. Tests use synthetic providers; live-model quality is unverified.
 
@@ -140,7 +140,7 @@ python tools/lint/quickfix_check.py services/career-service           # add --pr
 
 ## Debugging
 
-- Logs: `dc logs -f <service>` (after `source infrastructure/docker/dev-shell.sh`). Captured email: Mailpit UI on `MAILPIT_PORT` (default 8025) with the `development` profile.
+- Use `dc logs -f <service>` after `source infrastructure/docker/dev-shell.sh`. Browser integration tests use a [dedicated Gmail inbox](docs/testing.md#real-mongodb-and-full-stack-checks).
 - Inspect data only through service APIs or a disposable Mongo started for tests; never point tests or scripts at a personal database or inspect the private `.env`.
 - Reset local data: `dc down` keeps volumes; removing volumes deletes accounts, CVs and goals, so ask the user first.
 

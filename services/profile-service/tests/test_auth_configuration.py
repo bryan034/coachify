@@ -36,7 +36,7 @@ def test_explicit_email_only_production_needs_no_google_key(monkeypatch):
 
 @pytest.mark.parametrize('key,value',[
     ('AUTH_MODE','local_test'),('AUTH_MODE','unknown'),('APP_ENV','staging'),('OTP_HASH_SECRET',''),
-    ('SMTP_HOST','mailpit'),('SMTP_HOST',''),('SMTP_SECURITY','plain'),('SMTP_USERNAME',''),
+    ('SMTP_HOST','localhost'),('SMTP_HOST',''),('SMTP_SECURITY','plain'),('SMTP_USERNAME',''),
     ('SMTP_PASSWORD',''),('SMTP_FROM','invalid'),('SMTP_PORT','0'),('SMTP_SECURITY','invalid'),
 ])
 def test_production_rejects_missing_or_unsafe_configuration(monkeypatch,key,value):

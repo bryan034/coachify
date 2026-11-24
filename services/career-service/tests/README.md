@@ -50,8 +50,8 @@ to include real repository/index/ownership/idempotency tests; these create and
 drop only random `elo_analysis_test_*` databases.
 
 Frontend component/browser coverage lives under `apps/frontend`. The full-stack
-Career test uses real Profile authentication and TXT parsing, with synthetic
-accounts and Mailpit. It also verifies internal URLs are rejected and previews
+Career test uses real Profile authentication and TXT parsing. Test accounts
+receive OTPs in a dedicated Gmail inbox. It also verifies internal URLs are rejected and previews
 are absent from browser storage and lost after reload.
 
 J02–J04 integration tests create/drop `elo_reviews_test_*` databases. They cover
@@ -199,8 +199,9 @@ Synthetic adapter tests do not establish faithful or complete extraction by a li
 
 ## Reproduce the complete Career extraction journey
 
-From repository root, with Docker Desktop, Node.js dependencies and Playwright Chromium
-installed:
+Install Docker Desktop, Node.js dependencies, and Playwright Chromium. Export the
+[Gmail test account credentials](../../../docs/testing.md#real-mongodb-and-full-stack-checks).
+Run the command from the repository root.
 
 ```sh
 python infrastructure/testing/run-career-flow.py
@@ -215,14 +216,12 @@ Retrieval is an explicit empty synthetic source, so this verifies missing-eviden
 handling, not live search or citation quality. Existing synthetic tests cover sourced
 findings, citations, provider failures, ownership and concurrent mutations.
 
-The runner uses `--env-file /dev/null`, explicit synthetic settings and separately
-named databases/volumes; it does not load private deployment settings. It removes
-its own stack/volumes afterwards. `--keep` retains only that named test project for
-diagnosis; `--no-build` reuses verification images. Optional `--port` and `--mail-port`
-select unused local ports (defaults 8093 and 8036). `--skip-boundary` reruns only the
-real-service journey. Do not point these tests at a personal/production database.
+The runner uses `--env-file /dev/null` and removes its disposable stack and volumes
+after the run. `--keep` retains that project for diagnosis. `--no-build` reuses
+verification images. Use `--port` to change the gateway port from `8093`.
+Use `--skip-boundary` to rerun the full-stack journey on its own.
 
-Browser traces/screenshots are written under `apps/frontend/test-results/`.
+The boundary browser suite writes traces and screenshots under `apps/frontend/test-results/`.
 Journey artifacts use a unique project directory so subsequent runs cannot erase
 earlier failures. Each run also writes
 `apps/frontend/test-results/career-flow/reports/<project>.json`, with every attempt's

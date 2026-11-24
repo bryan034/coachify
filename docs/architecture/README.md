@@ -31,7 +31,6 @@ flowchart TB
         end
         subgraph Backend[backend network]
             APIs["HTTP APIs<br/>Profile / CV / Career<br/>Assessment / Roadmap / Jobs / Socials<br/>Dashboard: stateless"]
-            Mailpit[Mailpit: development profile only]
         end
         subgraph Database[database network: internal]
             Mongo[("MongoDB 8.2<br/>elo_profile / elo_ingestion / elo_career<br/>elo_assessment / elo_roadmap / elo_jobs / elo_socials")]
@@ -51,7 +50,6 @@ flowchart TB
     APIs -->|CV| Uploads
     APIs -->|CV, Career, Assessment, Roadmap| Budget
     APIs -->|Service-specific outbound requests| External
-    APIs -. Profile SMTP when configured .-> Mailpit
 ```
 
 The [detailed deployment diagram](diagrams/dockerised-mvp.puml) expands the API group into individual services and database owners. Model calls use the OpenAI Python SDK with OpenRouter defaults and service-specific overrides. Career public research defaults to OpenRouter native web search, with Brave LLM Context as fallback.
@@ -76,7 +74,7 @@ See the [API dependency diagram](diagrams/service-api-dependencies.mmd) and [ser
 
 ## Authentication status
 
-The profile slice supports verified email/password accounts and optional Google. New accounts complete an emailed OTP step before obtaining a revocable 24-hour elo session. Development uses a private Mailpit inbox; production uses authenticated encrypted SMTP. Canonical profile completion controls initial onboarding and workspace access. Browser credentials live in a Profile-issued HttpOnly cookie; a matching tab marker and browser header let NGINX forward the owner bearer to services for validation. Sign-out/account changes clear other tabs. Set the matching Google Web Client ID on both sides for Google mode. See the [application setup guide](../setup.md) for setup and remaining integration limits.
+Profile supports verified email and password accounts and optional Google sign-in. New accounts verify an emailed OTP before they receive a revocable 24-hour elo session. Local email uses Gmail SMTP, and production requires authenticated, encrypted SMTP. Canonical profile completion controls initial onboarding and workspace access. Browser credentials live in a Profile-issued HttpOnly cookie; a matching tab marker and browser header let NGINX forward the owner bearer to services for validation. Sign-out/account changes clear other tabs. Set the matching Google Web Client ID on both sides for Google mode. See the [application setup guide](../setup.md) for setup and remaining integration limits.
 
 See [service boundaries](service-boundaries.md), [API planning](../api/README.md), and [MongoDB guidance](../../infrastructure/mongodb/README.md).
 

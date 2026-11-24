@@ -20,6 +20,10 @@ ROOT=Path(__file__).resolve().parents[2]
 
 
 def run(args):
+    gmail_address = os.getenv('ELO_TEST_GMAIL_ADDRESS', '').strip().lower()
+    gmail_password = os.getenv('ELO_TEST_GMAIL_APP_PASSWORD', '').strip()
+    if not re.fullmatch(r'[a-z0-9]+(?:\.[a-z0-9]+)*@gmail\.com', gmail_address) or not gmail_password:
+        raise RuntimeError('Set ELO_TEST_GMAIL_ADDRESS and ELO_TEST_GMAIL_APP_PASSWORD for a dedicated Gmail mailbox.')
     project='elo-career-flow-'+uuid4().hex[:8]
     report_path=ROOT/'apps/frontend/test-results/career-flow/reports'/f'{project}.json'
     report={'project':project,'public_retrieval':'synthetic-empty','attempts':[]}
@@ -28,10 +32,11 @@ def run(args):
         report_path.write_text(json.dumps(report,indent=2)+'\n')
     env={name:os.environ[name] for name in ('PATH','TMPDIR','PLAYWRIGHT_BROWSERS_PATH') if name in os.environ}
     env.update({
-        'APP_ENV':'development','AUTH_MODE':'local_test','COMPOSE_PROFILES':'development',
-        'SMTP_HOST':'mailpit','SMTP_PORT':'1025','SMTP_SECURITY':'plain','SMTP_FROM':'no-reply@elo.test',
+        'APP_ENV':'development','AUTH_MODE':'local_test',
+        'SMTP_HOST':'smtp.gmail.com','SMTP_PORT':'587','SMTP_SECURITY':'starttls',
+        'SMTP_FROM':gmail_address,'SMTP_USERNAME':gmail_address,'SMTP_PASSWORD':gmail_password,
         'GOOGLE_CLIENT_ID':'test-client.apps.googleusercontent.com',
-        'GATEWAY_PORT':str(args.port),'MAILPIT_PORT':str(args.mail_port),
+        'GATEWAY_PORT':str(args.port),
         'AI_ENABLED':'true','CAREER_LLM_RESPONSE_MODE':'json_schema_strict',
         'CAREER_LLM_TOKEN_PARAMETER':'max_tokens','AI_CONTEXT_TOKENS':'16384','AI_MAX_OUTPUT_TOKENS':'8192',
         'AI_RETRIES':'0',
@@ -39,7 +44,7 @@ def run(args):
         'CAREER_LLM_API_KEY':'synthetic-fixture-key','CAREER_RESEARCH_API_KEY':'','OPPORTUNITY_ENABLED':'true',
         'NEXT_TELEMETRY_DISABLED':'1',
         'PROFILE_E2E_BASE_URL':f'http://localhost:{args.port}',
-        'MAILPIT_BASE_URL':f'http://localhost:{args.mail_port}',
+        'ELO_TEST_GMAIL_ADDRESS':gmail_address,'ELO_TEST_GMAIL_APP_PASSWORD':gmail_password,
         'CAREER_FLOW_E2E':'1','ELO_TEST_COMPOSE_PROJECT':project,
     })
     for name in ('MONGO_ROOT_PASSWORD','PROFILE_DB_PASSWORD','CAREER_DB_PASSWORD','CV_DB_PASSWORD','ASSESSMENT_DB_PASSWORD','ROADMAP_DB_PASSWORD','JOBS_DB_PASSWORD','SOCIALS_DB_PASSWORD'):
@@ -113,7 +118,6 @@ def run(args):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port',type=int,default=8093)
-    parser.add_argument('--mail-port',type=int,default=8036)
     parser.add_argument('--no-build',action='store_true',help='Use the previously built verification images.')
     parser.add_argument('--skip-boundary',action='store_true',help='Run only the real-service journey.')
     parser.add_argument('--repeat',type=int,choices=range(1,6),default=1,help='Run every journey this many times; record failures without retry-until-success.')

@@ -1,18 +1,6 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { gmailTestMailbox, gmailTestRecipient, gmailVerificationCode } from './gmail-inbox';
 export const TEST_PASSWORD='Synthetic passphrase 2026!';
-export async function inboxCode(page:Page,email:string){
- const inbox=process.env.MAILPIT_BASE_URL;
- if(!inbox)throw new Error('Set MAILPIT_BASE_URL to the disposable test inbox.');
- let id='';
- await expect.poll(async()=>{
-  const response=await page.request.get(`${inbox}/api/v1/search`,{params:{query:`to:${email}`}});
-  const data=await response.json();id=data.messages?.[0]?.ID||'';return id;
- }).not.toBe('');
- const message=await(await page.request.get(`${inbox}/api/v1/message/${id}`)).json();
- const code=String(message.Text).match(/\b[0-9]{6}\b/)?.[0];
- if(!code)throw new Error('Synthetic verification mail contained no code.');
- return code;
-}
 export async function fillCurrentEmployment(page: Page) {
  await page.getByRole('textbox',{name:'Place of employment'}).fill('Synthetic company');
  await page.getByRole('button',{name:'Continue',exact:true}).click();
@@ -22,14 +10,16 @@ export async function fillCurrentEmployment(page: Page) {
  await page.getByRole('button',{name:'Continue',exact:true}).click();
 }
 export async function createLocalAccount(page: Page, name = 'Synthetic test account') {
- const email=`synthetic-${crypto.randomUUID()}@example.test`;
+ const mailbox = gmailTestMailbox();
+ const email = gmailTestRecipient(mailbox.address);
+ test.setTimeout(test.info().timeout + 75_000);
  await page.goto('/register');
  await page.getByRole('textbox', { name: 'Display name (optional)' }).fill(name);
  await page.getByRole('textbox',{name:'Email address',exact:true}).fill(email);
  await page.getByLabel('Password',{exact:true}).fill(TEST_PASSWORD);
  await page.getByRole('button', { name: 'Create account', exact: true }).click();
  await expect(page.getByRole('heading',{name:'Verify your email.'})).toBeVisible();
- await page.getByRole('textbox',{name:'Verification code'}).fill(await inboxCode(page,email));
+ await page.getByRole('textbox',{name:'Verification code'}).fill(await gmailVerificationCode(mailbox, email));
  await page.getByRole('button',{name:'Verify email',exact:true}).click();
  await expect(page).toHaveURL(/\/onboarding$/);
  await expect(page.getByRole('heading', { name: 'Where are you right now?' })).toBeVisible();

@@ -77,7 +77,7 @@ Gmail SMTP. Fill in these values before starting:
 | `MONGO_ROOT_PASSWORD`, `PROFILE_DB_PASSWORD`, `CV_DB_PASSWORD`, `CAREER_DB_PASSWORD` | Generate each separately with `openssl rand -hex 24`. Preserve existing values when reusing your database. |
 
 Keep the supplied `APP_ENV=development`, `AUTH_MODE=email`, SMTP host, port and
-security values. No Google OAuth variables or Mailpit variables are needed.
+security values. Leave the Google OAuth settings blank.
 Each teammate keeps their own ignored `.env` and credentials.
 
 MongoDB data survives rebuilds in its volume. Changing an environment password
@@ -135,7 +135,6 @@ Each developer supplies their own credentials.
 
    ```sh
    docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up --build -d
-   docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml --profile development stop mailpit
    docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
    ```
 
@@ -149,11 +148,9 @@ or Google mode invalidates sessions from that mode; existing provider-specific
 records are preserved and are not automatically merged by email. An account
 created through Google does not automatically acquire a password.
 
-Mailpit is optional capture-only infrastructure, not a forwarding service. With
-these settings the backend sends directly to Gmail SMTP and Mailpit is unused.
-Automated tests continue using fake mail/Mailpit so they do not email real users.
-No Gmail API, client secret or new Python package is needed. Gmail settings are
-checked for authentication and encryption even in development.
+Profile sends account email directly through Gmail SMTP and requires authentication
+and encryption in development. Full-stack browser tests send OTPs to aliases of a
+[dedicated Gmail test inbox](testing.md#real-mongodb-and-full-stack-checks).
 
 References: [App Password requirements](https://support.google.com/mail/answer/185833),
 [Gmail SMTP transport](https://developers.google.com/workspace/gmail/imap/imap-smtp).

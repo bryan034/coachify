@@ -1,4 +1,4 @@
-"""SMTP transport. Development inbox capture is separate from production delivery."""
+"""SMTP transport for account email."""
 import os
 import smtplib
 import ssl
@@ -42,7 +42,7 @@ def mail_settings(environment):
         raise RuntimeError('SMTP_USERNAME and SMTP_PASSWORD must be configured together.')
     if host.casefold() == 'smtp.gmail.com' and (not username or security == 'plain'):
         raise RuntimeError('Gmail requires an App Password, SMTP_USERNAME and encrypted SMTP, including in development.')
-    if environment == 'production' and (not host or not username or security == 'plain' or host in {'mailpit', 'localhost', '127.0.0.1'}):
+    if environment == 'production' and (not host or not username or security == 'plain' or host in {'localhost', '127.0.0.1'}):
         raise RuntimeError('Production requires an external SMTP host, authentication and encrypted SMTP.')
     return MailSettings(host, port, security, username, password, sender)
 

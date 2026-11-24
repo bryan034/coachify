@@ -305,11 +305,6 @@ services:
         condition: service_healthy
     networks: [database]
     restart: "no"
-  mailpit:
-    image: axllent/mailpit:v1.34.0
-    profiles: [development]
-    ports: ["127.0.0.1:${MAILPIT_PORT:-8025}:8025"]
-    networks: [backend]
   mongodb:
     # See docs/setup.md for volume upgrades and host kernel compatibility.
     image: mongo:8.2
