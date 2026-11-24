@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 
 export type ProcessingStep = { label: string; state: 'done' | 'now' | 'next'; note?: string };
 
-/** Percent complete from known step states; a running step counts as half. */
 export function stepPercent(steps: ProcessingStep[]) {
  if (!steps.length) return 0;
  const score = steps.reduce((sum, step) => sum + (step.state === 'done' ? 1 : step.state === 'now' ? 0.5 : 0), 0);
@@ -11,7 +10,6 @@ export function stepPercent(steps: ProcessingStep[]) {
 
 const defaultNote = { done: 'Done', now: 'Now', next: 'Up next' } as const;
 
-/** Progress card shared by the Career Goal and Roadmap processing screens: percent, bar and a short step list. */
 export function ProcessingCard({ title, intro, progressLabel, steps, percent = stepPercent(steps), dark = false, footer, children, className = '' }: {
  title: string; intro?: string; progressLabel: string; steps: ProcessingStep[]; percent?: number; dark?: boolean; footer?: ReactNode; children?: ReactNode; className?: string;
 }) {
@@ -31,7 +29,6 @@ export function ProcessingCard({ title, intro, progressLabel, steps, percent = s
  </section>;
 }
 
-/** Decorative placeholder bars shown while the real content is still being prepared. */
 export function SkeletonRows({ rows = 4 }: { rows?: number }) {
  const widths = [36, 28, 42, 32, 38];
  return <div className="skeleton-rows" aria-hidden="true">{Array.from({ length: rows }, (_, index) => <div key={index} className="skeleton-row"><span className="sk dot" /><span className="sk" style={{ width: `${widths[index % widths.length]}%` }} /><span className="sk small" /><span className="sk pill" /></div>)}</div>;

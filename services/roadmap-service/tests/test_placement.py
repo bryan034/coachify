@@ -4,7 +4,7 @@ from app.planning.capacity import Placer, session_lengths
 from app.planning.placement import week_target
 from app.schemas.roadmap import PlannerConfig
 
-NOW=datetime(2030,1,13,0,0,tzinfo=timezone.utc)  # Sunday 08:00 in Singapore; the week of Monday the 14th is ahead.
+NOW=datetime(2030,1,13,0,0,tzinfo=timezone.utc)
 WEEK=(date(2030,1,14),date(2030,1,21))
 EVENING={'day':0,'start_time':'18:00','duration_minutes':180}
 def config(**changes):

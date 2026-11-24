@@ -124,7 +124,6 @@ career_goals *-- NonSkillRequirement : embeds
 career_goals *-- ReviewContent : temporary intake content
 ReviewContent *-- TargetSkill
 ReviewContent *-- NonSkillRequirement
-%% InterviewSkill is retained only for archived records and in-memory Q&A projections.
 interview_research *-- ResearchSource : embeds
 
 class Generation {
@@ -240,7 +239,6 @@ class InterviewEvidence {
     +String[] source_ids
     +String text
 }
-%% InterviewProcess is derived in-memory for Q&A; new reports store category findings only.
 InterviewProcess *-- InterviewStage
 InterviewProcess *-- InterviewEvidence
 InterviewStage *-- InterviewEvidence
@@ -307,12 +305,10 @@ class DiscoveryEvidence {
 }
 career_goals *-- DiscoveryEvidence : optional_market_provenance
 %% TargetSkill and NonSkillRequirement origin additionally support market_research.
-%% Listing frequencies, original terms and full claim references stay in immutable research_contexts snapshots.
 
 %% OpportunityReport schema v2 embeds five CategoryResult values: interviews,
 %% internship experience, career progression/salary, historical conversion outcomes,
 %% and company/team culture. Version 1 retains its original three-category contract.
-%% Exact cited Finding objects and existing interview_research persistence are reused.
 
 
 class CapabilityDeclaration {
@@ -592,9 +588,6 @@ PlanningPreferences *-- DayBudget
 roadmaps *-- PlanTask
 roadmaps *-- DailyAllocation
 
-%% Question research uses existing Finding/ResearchSource objects: exact public excerpt as value/quote,
-%% validated source IDs and low-confidence/general scope. Complex questions persist only cited
-%% passages from validated answers; public search subjects remain transient, outside these records.
 
 class CvDeletionReceipt {
     +String state [pending|complete]
@@ -828,10 +821,7 @@ class JobStatusChange {
 job_applications *-- JobApplicationSnapshot
 job_applications *-- JobStatusChange
 
-%% JobApplicationSnapshot persists independently of live job-provider results; availability is unknown on tracker reads.
-
 %% Assessment InputVersions: source_mode=cv_and_profile|profile_only; CV id/extraction/effective versions nullable for profile_only.
-%% Job-skill outcomes carry LLM-judged levels (llm-ratio-v1), a profile-linked fallback (profile-link-v1) or the application-ratio-v1 estimate; null means unknown, never zero.
 
 class CompetenceTarget {
     +Integer level [1..10; familiarity_minimum_8]
@@ -917,9 +907,6 @@ class PartialOutlineReview {
     +String[] uncovered_requirements
 }
 RoadmapOutline *-- PartialOutlineReview : reviewed omissions
-
-%% Create roadmap activates the outline and validated first week atomically; weekly objectives remain backend planning context, not calendar UI rows.
-
 
 class roadmap_workspaces["elo_roadmap.workspaces"] {
     +RoadmapPlannerState planner

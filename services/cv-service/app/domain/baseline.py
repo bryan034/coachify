@@ -21,8 +21,6 @@ def estimate_skill(item, claim):
         refs = ['source:' + digest({'item': item['id'], 'evidence': e})[:24] for e in item.get('evidence', [])]
     personal = claim.get('attribution') == 'personal'
     assistance = claim.get('assistance', 'unknown')
-    # Typed ownership and exact assistance values in source-validated review facts
-    # may establish the same rubric as the structured claim attributes.
     use = [f for f in supported.get('skill_use', []) if f.get('skill_name')]
     if claim.get('attribution', 'unknown') == 'unknown' and use:
         personal = all(f.get('attribution') == 'personal' for f in use)
@@ -74,7 +72,6 @@ def baseline_targets(item):
                {'personal_contribution', 'assistance', 'skill_use'} for f in facts): continue
         supported = {f['field'] for f in facts if f['status'] == 'supported'}
         owner_missing |= 'personal_contribution' not in supported
-        # Establish a concrete relevant application before probing its support.
         if 'skill_use' not in supported:
             result.append({'field': 'skill_use', 'skill_name': claim['name'], 'reason': 'baseline_skill_evidence'})
         elif 'assistance' not in supported:

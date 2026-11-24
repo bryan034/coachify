@@ -30,7 +30,6 @@ def recover_outline(draft,assessment,existing=None):
         dependent={m['key'] for m in data['milestones'] if removed.intersection(m['prerequisite_keys'])}
         if dependent<=removed:break
         removed.update(dependent)
-    # Never remove milestones attached to saved work or progress.
     if any(t.get('milestone_key') in removed for t in ((existing or {}).get('editable_tasks') or [])):return None,None
     if any(a.get('milestone_key') in removed for a in (existing or {}).get('assignments',[])):return None,None
     if any(m['key'] in removed and ((m.get('outcome') or {}).get('demonstrated') or any(c.get('reached_at') for c in m.get('checkpoints',[]))) for m in (existing or {}).get('milestones',[])):return None,None

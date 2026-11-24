@@ -33,7 +33,6 @@ class Primary(AI):
     async def generate(self,request,operation,**kwargs):
         if request.stage=='opportunity_triage':
             data=json.loads(request.context);self.triaged.append(data)
-            # Metadata names the topic a page was found for; pages without one look relevant to every topic.
             output=Triage(pages=[{'ref':page['ref'],'topics':[t for t in data['topics'] if t in page['url']] or list(data['topics'])} for page in data['pages']])
             if kwargs.get('validate_output'):kwargs['validate_output'](output)
             return SimpleNamespace(data=output)
@@ -85,7 +84,6 @@ class Search:
             if self.empty:return []
             text='Example candidates report a technical interview.' if 'interview_' in tagged else 'Example interns report SGD 1500 per month.' if 'internship_' in tagged else 'Example interns converted to full-time in 2025 at a conversion rate of 50%.' if 'conversion_outcomes' in tagged else 'Example graduate analysts receive SGD 5000 monthly.' if 'career_progression' in tagged else 'Example teams report a collaborative company culture.'
             slug='-'.join(query.split()[-2:])
-            # The page URL names the topics it covers, which the synthetic triage reads.
             covers='+'.join(GROUPS[group]) if group else topic or 'general'
             return [ResearchSource(source_id=slug,platform='other',url=f'https://example.test/{covers}/{slug}',title='Example public report',evidence=text,reliability='anecdotal')]
         finally:self.active-=1
@@ -135,7 +133,6 @@ def test_parallel_categories_persist_cited_summary_and_legacy_chat_compatibility
     body={'expected_version':workspace['current']['goal']['version'],'expected_selection_version':workspace['current']['selection_version'],'refresh':True,'category':'company_intelligence'}
     key=str(uuid4());assert flow[0].post(path,headers=headers(key),json=body).status_code==202
     _,refreshed,_=research(flow)
-    # Only the refreshed category's group searches again, then each of its own topics twice.
     own=category_topics('company_intelligence');refresh=flow[4].calls[RUN_SEARCHES:]
     assert query_group(refresh[0])=='culture' and len(refresh)==refresh_searches('company_intelligence')
     assert {query_topic(q) for q in refresh[1:]}==set(own)
@@ -180,7 +177,6 @@ def test_invalid_claim_repairs_are_bounded_and_no_unvalidated_facts_persist(oppo
     _,result,_=research(flow)
     assert result['status']=='failed'
     assert all(not c['findings'] for c in result['categories'].values())
-    # Each round with evidence makes one call and one repair.
     rounds=[json.loads(v.context)['category'] for v in flow[2].calls if v.stage=='opportunity_structure']
     assert set(rounds)==set(CATEGORIES)
     assert all(rounds.count(c)%2==0 and rounds.count(c)<=2*(OpportunitySettings().topic_searches+1) for c in CATEGORIES)
@@ -242,7 +238,6 @@ def test_durable_restart_reuses_completed_searches(opportunity_flow):
         value.launch(job['_id'])
     client.portal.call(restart)
     _,result,_=research(flow)
-    # Gap searches cancelled by the shutdown keep their reservations, so the run may finish under its allowance.
     calls=flow[4].calls
     assert result['status']=='completed' and len(calls)==len(set(calls))<=RUN_SEARCHES
     assert sorted(query_group(q) for q in calls if query_group(q))==sorted(GROUPS)
@@ -375,7 +370,6 @@ def test_quota_pause_does_not_reset_the_invalid_response_repair_budget(opportuni
     primary.generate=generate;ingest(flow)
     _,result,_=research(flow)
     assert result['finished'] and result['status']=='failed'
-    # A pause after the first invalid response keeps the round to one call and one repair.
     assert all(count%2==1 for count in attempts.values()) and set(attempts)==set(CATEGORIES)
     assert all(v['error_code']=='invalid_output' for v in result['categories'].values())
 
@@ -400,7 +394,6 @@ def test_topics_read_and_keep_sources_within_their_policy(opportunity_flow):
     ingest(flow);_,result,_=research(flow)
     assert result['status']=='completed' and len(search.calls)==RUN_SEARCHES
     job=flow[1].research_contexts.find_one({'kind':'opportunity_job'})
-    # The grouped round reads one search's allowance per topic, so unsettled topics still run gap searches.
     assert {query_topic(q) for q in search.calls[len(GROUPS):]}<=set(job['history'])
     assert all(len(job['evidence'][t])<=GROUP_CANDIDATES+CANDIDATES_PER_SEARCH*2 for t in TOPICS if t in job['evidence'])
     assert all(policy(t).urls_per_search<=len(ids)<=policy(t).max_urls for t,ids in job['read'].items())

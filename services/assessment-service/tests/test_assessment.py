@@ -37,7 +37,6 @@ def judge(context):
         'requirement_refs':[r['ref'] for r in context['goal']['requirements']][:1]} for skill in context['skills']])
 class Interpreter:
     configured=True
-    # `calls` counts requirement comparisons; per-skill judgements are counted separately.
     def __init__(self,sources=None):self.calls=0;self.skill_calls=0;self.sources=sources
     async def generate(self,schema,instructions,context):
         if schema is SkillBatch:

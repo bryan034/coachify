@@ -148,7 +148,6 @@ def test_saved_pre_task_model_roadmap_is_readable_without_read_migration():
         state = accepted(client)
         store = client.app.state.store
         owner = '11111111-1111-4111-8111-111111111111'
-        # Simulate a saved roadmap-v2 document created before the editable-task model.
         store.data[owner]['planner']['active'].pop('editable_tasks', None)
         old = copy.deepcopy(store.data[owner])
         restored = read(client)
@@ -241,7 +240,6 @@ def test_old_requirement_link_survives_an_unrelated_edit_and_is_flagged():
         state = save(client, 'add', state, task=definition(requirement_refs=['job:python']))
         ident = by_title(state, 'Practise explaining a project')['id']
         owner = '11111111-1111-4111-8111-111111111111'
-        # A revised assessment no longer contains the old reference.
         plan = client.app.state.store.data[owner]['planner']['active']
         plan['assessment']['job_skill_gaps'] = []
         state = read(client)

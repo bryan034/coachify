@@ -29,7 +29,6 @@ class AccountRepository:
 
     def begin(self, data, settings):
         key = digest(data.flow_id)
-        # Concurrent begins share one flow id; when a race is lost, re-read the winner and decide again.
         for _ in range(5):
             existing = self.flows.find_one({'_id': key})
             if existing and existing['generation'] >= data.generation:
@@ -82,7 +81,6 @@ class AccountRepository:
                 if not current or current.get('fingerprint') != fingerprint or current['status'] not in ('pending', 'completed'):
                     raise HTTPException(409, 'Access attempt cancelled or superseded. Start again.')
             flow = self.attempt(data, settings)
-        # A concurrent identical completion uses the winning flow's candidate.
         account = self.bound_account(flow)
         if flow.get('registration_candidate') and flow.get('otp_verified'):
             account = self.activate_registration(flow)
@@ -116,7 +114,6 @@ class AccountRepository:
                 self.verification.limit(settings.otp_secret, 'registration-account-source', [identity, source], 10)
         account = self.accounts.find_one({'identity': identity})
         if google and account and not account.get('email'):
-            # Upgrade only after proving the exact Google subject; never link by email.
             self.accounts.update_one({'id': account['id'], 'email': {'$exists': False}},
                                      {'$set': {'email': email, 'email_verified': False}})
             account = self.accounts.find_one({'id': account['id']})
@@ -185,7 +182,6 @@ class AccountRepository:
         elif current:
             if current.get('id') != flow.get('registration_replaces') or not self.reclaimable_reservation(current):
                 raise HTTPException(409, 'An account already exists for this email address. Sign in or use Forgot password.')
-            # Compare the complete previously inspected reservation.
             activated = self.accounts.find_one_and_replace(
                 {'_id': current['_id'], '$expr': {'$eq': ['$$ROOT', {'$literal': current}]}},
                 activated, return_document=ReturnDocument.AFTER)
@@ -200,7 +196,6 @@ class AccountRepository:
             or activated.get('registration_attempt') != marker):
             raise HTTPException(409, 'An account already exists for this email address. Sign in or use Forgot password.')
         if flow.get('registration_replaces'):
-            # Cancel flows of the replaced registration.
             self.flows.update_many({'account_id': flow['registration_replaces']},
                                    {'$set': {'status': 'cancelled', 'active_session': None}})
             self.sessions.update_many({'account_id': flow['registration_replaces']}, {'$set': {'revoked': True}})

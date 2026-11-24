@@ -1,7 +1,6 @@
 "use client";
 import { useId, useState } from 'react';
 
-/** A path built from the three connected points in the Elo mark. `animated` bounces the ball along the platforms. */
 export function JourneyVisual({ animated = false }: { animated?: boolean }) {
  const id = useId().replace(/:/g, '');
  const [paused, setPaused] = useState(false);

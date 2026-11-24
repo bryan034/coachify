@@ -20,10 +20,8 @@ def create_app(store=None,upstream=None,model=None):
         if previous['freshness'] == 'current' and previous['completeness'] == 'complete':
             return row
         checkpoint=row['pending'].get('checkpoint')
-        # A pre-v2 checkpoint restarts with the new rubric only when the exact source revisions still match.
         if checkpoint and checkpoint.get('scoring_rubric')!=RUBRIC_VERSION and checkpoint['input_hash']==digest(snapshot['inputs']):
             checkpoint=None
-        # A retry whose inputs changed since its checkpoint discards the partial outcomes and starts again.
         if checkpoint and checkpoint['input_hash']!=snapshot['input_hash']:
             checkpoint=None
         if checkpoint:
@@ -48,14 +46,12 @@ def create_app(store=None,upstream=None,model=None):
                 except Problem as error:
                     if error.code!='assessment_output' or attempt:
                         raise
-                    # Only fixed local validation guidance is sent back.
                     model_context={**model_context,'validation_feedback':getattr(error,'feedback',None) or error.detail,
                                    'previous_output':output.model_dump(mode='json')}
             outcomes.extend(validated)
             row['pending']['checkpoint']['outcomes']=outcomes
             row['pending']['stage']='assessed_'+str(len(outcomes))
             await thread(app.state.store.checkpoint,account['id'],row)
-        # Per-skill category, relevance and competence, judged from the same reviewed evidence.
         judged=row['pending']['checkpoint'].setdefault('skill_batches',[])
         async def save_skills():
             row['pending']['checkpoint']['skill_batches']=judged
@@ -199,7 +195,6 @@ def create_app(store=None,upstream=None,model=None):
         if not snapshot['ready']:raise Problem('Complete your CV and Career goal first.',409,'inputs_missing')
         skill=find_skill(snapshot['evidence'],body.name,body.canonical_skill_id)
         if not skill:raise Problem('This skill is not in your Skills Profile.',404,'skill_not_found')
-        # Only evidence for this skill may differ from what the saved evaluation read.
         status=evaluation_status(row,snapshot);before=result['evidence'];now=snapshot['evidence']
         changed=[ref for ref in {*before,*now} if before.get(ref)!=now.get(ref)]
         mine={source['ref'] for source in skill['sources']}
@@ -212,7 +207,6 @@ def create_app(store=None,upstream=None,model=None):
         key=judged['canonical_skill_id'] or judged['name'].casefold()
         skills=[judged if (item.get('canonical_skill_id') or item['name'].casefold())==key else item for item in profile['skills']]
         if judged not in skills:skills.append(judged)
-        # Only the current copy moves to the inputs this skill was judged from.
         row['result']={**result,'skill_profile':{**profile,'skills':skills},'evidence':now,'inputs':snapshot['inputs'],'input_hash':snapshot['input_hash'],'source_snapshot':snapshot['source_snapshot']}
         saved=await thread(app.state.store.cas,account['id'],row['version'],row)
         return {'version':saved['version'],'skill':judged}

@@ -44,7 +44,6 @@ async def semantic_chat(request,account,row,body):
         async def check():
             if await current()!=revision:raise AIError('stale_input',True)
         await check()
-        # Completed queries are recorded for this turn; quota waits retry only the unfinished request.
         with budget_owner(account):result=await research_question(request,title,focus,check,query=query)
         search_count+=1
         return result
@@ -69,7 +68,6 @@ async def semantic_chat(request,account,row,body):
         plan=ContextPlan.model_validate((await generate('context_route',{'index':index},history,validate=validate)).model_dump())
         validate(plan)
         if plan.topic=='career_guidance' and not refining:plan=plan.model_copy(update={'topic':'off_topic'})
-        # Places the saved goal names widen public search and tell the answer model which markets relate.
         title={**index['goal'],**({'related_locations':plan.related_locations} if plan.related_locations else {})}
         return {'plan':plan,'title':title,'skills':[str(s.get('name'))[:80] for s in goal.get('skills',[])[:20] if s.get('name')]}
 
@@ -84,7 +82,6 @@ async def semantic_chat(request,account,row,body):
             goal.update(g);research=merge_projection(research,r)
         facts,links,partial=focused_saved_facts(plan.research_focus,goal,research,plan.item_refs) if plan.research_focus else selected_facts(plan,goal,research)
         focus=plan.research_focus or PUBLIC_FOCUS.get(plan.topic)
-        # Database first: search only when nothing relevant is saved.
         queries=question_queries(state['title'],focus,plan.public_search_terms) if focus else []
         return {**state,'facts':facts,'links':links,'partial':partial,'focus':focus,'queries':queries,'saved_facts':facts,'saved_links':links,
                 'needs_search':bool(focus) and (not facts or plan.missing)}
@@ -117,7 +114,6 @@ async def semantic_chat(request,account,row,body):
         scopes=await label_passages(state['focus'],state['title'],passages,terms)
         verified,verified_sources,unverified,unverified_sources=scoped_question_findings(
             state['focus'],sources,passages,scopes,state['title'],terms=terms)
-        # Only passages that pass every scope check become saved job facts.
         known={f.finding_id for f in state.get('candidates',[])}
         fresh=[f for f in verified if f.finding_id not in known]
         if fresh:await persist(state,fresh,[s for s in verified_sources if s.source_id in {i for f in fresh for i in f.source_ids}])
@@ -126,8 +122,6 @@ async def semantic_chat(request,account,row,body):
         candidates.update({f.finding_id:f for f in findings})
         findings=list(candidates.values())[-12:]
         source_map={s.source_id:s for s in [*state.get('candidate_sources',[]),*sources]}
-        # Preserve each exact passage if another query returns a different excerpt
-        # from the same canonical URL/source identity.
         for sid,source in list(source_map.items()):
             quotes=[quote for f in findings for source_id,quote in zip(f.source_ids,f.quotes) if source_id==sid]
             source_map[sid]=source.model_copy(update={'evidence':'\n'.join(dict.fromkeys(quotes))})

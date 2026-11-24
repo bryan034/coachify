@@ -23,7 +23,6 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.auth_settings = auth_settings()
-        # Separate capacity for CV attachment calls.
         app.state.capability_limiter = CapacityLimiter(8)
         client = None
         if repository is None:
@@ -52,7 +51,6 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
     app.include_router(skills_profile_router)
 
     if dev_reset_enabled():
-        # Development only: clears manual skill declarations and Skills Profile intake; keeps the account, session and onboarding.
         @app.post("/api/v1/profile/dev/reset", include_in_schema=False)
         def dev_reset(request: Request, owner: Annotated[str, Depends(current_owner)]):
             capabilities = request.app.state.capabilities
@@ -74,7 +72,6 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc: RequestValidationError):
-        # Do not echo supplied values (including non-finite numbers) into JSON errors.
         return JSONResponse(status_code=422, content={"detail": [
             {"loc": list(error["loc"]), "msg": error["msg"], "type": error["type"]}
             for error in exc.errors()

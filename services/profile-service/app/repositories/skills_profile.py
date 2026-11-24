@@ -59,8 +59,6 @@ class SkillsProfileRepository:
             areas=request.areas, entries=request.entries).model_dump(mode='json', exclude={'skill_groups','skill_subgroups'})
         declarations = deepcopy(account.get('capability_declarations', []))
         if request.status == 'saved':
-            # Publish confirmed manual skills through the existing declaration authority.
-            # Preserve ordinary declarations; intake skills retain stable entry identities.
             generated = []
             for entry in request.entries:
                 for skill in entry.skills:
@@ -123,7 +121,6 @@ class SkillsProfileRepository:
                 raise CapabilityConflict('This request key was used for different profile changes.')
             if candidate.get('completed'): return self.current(owner)
             values = candidate['values']
-        # Account revision marker also fences two first writes when no profile exists.
         declaration_version = candidate['base_declarations_version']
         result = self.accounts.update_one({'id': account['id'],
             'skills_profile_last_mutation': candidate['base_profile_mutation'],

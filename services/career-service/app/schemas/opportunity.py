@@ -25,7 +25,6 @@ def tidy_bold(text):
     if '*' in rest or re.search(r'[`#<>]|\]\(',rest) or len(spans)>MAX_BOLD_SPANS or (spans and not re.search(r'\w',rest)):return plain_text(text)
     return text
 RoundName=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
-# Interview rounds vary by job; only rounds the evidence supports are recorded.
 MAX_ROUNDS=10
 Confidence=Literal['high','medium','low','insufficient_evidence']
 EvidenceType=Literal['official','candidate_reported','third_party','inferred']
@@ -60,7 +59,6 @@ class Finding(Model):
         if self.round_name is not None and self.round_number is None:raise ValueError('A round name needs its round number.')
         return self
 
-# Each topic keeps at most five sources, so a category cites at most this many pages.
 MAX_CATEGORY_SOURCES=40
 MAX_RESEARCH_SOURCES=100
 
@@ -93,10 +91,8 @@ class SkillLevelRating(Model):
     """The level a role needs in one skill on elo's shared 1-10 understanding scale, rated from research."""
     skill:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=200)]
     level:int=Field(ge=1,le=10,strict=True)
-    # What the employer expects in this skill.
     employer_demand:Text|None=None
     reported_examples:list[SkillLevelExample]=Field(default_factory=list,max_length=2)
-    # Why elo rated the role at this level.
     rationale:Text
     # Findings of this report that informed the level; empty when it rests on the role alone.
     finding_ids:list[str]=Field(default_factory=list,max_length=4)

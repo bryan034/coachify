@@ -99,7 +99,6 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
     async def health(): return {'status': 'ok'}
 
     if dev_reset_enabled():
-        # Development only: delete the caller's CVs, files and conversations.
         @app.post('/api/v1/cv/dev/reset', include_in_schema=False)
         async def dev_reset(request: Request, account=Depends(authenticated)):
             repository = request.app.state.repository

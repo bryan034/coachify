@@ -68,7 +68,6 @@ def test_research_repairs_log_safe_schema_fields_and_retain_truncation_reason(ca
         requests=[];updates=[]
         def handler(request):
             requests.append(json.loads(request.content))
-            # Truncation followed by a complete but incorrectly typed category.
             content={group:'Example public interview query' for group in GROUPS}
             content['culture']={'PRIVATE_EXTRA_FIELD':'PRIVATE_MODEL_TEXT'}
             return httpx.Response(200,json={'choices':[{'finish_reason':'length' if len(requests)==1 else 'stop',

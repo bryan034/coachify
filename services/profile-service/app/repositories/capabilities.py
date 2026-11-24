@@ -71,7 +71,6 @@ class CapabilityRepository:
         if receipt and (receipt.get("completed") or account.get("capability_last_mutation") == request.mutation_id):
             return self.current(owner)
         if account.get("declarations_version", 0) != request.expected_version:
-            # A same-key concurrent request may have committed after the first read.
             latest = self.account(owner)
             replay = self.receipts.find_one(query)
             if replay and replay["fingerprint"] != fingerprint:
@@ -94,7 +93,6 @@ class CapabilityRepository:
                 raise CapabilityConflict("This request key was already used for different changes. Use a new key.", "mutation_conflict")
         if candidate.get("completed"):
             return self.current(owner)
-        # Even no-ops publish their receipt under the expected-version boundary, without incrementing the version.
         version_filter = ({"$or": [{"declarations_version": 0}, {"declarations_version": {"$exists": False}}]}
                           if request.expected_version == 0 else {"declarations_version": request.expected_version})
         result = self.accounts.update_one({"id": account["id"], **version_filter,

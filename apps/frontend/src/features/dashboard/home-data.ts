@@ -1,6 +1,5 @@
 import type { Planner, PlanMilestone } from '@/features/roadmap/types';
 
-/** Pure reads of the saved roadmap for Home. */
 export type HomeSession = {
  id: string; taskId: string | null; title: string; instructions: string; criterion: string; date: string; startTime: string | null;
  minutes: number; done: boolean; completedAt: string | null; milestoneKey: string | null; skills: string[];
@@ -9,19 +8,14 @@ export type HomeSession = {
 const noon = (date: string) => new Date(`${date}T12:00:00Z`);
 export const addDays = (date: string, days: number) => { const d = noon(date); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 export const daysBetween = (from: string, to: string) => Math.round((noon(to).getTime() - noon(from).getTime()) / 86400000);
-/** The Monday of the week a date falls in. */
 export const weekStart = (date: string) => addDays(date, -((noon(date).getUTCDay() + 6) % 7));
-/** Which week of the roadmap today falls in (1-based, capped at the roadmap's length), or null when its length is unknown. */
 export const planWeek = (start: string, today: string, weeks: number | null | undefined) => weeks ? Math.min(weeks, Math.max(1, Math.floor(daysBetween(weekStart(start), weekStart(today)) / 7) + 1)) : null;
 export const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
-/** "24 Nov". */
 export const shortDate = (date: string) => noon(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-/** "15 November". */
 export const longDay = (date: string) => noon(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
 export const monthName = (date: string) => noon(date).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
 export const hours = (minutes: number) => `${Math.round(minutes / 60)}h`;
 
-/** Every session of the active roadmap in one shape, from the task view when the service sent it. */
 export function homeSessions(planner: Planner | null): HomeSession[] {
  if (!planner?.active) return [];
  if (planner.active_sessions) return planner.active_sessions.map(item => ({ id: item.id, taskId: item.task_id, title: item.title, instructions: item.instructions, criterion: item.completion_criterion, date: item.date, startTime: item.start_time, minutes: item.duration_minutes, done: item.status === 'completed', completedAt: item.completed_at ?? null, milestoneKey: item.milestone_key, skills: item.skills.map(skill => skill.name) }));
@@ -30,14 +24,12 @@ export function homeSessions(planner: Planner | null): HomeSession[] {
 }
 const order = (a: HomeSession, b: HomeSession) => (a.date + (a.startTime ?? '')).localeCompare(b.date + (b.startTime ?? ''));
 
-/** The earliest session still to do, then the one after it. Missed sessions come first: they are what is overdue. */
 export function nextTasks(sessions: HomeSession[]) {
  const todo = sessions.filter(item => !item.done).sort(order);
  return { next: todo[0] ?? null, after: todo[1] ?? null };
 }
 
 export type WeekDay = { date: string; letter: string; state: 'none' | 'planned' | 'done'; today: boolean };
-/** Monday to Sunday of the week containing today, with what is planned and finished each day. */
 export function weekDays(sessions: HomeSession[], today: string): WeekDay[] {
  const start = weekStart(today);
  return Array.from({ length: 7 }, (_, index) => {
@@ -46,10 +38,6 @@ export function weekDays(sessions: HomeSession[], today: string): WeekDay[] {
  });
 }
 
-/**
- * Weeks on track: consecutive weeks in which every planned session was finished. The current week counts once it is
- * complete; an unfinished current week neither adds to nor breaks the run. Weeks without sessions do not count.
- */
 export function weeksOnTrack(sessions: HomeSession[], today: string, planStart: string | null) {
  const first = planStart ? weekStart(planStart) : sessions.length ? weekStart(sessions.map(item => item.date).sort()[0]) : weekStart(today);
  const current = weekStart(today);
@@ -65,14 +53,12 @@ export function weeksOnTrack(sessions: HomeSession[], today: string, planStart: 
  return { count, week: total, dots };
 }
 
-/** The latest things the person finished, newest first. */
 export function recentWins(sessions: HomeSession[], milestones: PlanMilestone[], limit = 3) {
  const wins: { at: string; text: string }[] = sessions.filter(item => item.done && item.completedAt).map(item => ({ at: item.completedAt!, text: `Finished “${item.title}”` }));
  for (const milestone of milestones) for (const checkpoint of milestone.checkpoints ?? []) if (checkpoint.reached_at) wins.push({ at: checkpoint.reached_at, text: `Reached “${checkpoint.title}”` });
  return wins.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
 }
 
-/** The first checkpoint not yet reached, with the sessions done in its milestone. */
 export function nextCheckpoint(milestones: PlanMilestone[], sessions: HomeSession[], today: string) {
  const rows = milestones.flatMap(milestone => (milestone.checkpoints ?? []).filter(checkpoint => !checkpoint.reached_at).map(checkpoint => ({ milestone, checkpoint })))
   .sort((a, b) => a.checkpoint.date.localeCompare(b.checkpoint.date));
@@ -83,7 +69,6 @@ export function nextCheckpoint(milestones: PlanMilestone[], sessions: HomeSessio
 }
 
 export type TimelineMilestone = { id: string; title: string; start: string; end: string; days: number; minutes: number; checkpoints: boolean[]; done: number; total: number; started: boolean; startsIn: number };
-/** Milestones in order with their span, and the buffer between the last one and the target date. */
 export function timeline(milestones: PlanMilestone[], sessions: HomeSession[], today: string, target: string | null) {
  const rows: TimelineMilestone[] = [...milestones].sort((a, b) => a.projected_start.localeCompare(b.projected_start)).map(item => {
   const members = sessions.filter(session => session.milestoneKey === item.key);
@@ -96,7 +81,6 @@ export function timeline(milestones: PlanMilestone[], sessions: HomeSession[], t
  return { rows, buffer, current: current?.id ?? null };
 }
 
-/** Month labels spread evenly from today to the target date. */
 export function monthTicks(from: string, to: string, count = 5) {
  const span = daysBetween(from, to);
  return Array.from({ length: count }, (_, index) => monthName(addDays(from, Math.round(span * index / (count - 1)))));

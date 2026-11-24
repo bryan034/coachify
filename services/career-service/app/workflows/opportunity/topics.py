@@ -12,10 +12,8 @@ class Policy:
     backing_sites:int
 
 
-# urls_per_search and max_urls count pages actually read after triage, not search results.
 FACTUAL=Policy(urls_per_search=2,max_urls=5,keep=2,backing_sites=2)
 REVIEWS=Policy(urls_per_search=4,max_urls=8,keep=4,backing_sites=4)
-# Search results whose title, URL, date and preview are triaged before any page is read.
 CANDIDATES_PER_SEARCH=6
 GROUP_CANDIDATES=10
 
@@ -41,7 +39,6 @@ GROUP_TERMS={
  'conversion':'return offer conversion intern intake','career':'career path graduate programme progression',
  'culture':'company culture management reviews'}
 
-# What a person would type after the employer and role.
 TERMS={
  'recruitment_stages':'interview process stages rounds','interview_questions':'interview questions asked',
  'difficulty':'interview difficulty','application_timeline':'application deadline timeline',

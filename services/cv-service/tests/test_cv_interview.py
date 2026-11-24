@@ -64,7 +64,6 @@ def test_resume_memory_and_accept_rich_answer_without_another_interpretation_cal
     assert saved['effective_version'] > cv['effective_version']
     stored = app.state.conversations.get('owner-a', chat['id'])
     assert stored['interview_memory']['questions'][-1]['targets'][0]['field'] == 'task_scope'
-    # Reconstruct the coordinator, retaining only its database and configured provider.
     from app.conversation.service import ConversationService
     app.state.conversations = ConversationService(app.state.conversations.cv, provider)
     resumed = client.post(PREFIX, json={'cv_id': cv['id'], 'purpose': 'skills_profile', 'mutation_id': str(uuid4())}).json()
@@ -160,7 +159,6 @@ def test_skip_closes_a_topic_with_nothing_left_and_moves_to_the_next(harness):
     second = next(t['id'] for t in chat['interview']['topics'] if t['id'] != first)
     from app.conversation import interview as module
     original = module.clarification_context
-    # Synthetic state: the skipped field was this topic's last open gap.
     module.clarification_context = lambda item, facts=None: (
         {'clarification_targets': []} if item['id'] == first else original(item, facts))
     try:
@@ -930,7 +928,7 @@ def test_progress_advances_on_transition_and_stays_stable_through_next_topic(har
                               'evidence_refs': [ref for ref, value in context['evidence_index'].items()
                                                 if value['item_id'] == first]}] if explicit_coverage else []}
 
-    provider.plans = [switch, switch]  # Selection, then hydration of the next source.
+    provider.plans = [switch, switch]
     chat = send(client, chat, 'I built the Python API with guidance.')
     assert chat['active_question']['item_id'] == second, chat['messages'][-1]
     assert chat['interview']['reviewed_items'] == 1
@@ -1201,7 +1199,7 @@ def test_review_clarifies_only_ambiguous_ownership_then_finishes_without_three_q
     assert chat['active_question'] is None, chat['messages'][-1]
     assert chat['interview']['reviewed_items'] == chat['interview']['total_items'] == 1
     assert chat['interview']['status'] in {'reviewed', 'reviewed_with_gaps'}
-    assert len([c for c in provider.calls if c['task'] == 'cv_interview_plan']) == 1  # Opening only.
+    assert len([c for c in provider.calls if c['task'] == 'cv_interview_plan']) == 1
     assert len([c for c in provider.calls if c['task'] == 'cv_interview_interpret']) == 1
     saved = client.get('/api/v1/cv/' + cv['id']).json()
     assert len(saved['clarifications']) == 1
@@ -1234,7 +1232,6 @@ def test_two_questions_per_item_preserve_source_scoped_skill_evidence(harness):
     def rich(context):
         active, text = context['active_question'], context['message']
         names = [c['name'] for c in context['focused_source']['skill_claims']]
-        # Concrete skill use arrives with each item's second answer.
         used = names if context['topic_question_budget']['asked'] >= 2 else []
         return {'intent': 'answer', 'reply': 'Your personal contribution is captured.',
             'actions': [{'kind': 'clarify', 'item_id': active['item_id'], 'question_id': active['id'], 'excerpt': text}],

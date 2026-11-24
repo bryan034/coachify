@@ -24,12 +24,11 @@ async def blocked_async_http(*args, **kwargs):
     raise AssertionError('Synthetic tests must use an explicit mock HTTP transport.')
 
 
-# Run before importing test modules.
 isolate_application_settings()
 httpx.HTTPTransport.handle_request = blocked_http
 httpx.AsyncHTTPTransport.handle_async_request = blocked_async_http
-socket.create_connection = blocked_http  # Career's pinned preview HTTP client.
-requests.sessions.Session.request = blocked_http  # Includes uncached tokenizer downloads.
+socket.create_connection = blocked_http
+requests.sessions.Session.request = blocked_http
 
 
 @pytest.fixture(autouse=True)

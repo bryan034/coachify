@@ -11,9 +11,7 @@ class Model(BaseModel):
 
 
 BulletText=Annotated[str,StringConstraints(strip_whitespace=True,min_length=2,max_length=110)]
-# A 2-6 word takeaway shown under the topic title; plain text, no markup.
 Headline=Annotated[str,StringConstraints(strip_whitespace=True,min_length=2,max_length=60,pattern=r'^[^*]+$')]
-# Bumped when the saved shape or style changes.
 FORMAT=2
 BOLD=re.compile(r'\*\*(?=\S)([^*\n]{1,40}?)(?<=\S)\*\*')
 

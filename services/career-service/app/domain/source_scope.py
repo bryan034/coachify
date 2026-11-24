@@ -25,8 +25,6 @@ COMPANY_SUFFIXES = {'pte', 'ltd', 'limited', 'inc', 'incorporated', 'corp', 'cor
 ROLE_FILLER = {'the', 'and', 'of', 'for', 'in', 'at', 'to', 'a', 'an', 'with', 'i', 'ii', 'iii', 'iv',
                'senior', 'junior', 'lead', 'principal', 'staff', 'associate', 'assistant', 'summer',
                'winter', 'spring', 'autumn', 'fall', 'programme', 'program', 'role', 'position', 'job'}
-# Currency markers by structure: any Unicode currency symbol (S$, US$, £, ₹...), or an ISO-style
-# three-letter code written directly beside the amount (SGD 1,500 or 1,500 AUD).
 CURRENCY_SYMBOLS = ''.join(chr(c) for c in range(sys.maxunicode + 1) if unicodedata.category(chr(c)) == 'Sc')
 AMOUNT = r'\d+(?:[,.]\d+)*(?:[kKmM]\b)?'
 MARKER = r'(?:\b[A-Z]{1,3})?[' + re.escape(CURRENCY_SYMBOLS) + r']|\b[A-Z]{3}(?=\s?\d)'
@@ -75,7 +73,6 @@ def employer_match(company, url, title, text):
     phrase = r'\b' + r'[\s.&-]*'.join(map(re.escape, words)) + r'\b'
     compact = ''.join(words)
     name = host(url)
-    # A matching subdomain or prefix does not establish employer ownership.
     official = len(compact) >= MIN_EMPLOYER_NAME and name in {
         compact + suffix for suffix in ('.com', '.sg', '.com.sg', '.careers', '.io')
     }
@@ -118,7 +115,6 @@ def verify(url, title, passage, goal, *, scope=None, terms=None, published=None,
         return Verdict(False, True, reasons=['foreign'])
     if scope is not None and scope.market != 'target':
         reasons.append('location')
-    # A goal without a saved employer is a general role; there is no employer to match.
     matched, official = employer_match(goal.get('company'), url, title, text) if company_words(goal.get('company')) else (True, False)
     if not matched:
         reasons.append('employer')

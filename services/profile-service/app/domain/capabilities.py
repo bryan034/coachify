@@ -20,7 +20,6 @@ def normalized_name(name):
 
 
 def skill_id(name):
-    # Shared normalization v1; source IDs remain separate from a skill identity.
     return "skill:" + " ".join(unicodedata.normalize("NFKC", name).split()).casefold()
 
 

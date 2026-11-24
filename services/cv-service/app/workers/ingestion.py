@@ -23,7 +23,6 @@ from app.domain.auto_selection import auto_select, first_ready
 
 logger = logging.getLogger(__name__)
 
-# Only schema-owned locations and known error types may reach logs.
 _ITEM_FIELDS = frozenset({'kind', 'title', 'description', 'explicit', 'evidence', 'skill_names',
     'category', 'proficiency', 'experience_months', 'start_date', 'end_date', 'ongoing',
     'context', 'supporting_items', 'uncertainties'})
@@ -33,9 +32,7 @@ _ERROR_TYPES = frozenset({'missing', 'extra_forbidden', 'literal_error', 'model_
     'bool_type', 'int_type', 'float_type', 'greater_than_equal', 'less_than_equal',
     'finite_number', 'too_short', 'too_long', 'value_error'})
 _MAX_DIAGNOSTIC_ERRORS = 16
-# These retries start from the document.
 _RESTART_AFTER = frozenset({'unexpected_error'})
-# Model-call limit shared across extraction, repair and semantic checks, reserved before dispatch.
 _OPERATION_MODEL_CALL_LIMIT = 6
 
 
@@ -90,7 +87,6 @@ class IngestionWorker:
             bump(document, operational=True)
             try: self.repository.replace(candidate, document)
             except Conflict: pass
-            # A retry after repeated interruptions starts clean.
             self.repository.extraction_states.discard(document['_id'])
             return None
         operation.pop('retry_at', None)
@@ -118,7 +114,6 @@ class IngestionWorker:
                         or current['operation']['status'] != 'processing'
                         or current['operation']['lease_until'] <= now()):
                     raise StaleExtraction()
-                # Never move the displayed progress backwards.
                 previous = current['operation'].get('stage', 'source_read')
                 if PROCESSING_STAGES[previous][0] >= PROCESSING_STAGES[value][0]: return
                 updated = deepcopy(current)
@@ -144,7 +139,7 @@ class IngestionWorker:
             if remaining <= 10:
                 raise ExtractionFailure('CV extraction has insufficient processing time remaining. Your upload is saved; retry later.',
                                         stage, 'timeout')
-            return remaining - 10  # Leave time for validation and fenced publication.
+            return remaining - 10
 
         def reserve_operation_call():
             for _ in range(10):
@@ -168,9 +163,9 @@ class IngestionWorker:
             raise StaleExtraction()
 
         def call_model(blocks, candidate, feedback):
-            remaining_time()  # Deny stale work before reserving a provider attempt.
+            remaining_time()
             def invoke():
-                timeout = remaining_time()  # Revalidate after admission/concurrency I/O.
+                timeout = remaining_time()
                 if getattr(self.extractor, 'configured', True): reserve_operation_call()
                 if feedback is not None:
                     return self.extractor.repair(blocks, candidate, feedback, timeout_seconds=timeout, **told)
@@ -196,10 +191,8 @@ class IngestionWorker:
                 lambda data: self.parser(data, '.' + claimed['file_type'], self.settings.max_file_bytes),
                 call_model, observe, verify_evidence=verify_evidence,
                 checkpointer=LatestStateSaver(self.repository.extraction_states, claimed['_id'], claimed['user_id'], holds_lease),
-                # A retry keeps the operation and resumes. A reupload or new workflow version starts fresh.
                 thread_id=f"{claimed['operation']['id']}:{WORKFLOW_VERSION}",
                 rewind_rejected=bool(previous_failure and previous_failure['category'] in REJECTED_OUTPUT),
-                # Salvage verified portions after one repair in this same operation.
                 allow_partial=True)
             with operation_scope(claimed['operation']['id']):
                 result = harness.run(original)
@@ -241,7 +234,6 @@ class IngestionWorker:
                      'failure_stage': stage, 'failure_category': 'unexpected_error'}
         repair_attempted = bool(harness and harness.repair_attempted)
         if error: error['repair_attempted'] = repair_attempted
-        # Re-read to apply retained overlays; only the currently live lease can publish.
         current = self.repository.get(claimed['user_id'], claimed['_id'])
         if not current or current['operation']['lease_token'] != token or current['operation']['status'] != 'processing' or current['operation']['lease_until'] <= now():
             return False
@@ -252,7 +244,6 @@ class IngestionWorker:
         if not error:
             affected = affected_sources(document, items)
             if affected:
-                # Keep the usable prior extraction and retain the candidate for an explicit new-source review.
                 document['candidate'] = candidate_for(document, items, metadata, parsed.get('notices', []), other_information=result['other_information'])
                 document['reconciliation'] = [{'item_id': identifier, 'reason': 'Source interpretation changed. Compare the preserved result and candidate before accepting it.'}
                     for identifier in affected]
@@ -279,7 +270,6 @@ class IngestionWorker:
             used = operation.get('auto_retries', 0)
             if auto_retry_allowed and should_auto_retry(error) and used < self.settings.extraction_auto_retries:
                 delays = self.settings.extraction_retry_delays
-                # Back to the queue with the saved state intact; the next run continues from it.
                 operation.update(status='queued', error=None, attempt=0, auto_retries=used + 1,
                                  auto_retry_limit=self.settings.extraction_auto_retries,
                                  retry_reason=error.get('failure_category'),
@@ -292,7 +282,6 @@ class IngestionWorker:
             selection = self.repository.selection(claimed['user_id'])
             document['auto_selection_revision'] = selection.get('revision', 0)
         try:
-            # Extraction/candidate/history content never consumes bookkeeping space.
             bump(document, operational=bool(error and items is None))
         except CvError:
             document = deepcopy(current)
@@ -302,7 +291,6 @@ class IngestionWorker:
             bump(document, operational=True)
         failure = document['operation'].get('error') or error
         if failure and failure.get('failure_category') != 'schema_validation':
-            # Never log exception strings, prompts, provider bodies, URLs or CV text.
             logger.warning('CV extraction failed cv_id=%s operation_id=%s stage=%s category=%s provider_status_code=%s repair_attempted=%s provider_reason=%s provider_parameter=%s',
                 _safe_uuid(claimed.get('_id')), _safe_uuid(claimed['operation'].get('id')),
                 failure.get('failure_stage'), failure.get('failure_category'), failure.get('provider_status_code'), repair_attempted,
@@ -338,7 +326,6 @@ class IngestionWorker:
                     entry = self.capacity.entry(claimed['_id'])
                     size = self.files.size(claimed['_id'])
                     self.files.remove(claimed['_id'])
-                    # Physical deletion precedes credit.
                     self.capacity.release_bytes(claimed['_id'], entry['generation'] if entry else None, size)
                     updated = deepcopy(claimed)
                     updated['original_available'] = False
@@ -346,7 +333,6 @@ class IngestionWorker:
                     bump(updated, operational=True)
                     self.repository.replace(claimed, updated)
             except Exception:
-                # Advance the cursor even for malformed records, filesystem failures or CAS races.
                 continue
         self.capacity.cleanup_orphans(timestamp - 3600)
 

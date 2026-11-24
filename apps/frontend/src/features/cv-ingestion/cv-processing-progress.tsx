@@ -11,7 +11,6 @@ export function CvProcessingProgress({cv}: {cv: CvSummary}) {
  return <PreparationProgress key={`${cv.id}:${cv.operation_id}`} cv={cv}/>;
 }
 
-/** Smoothed, never-100-until-ready percentage shared by every processing view. */
 export function useProcessingPercent(cv: CvSummary) {
  const progress = cv.processing_progress;
  const stage = progress?.stage;

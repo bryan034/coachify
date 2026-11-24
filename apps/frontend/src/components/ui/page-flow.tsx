@@ -7,7 +7,6 @@ const steps = [
  { href: '/roadmap', label: 'Roadmap' },
 ];
 
-/** How Career Goal, Skills Profile and Roadmap feed each other, with the current page marked. */
 export function PageFlow({ current, children }: { current: '/career-goal' | '/cv'; children: ReactNode }) {
  return <div className="ws-connect">
   <nav className="ws-flow" aria-label="How the pages connect">{steps.map((step, index) => <span key={step.href} style={{ display: 'contents' }}>

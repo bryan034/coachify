@@ -2,12 +2,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { NoteBlock, NoteRun, NotesDocument } from './types';
 
-/*
- * A Word-like notes page. The toolbar formats text and inserts a checkbox or a
- * single-choice question at the cursor. Saves a validated NotesDocument, not HTML;
- * pasted markup is reduced to plain text with bold, italic and underline.
- */
-
 const escape = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const uid = () => Math.random().toString(36).slice(2, 10);
 const MAX_TEXT = 20000;
@@ -17,7 +11,6 @@ function runsHtml(runs: NoteRun[]) {
  return html || '<br>';
 }
 
-/** The saved document as editor HTML. Every piece of text is escaped. */
 export function toHtml(doc: NotesDocument | null | undefined) {
  const blocks = doc?.blocks.length ? doc.blocks : [{ type: 'paragraph', runs: [] } as NoteBlock];
  let html = '', list: 'ul' | 'ol' | null = null;
@@ -50,7 +43,6 @@ function runsOf(node: Node, marks: Omit<NoteRun, 'text'> = {}): NoteRun[] {
  if (tag === 'BR') return [];
  return [...node.childNodes].flatMap(child => runsOf(child, next));
 }
-/** Adjacent runs with the same marks become one; mark flags are only kept when set. */
 function tidy(runs: NoteRun[]): NoteRun[] {
  const out: NoteRun[] = [];
  for (const run of runs) {
@@ -62,7 +54,6 @@ function tidy(runs: NoteRun[]): NoteRun[] {
  return out.map(run => ({ ...run, text: run.text.slice(0, 2000) }));
 }
 
-/** Reads the editor back into the document format. Unknown markup becomes plain paragraphs. */
 export function fromElement(root: HTMLElement): NotesDocument {
  const blocks: NoteBlock[] = [];
  const visit = (node: Node) => {
@@ -85,7 +76,6 @@ export function fromElement(root: HTMLElement): NotesDocument {
   blocks.push({ type: 'paragraph', runs: tidy(runsOf(node)) });
  };
  root.childNodes.forEach(visit);
- // Empty paragraphs at the start or end are not content; blank lines in between are kept.
  const empty = (block?: NoteBlock) => !!block && block.type === 'paragraph' && !block.runs.some(run => run.text.trim());
  while (empty(blocks[blocks.length - 1])) blocks.pop();
  while (empty(blocks[0])) blocks.shift();
@@ -100,7 +90,6 @@ function insertAtCaret(root: HTMLElement, html: string) {
  const holder = document.createElement('div'); holder.innerHTML = html;
  const nodes = [...holder.childNodes];
  if (!range) { nodes.forEach(node => root.appendChild(node)); return; }
- // Insert after the block that holds the caret.
  let block: Node | null = range.startContainer;
  while (block && block.parentNode !== root) block = block.parentNode;
  const anchor = block?.nextSibling ?? null;
@@ -109,13 +98,11 @@ function insertAtCaret(root: HTMLElement, html: string) {
 
 type Tool = { label: string; text: string; run: () => void; pressed?: string };
 
-/** With `onDraft`, the editor reports each change and saves nothing itself: the surrounding form owns Save. */
 export function NotesEditor({ value, label, disabled = false, onSave, onDraft }: { value: NotesDocument | null | undefined; label: string; disabled?: boolean; onSave?: (doc: NotesDocument) => Promise<unknown>; onDraft?: (doc: NotesDocument) => void }) {
  const editor = useRef<HTMLDivElement>(null);
  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
  const savedJson = useRef(JSON.stringify(value ?? { blocks: [] }));
  const [state, setState] = useState<'saved' | 'saving' | 'unsaved' | 'failed' | 'too_long'>('saved');
- // The editor owns its DOM while open; it is only reset when the saved notes change elsewhere.
  useEffect(() => { if (editor.current && document.activeElement !== editor.current) { editor.current.innerHTML = toHtml(value); savedJson.current = JSON.stringify(value ?? { blocks: [] }); } }, [value]);
  useEffect(() => () => clearTimeout(timer.current), []);
  const save = async () => {

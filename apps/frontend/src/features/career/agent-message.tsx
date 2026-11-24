@@ -5,7 +5,6 @@ import {sourceLink} from './source-links';
 import {useEffect,useState} from 'react';
 import {humaniseText} from '@/lib/format';
 
-/** Model text is Markdown, never executable HTML or remote images. */
 export function AgentMarkdown({children}:{children:string}){
  return <div className="agent-markdown"><Markdown skipHtml disallowedElements={['img']} components={{
   a:({href,children})=>{
@@ -47,7 +46,6 @@ const activities:Record<string,string>={
 export function observedActivity(steps:string[]=[]){
  return steps.map(step=>activities[step]).filter(Boolean).at(-1);
 }
-/** Only known server-observed steps are shown, never model reasoning or tool names. */
 export function AgentProgress({steps}:{steps:string[]}){
  const labels=[...new Set(steps)].map(step=>activities[step]).filter(Boolean);
  return labels.length?<div className="agent-progress" role="status" aria-label="Career goal progress"><p className="small">Career goal progress</p><ul>{labels.map(label=><li key={label}>{label}</li>)}</ul></div>:null;
@@ -56,14 +54,12 @@ export function AgentProgress({steps}:{steps:string[]}){
 export function isTokenLimit(code:unknown){return code==='rate_limited'||code==='input_limit'||code==='model_daily_allowance';}
 export function errorCode(cause:unknown){return cause&&typeof cause==='object'&&'code' in cause&&typeof cause.code==='string'?cause.code:'';}
 
-/** Whole hours and minutes (rounded up), for waits that last until the daily allowance resets. */
 export function formatWait(seconds:number){
  const total=Math.max(1,Math.ceil(seconds/60)),hours=Math.floor(total/60),minutes=total%60;
  const part=(n:number,unit:string)=>`${n} ${unit}${n===1?'':'s'}`;
  return [hours&&part(hours,'hour'),minutes&&part(minutes,'minute')].filter(Boolean).join(' ');
 }
 
-/** Explain known failures without repeating raw provider diagnostics. */
 export function AgentRecovery({message,code,onRetry,disabled=false,label='Retry',seconds}:{message:string;code:string;onRetry:()=>void;disabled?:boolean;label?:string;seconds?:number}){
  const tokenLimit=isTokenLimit(code);
  const conflict=code==='operation_in_progress'||code==='operation_key_reused';
@@ -96,7 +92,6 @@ export function AgentRecovery({message,code,onRetry,disabled=false,label='Retry'
  </div>;
 }
 
-/** Animates a reply after a validated response arrives. */
 export function AgentReply({children,animate=true,onProgress}:{children:string;animate?:boolean;onProgress?:()=>void}){
  const [shown,setShown]=useState({text:children,count:1});
  const [reduced,setReduced]=useState(()=>typeof window!=='undefined'&&!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);

@@ -37,7 +37,7 @@ def structured_node(node):
                     logging.getLogger('uvicorn.error.ai_usage').info(
                         'structured_recovery node=%s correction=%s reason=%s',
                         node.__name__, attempt, feedback['reason'])
-                    await asyncio.sleep(0)  # Allow shutdown/replacement between attempts.
+                    await asyncio.sleep(0)
         finally:
             validation_feedback.reset(context)
             await notify(None)

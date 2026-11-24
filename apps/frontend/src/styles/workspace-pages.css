@@ -1,4 +1,3 @@
-/* Home, Career Goal and Skills Profile shared visual system. */
 .ws-page{--ws-line:#e8ecf1;--ws-muted:#64748b;--ws-soft:var(--cloud);--ws-mint-ink:#047857;--ws-amber:#b45309;--ws-amber-bg:#fef3c7;--ws-amber-bar:#f2b44a;--ws-build:#94a3b8;--ws-partial:#60a5fa;--ws-unknown:#cbd5e1;
  display:flex;flex-direction:column;gap:18px;max-width:1180px;font-size:15px;line-height:1.5;color:var(--ink)}
 .ws-page.ws-home{max-width:1240px}
@@ -11,7 +10,6 @@
 .ws-page p{margin:0}
 .ws-page ul,.ws-page ol{list-style:none;margin:0;padding:0}
 
-/* Sidebar: same shell on every page */
 .side .nav a{padding:10px 12px;border-radius:12px;font-size:15px;font-weight:400;color:#64748b}
 .side .nav a.on{background:var(--mint-mist);color:#047857;font-weight:600;box-shadow:none}
 .side .nav a.on svg{color:inherit}
@@ -20,7 +18,6 @@
 .side-bottom .me .small{font-size:12px;color:#64748b}
 .side-bottom .me .avatar{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:50%;background:#e8ecf1;font-size:13px;font-weight:600}
 
-/* Buttons, chips, pills */
 .ws-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:999px;padding:11px 18px;font-weight:600;font-size:14px;line-height:1.3;text-decoration:none;white-space:nowrap}
 .ws-btn.primary{background:var(--mint);color:#052e16}
 .ws-btn.ghost{background:rgb(255 255 255 / .08);color:#fff;border:1px solid rgb(255 255 255 / .16)}
@@ -49,13 +46,11 @@
 .ws-sub b{color:var(--ink);font-weight:600}
 .ws-error{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:14px;color:var(--ws-muted)}
 
-/* Dark hero used by Home and the goal header */
 .ws-hero{position:relative;overflow:hidden;border-radius:28px;color:#fff;padding:32px;background:radial-gradient(110% 120% at 85% 0%,#134e4a 0%,var(--hero) 58%)}
 .ws-hero h1{margin:6px 0 22px;font-size:clamp(34px,4.4vw,52px);line-height:1.02;letter-spacing:-.04em;font-weight:700;color:#fff;overflow-wrap:anywhere}
 .ws-eyebrow{font-size:13px;color:var(--mint);font-weight:600}
 .ws-actions{display:flex;gap:8px;flex-wrap:wrap}
 
-/* Cards and panels */
 .ws-card{background:var(--white);border:1px solid var(--ws-line);border-radius:22px;padding:20px 22px;display:flex;flex-direction:column;gap:8px;min-height:190px;min-width:0}
 .ws-card h3{margin:0;font-size:17px;font-weight:600;line-height:1.3;letter-spacing:-.01em}
 .ws-k{font-size:13px;color:var(--ws-muted);font-weight:500;display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -84,7 +79,6 @@
 .ws-tick{width:2px;height:12px;background:var(--ink)}
 .ws-empty{padding:22px 4px;color:var(--ws-muted);font-size:14px}
 
-/* How the pages connect */
 .ws-connect{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .ws-connect p{flex:1;min-width:260px;font-size:14px;color:var(--ws-muted)}
 .ws-flow{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ws-muted);flex-shrink:0}
@@ -92,7 +86,6 @@
 .ws-flow a.on{background:var(--mint-mist);color:var(--ws-mint-ink)}
 .ws-flow a:hover{color:var(--ink)}
 
-/* Status and confirmation pills */
 .ws-status{display:flex;align-items:center;gap:14px;padding:12px 12px 12px 18px;border-radius:999px;background:var(--white);border:1px solid var(--ws-line)}
 .ws-status p{flex:1;min-width:0;font-size:14px;color:var(--ws-muted)}
 .ws-status p b{color:var(--ink);font-weight:600}
@@ -106,7 +99,6 @@
 .ws-okdot{width:22px;height:22px;border-radius:50%;background:var(--ws-mint-ink);color:#fff;display:grid;place-items:center;flex-shrink:0;font-size:12px;font-weight:800}
 .ws-okdot.warn{background:var(--ws-amber-bg);color:var(--ws-amber)}
 
-/* ---------- Home ---------- */
 .ws-home .ws-hero{display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "path" "next";gap:24px 28px}
 .ws-home .ws-hero::after{content:"";position:absolute;inset:0;background-image:radial-gradient(rgb(255 255 255 / .07) 1.5px,transparent 1.6px);background-size:26px 26px;pointer-events:none;-webkit-mask-image:linear-gradient(90deg,transparent 35%,#000 75%);mask-image:linear-gradient(90deg,transparent 35%,#000 75%)}
 .ws-home .ws-hero>*{position:relative;z-index:1;min-width:0}
@@ -215,7 +207,6 @@
 .ws-pq-text{font-weight:500;overflow-wrap:anywhere}
 .ws-pq-src{font-size:12.5px;color:var(--ws-muted)}
 
-/* ---------- Career Goal ---------- */
 .ws-goal{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:center;padding:30px 32px}
 .ws-goal h1{margin:6px 0 12px;font-size:clamp(32px,4vw,46px);line-height:1.04}
 .ws-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -248,7 +239,6 @@
 .ws-chev{transition:transform .2s;color:var(--ws-muted)}
 .ws-skill.open .ws-chev{transform:rotate(180deg)}
 .ws-sk-more{display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:0 4px 18px}
-/* A goal skill's breakdown: the person's skills that count towards it and the smaller skills it is made of */
 .ws-sk-parts{display:flex;flex-direction:column;gap:8px;padding:0 4px 14px}
 .ws-sk-parts>div{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .ws-sk-parts ul{display:contents;list-style:none}
@@ -259,7 +249,6 @@
 .ws-sk-more[hidden]{display:none}
 .ws-sk-more>p{flex:1;min-width:240px;font-size:14px;color:var(--ws-muted)}
 .ws-sk-more>p b{color:var(--ink)}
-/* Why a goal skill has its target and level, shown when the row is opened */
 .ws-why{flex:1 1 100%;display:grid;gap:10px;margin:0;font-size:14px}
 .ws-why dt{font-size:12.5px;font-weight:600;color:var(--ws-muted)}
 .ws-why dd{margin:2px 0 0;color:var(--ink)}
@@ -277,7 +266,6 @@
 .ws-evidence a{color:var(--ws-mint-ink);font-weight:600}
 .ws-pending{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;background:var(--mint-mist);color:var(--ws-mint-ink);font-size:11.5px;font-weight:700;vertical-align:middle;white-space:nowrap}
 
-/* ---------- Skills Profile ---------- */
 .ws-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
 .ws-head h1{margin:0;font-size:clamp(32px,4vw,46px);font-weight:700;letter-spacing:-.04em;line-height:1.05}
 .ws-head .ptitle{margin:0;align-items:center}
@@ -301,7 +289,6 @@
 :root[data-theme="dark"]{--skill-important:#4ade80;--skill-nice:#fbbf24;--rating-met:#15803d;--rating-near:#422006;--rating-near-bg:#facc15;--rating-far:#fecaca;--rating-far-bg:#7f1d1d}
 :root[data-theme="dark"] :is(.ws-sc.nice,.ws-sc.minor.nice){color:#fbbf24}
 .ws-sc.minor{font-weight:500;color:var(--ws-muted)}
-/* A skill the goal expects that the person's evidence doesn't show yet */
 .ws-sc.missing,.ws-sc.missing.important,.ws-sc.missing.nice{border-style:dashed;border-width:1.5px;background:var(--white)}
 .ws-sc.missing:not(.important):not(.nice){border-color:var(--ws-muted)}
 .ws-sc .ws-pending{margin-left:0}
@@ -326,7 +313,6 @@
 .ws-expcol dl{display:grid;gap:6px;font-size:13px}
 .ws-expcol dt{font-weight:600;color:var(--ws-muted);font-size:12px}
 
-/* ---------- Talk it through drawer ---------- */
 .ws-scrim{position:fixed;inset:0;background:rgb(15 23 42 / .35);opacity:0;pointer-events:none;transition:.2s;z-index:70}
 .ws-scrim.on{opacity:1;pointer-events:auto}
 .ws-drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:var(--white);border-left:1px solid var(--ws-line);box-shadow:-20px 0 50px -30px rgb(15 23 42 / .4);transform:translateX(100%);visibility:hidden;transition:transform .25s,visibility .25s;z-index:71;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -363,7 +349,6 @@
 .ws-toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);opacity:0;background:var(--fill);color:var(--on-fill);padding:12px 18px;border-radius:999px;font-size:14px;font-weight:500;transition:.25s;pointer-events:none;z-index:80;max-width:calc(100vw - 32px);text-align:center}
 .ws-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* The shared evaluation banner takes the same pill shape */
 .app .evaluate-banner{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 12px 12px 18px;border:1px solid #e8ecf1;border-radius:22px;background:var(--white)}
 .app .evaluate-banner>div:not(.evaluate-banner-actions){flex:1 1 260px;min-width:0}
 .app .evaluate-banner h2{font-size:14px;font-weight:600}
@@ -400,7 +385,6 @@
 
 .cv-workspace [hidden]{display:none!important}
 
-/* Upload panel beside the CV card, with a dashed drop-zone look. */
 .ws-cv .cv-upload-panel{display:flex;flex-direction:column;min-height:0;padding:0;border:0;background:transparent;box-shadow:none}
 .ws-cv .cv-upload-panel .cv-form{display:flex;flex-direction:column;flex:1;gap:10px}
 .ws-cv .cv-upload-panel .skills-dropzone{flex:1;justify-content:center;margin:0;padding:24px;border:2px dashed var(--ws-line);border-radius:24px;background:var(--white)}
@@ -413,7 +397,6 @@
 .ws-cv .cv-upload-panel form>.small{font-size:12px;line-height:1.45}
 .ws-cv .cv-upload-panel form>.btn{align-self:center}
 
-/* Home setup path: a diagonal line with each step broken out. */
 .ws-journey{position:relative;min-height:230px;margin-top:6px}
 .ws-journey-line{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .ws-journey-line line{stroke:rgb(255 255 255 / .3);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
@@ -434,14 +417,12 @@
 .ws-stop a:hover strong{text-decoration:underline;text-underline-offset:3px}
 @media (prefers-reduced-motion:reduce){.ws-stop.is-next .ws-stop-node{animation:none}}
 @media (max-width:640px){.ws-journey{min-height:0}.ws-journey-line{display:none}.ws-journey ol{display:grid;gap:14px}.ws-stop{position:static}.ws-stop a{position:static}.ws-stop-text{transform:none}}
-/* Wide screens: the path sits beside the welcome and next step, as a diagonal climbing to the right. */
 @media (min-width:960px){
 .ws-home .ws-hero{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);grid-template-areas:"head path" "next path";align-items:start}
 .ws-home .ws-hero-path{display:flex;flex-direction:column;align-self:stretch}
 .ws-home .ws-hero-path .ws-journey{flex:1;min-height:300px;margin:8px 0 0 12px}
 .ws-journey-line line{stroke-width:2.5}
 }
-/* Up-next stop: a radiating green glow; the whole node is the link to the page to work on. */
 .ws-journey-line line{stroke:rgb(255 255 255 / .85);stroke-width:3;stroke-dasharray:none}
 .ws-journey-line line:not(.is-walked){stroke:rgb(255 255 255 / .3);stroke-width:2;stroke-dasharray:2 7}
 .ws-stop.is-next .ws-stop-node{position:relative;width:34px;height:34px;margin:-3px;cursor:pointer;box-shadow:0 0 18px 6px rgb(52 211 153 / .55),0 0 44px 14px rgb(52 211 153 / .28);animation:none}
@@ -450,7 +431,6 @@
 @keyframes ws-radiate{from{transform:scale(1);opacity:.9}to{transform:scale(3.2);opacity:0}}
 @media (prefers-reduced-motion:reduce){.ws-stop.is-next .ws-stop-node::before,.ws-stop.is-next .ws-stop-node::after{animation:none;opacity:.4;transform:scale(1.8)}}
 
-/* Shared in-chat helper pieces (components/ui/helper-chat.tsx); the Talk it through drawer uses them */
 .helper-head{display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)}
 .helper-head h2{flex:1;min-width:0;font-size:16px;line-height:1.3}
 .helper-avatar{width:36px;height:36px;border-radius:10px;background:var(--mint-mist);display:grid;place-items:center;flex:none}
@@ -468,7 +448,6 @@
 .helper-compose-foot span{font-size:12px;color:var(--mute)}
 .helper-compose-foot button{pointer-events:auto;flex:none;width:44px;height:44px;border:0;border-radius:50%;background:var(--fill);color:var(--on-fill);font-size:22px;line-height:1}
 .helper-compose-foot button:disabled{background:#e5e7eb;color:#6b7280}
-/* The drawer: the opening and suggested replies read as stacked, full-width options */
 .ws-drawer .ws-msgs{padding:20px}
 .ws-drawer .ws-replies{flex-direction:column;align-items:stretch;padding:0 20px 14px}
 .ws-drawer .ws-reply{width:100%;border-radius:12px;padding:12px 14px;text-align:left;font-weight:500;font-size:14px;box-sizing:border-box}
@@ -479,7 +458,6 @@
 .ws-filter{margin:0 0 12px}
 .ws-filter .ws-showall{margin-top:0}
 
-/* Skills Helper drawer: one look on every page. */
 .app .ws-drawer{font-size:15px;line-height:1.5;color:var(--ink);text-align:left}
 .app .ws-drawer .helper-head h2{margin:0;font-size:16px;font-weight:600;line-height:1.3;letter-spacing:-.01em;overflow-wrap:normal}
 .app .ws-drawer .helper-opening h3{margin:0 0 12px;font-size:20px;font-weight:600;line-height:1.3;letter-spacing:-.02em;overflow-wrap:normal}

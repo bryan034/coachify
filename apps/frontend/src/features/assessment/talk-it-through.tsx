@@ -12,30 +12,23 @@ import { HelperComposer, HelperHeader, HelperOpening, HelperStatus } from '@/com
 import { announceInputsChanged, type Comparison } from './comparison';
 import { levelText } from './levels';
 
-/** One skill as the drawer talks about it. Level and target come from the saved evaluation. */
 export type TalkSkill = {
  key: string; name: string; canonicalId?: string | null;
  level: number | null; target: number | null; estimated?: boolean;
- /** What reaching the target means for this role, when the goal says. */
  meaning?: string | null;
- /** Where the current level comes from. */
  sources?: string[];
- /** What the CV review noted about this skill. */
  note?: string | null;
- /** Saved things to learn for this skill; the drawer offers them one at a time. */
  tasks: { name: string; reason: string }[];
 };
 type Props = {
  skill: TalkSkill | null; onClose: () => void; token?: string; goalLabel?: string; comparison: Comparison;
 
- /** 'build' opens straight at the task that builds the skill. */
  mode?: 'talk' | 'build'; onRoadmapChanged?: () => void;
 };
 type Message = { id: number; kind: 'elo' | 'me' | 'task' | 'alert' | 'result' | 'wait'; body: ReactNode };
 type Reply = { label: string; solid?: boolean; href?: string; run?: () => void };
 
 const words = (value: string) => value.trim().split(/\s+/).filter(Boolean);
-/** One line, under 20 words, on why the skill has its level. */
 export function ratingReason(skill: Pick<TalkSkill, 'name' | 'level' | 'sources' | 'note' | 'estimated'>) {
  if (skill.note && words(skill.note).length < 20) return skill.note;
  if (skill.level == null) return 'I couldn’t find enough in your CV to rate this.';
@@ -46,13 +39,8 @@ export function ratingReason(skill: Pick<TalkSkill, 'name' | 'level' | 'sources'
  const named = both && words(both).length <= room ? both : words(sources[0]).slice(0, room).join(' ');
  return `${base} ${named}.`;
 }
-/** Roadmap task names hold at most 19 words and 160 characters. */
 const taskTitle = (value: string) => value.trim().split(/\s+/).slice(0, 19).join(' ').slice(0, 160);
 
-/**
- * Skills Helper: tell elo about experience that isn't on the CV. The answer is saved to the Skills Profile and
- * only this skill is judged again. Opened from "build", it offers one task that builds the skill instead.
- */
 export function TalkItThrough(props: Props) {
  const { skill, onClose } = props;
  const close = useRef<HTMLButtonElement>(null), opener = useRef<Element | null>(null);
@@ -85,10 +73,9 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
  const push = (kind: Message['kind'], body: ReactNode) => setMessages(all => [...all.filter(item => item.kind !== 'wait'), { id: next.current++, kind, body }]);
  useEffect(() => { const node = list.current; if (node) node.scrollTop = node.scrollHeight; }, [messages, replies]);
  useEffect(() => { if (mode !== 'build') input.current?.focus(); }, [mode]);
- useEffect(() => { if (mode === 'build') build('Help me build it');  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+ useEffect(() => { if (mode === 'build') build('Help me build it');  }, []);
  const done = (): Reply[] => [{ label: 'Close', solid: true, run: onClose }];
 
- /* ---- What the person tells elo: saved as evidence, then only this skill is judged again ---- */
  async function share(what: string) {
   if (!token || busy) return;
   push('me', what); setDraft(''); setBusy(true); push('wait', 'Saving your answer…');
@@ -116,7 +103,6 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
   } finally { if (!signal.aborted) { setBusy(false); announceInputsChanged(); } }
  }
 
- /* ---- Opened from "Build this skill": one task that builds the skill ---- */
  function build(label: string) {
   push('me', label); setReplies([]);
   if (!skill.tasks.length) {

@@ -66,7 +66,6 @@ def fact_group_value(facts):
 def fact_statement(fact):
     subject = f"For the user's {fact['skill_name']} work" if fact.get('skill_name') else 'For this experience'
     statement = f"{subject}, {fact['field']} is {fact['value']}" if fact['value'] is not None else f"{subject}, the user says {fact['field']} is {fact['status']}."
-    # Unknown attribution is an absence of an ownership claim.
     if fact.get('attribution') not in (None, 'unknown'):
         statement += f" Attribution is {fact['attribution']}; personal/shared means the user personally performed the stated work, team means teammates only, observed means watching only."
     return statement
@@ -81,7 +80,6 @@ class SkillEstimate(BaseModel):
     evidence_refs: list[str] = Field(min_length=1, max_length=12)
 
 
-# elo_shared.competence_scale: 1 = not competent, 5 = independent and understands, 10 = most complex work.
 SkillLevel = Annotated[int, Field(ge=1, le=10, strict=True)]
 
 

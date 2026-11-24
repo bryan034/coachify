@@ -40,7 +40,6 @@ def query_key(query):return ' '.join(query.casefold().split())
 
 
 def next_query(state,context):
-    # Deterministic fallbacks keep employer/location.
     base=' '.join(v[:limit] for v,limit in ((context.company,50),(context.role,40),(context.location,35),(context.field,20)) if v)
     fallbacks=[base+' '+focus for focus in ('interview process rounds','online assessment coding test',
         'technical interview questions','candidate interview experience','recruitment selection stages','assessment centre interview')]
@@ -73,7 +72,6 @@ async def plan(workflow,state):
 async def assess(workflow,state):
     goal=await workflow.goal(state)
     if state.get('source_error'):
-        # Keep already assessed evidence after later acquisition failures.
         if state.get('useful_source_ids'):
             return {'search_exhausted':True}
         raise GoalError(state['source_error'],503)
@@ -101,7 +99,6 @@ async def assess(workflow,state):
     round=state.get('round',0)+1
     stalled=0 if set(useful)-previous else state.get('stalled_rounds',0)+1
     budget=validation_budget.get()
-    # Reserve a retrieval, assessment and synthesis before starting another round.
     settings=getattr(workflow.app.state.ai,'settings',None)
     primary=getattr(settings,'timeout_seconds',45)
     context=getattr(getattr(workflow.app.state.ai,'context',None),'settings',settings)

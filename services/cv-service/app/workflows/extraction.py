@@ -49,7 +49,7 @@ class ExtractionHarness:
 
     def _parse(self, state):
         self.observe('document_parse')
-        return {'parsed': self.parse(self.original)}  # The file itself stays in private storage, never in state.
+        return {'parsed': self.parse(self.original)}
 
     def _extract(self, state):
         self.observe('model_request')
@@ -62,7 +62,6 @@ class ExtractionHarness:
         try:
             pending = evidence_requiring_semantic_check(state['candidate'], blocks)
             support = self.verify_evidence(blocks, pending) if pending and self.verify_evidence else frozenset()
-            # Approval is scoped to the exact source/summary pair.
             candidate = state['candidate']
             items = validate_extraction(candidate, blocks, self.cv_id, support)
             other = validate_other_information(Extraction.model_validate(candidate).other_information, blocks, support)
@@ -70,7 +69,6 @@ class ExtractionHarness:
             raise
         except (ValidationError, ValueError) as error:
             if state['repair_attempts'] >= 1:
-                # Out of retries: keep what verified and flag what did not.
                 kept = salvage(state['candidate'], blocks, self.cv_id, self.verify_evidence, support) if self.allow_partial else None
                 if kept is None: raise
                 return {'items': kept.items, 'other_information': kept.other_information,
@@ -94,17 +92,15 @@ class ExtractionHarness:
     def run(self, original):
         self.original = original
         config = {'configurable': {'thread_id': self.thread_id}, 'recursion_limit': 8, 'callbacks': []}
-        # Disable inherited callbacks and LangSmith tracing.
         with tracing_context(enabled=False):
             saved = self.graph.get_state(config)
             if self.rewind_rejected and saved.next == ('validate',) and saved.values.get('repair_attempts'):
-                # Keep the parsed document and ask the model again.
                 self.graph.update_state(config, {'candidate': None, 'feedback': [], 'needs_repair': False, 'repair_attempts': 0}, as_node='parse')
                 saved = self.graph.get_state(config)
             self.repair_attempted = bool(saved.values.get('repair_attempts'))
-            if saved.next:  # Interrupted: continue from the first unfinished step.
+            if saved.next:
                 result = self.graph.invoke(None, config=config, durability='sync')
-            elif 'items' in saved.values:  # Finished but not yet published: no step needs repeating.
+            elif 'items' in saved.values:
                 result = dict(saved.values)
             else:
                 result = self.graph.invoke({'repair_attempts': 0}, config=config, durability='sync')

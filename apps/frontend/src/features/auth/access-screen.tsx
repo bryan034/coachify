@@ -20,7 +20,6 @@ export function AccessFrame({ children, entry = false }: { children: ReactNode; 
   <footer className="access-footer"><span>Your next chapter starts here.</span><span>Built around your ambition.</span></footer>
  </div>;
 }
-/** The header offers the other way in: Create account on the sign-in page, Sign in everywhere else. */
 function HeaderAction() {
  const pathname = usePathname();
  return pathname === '/login' ? <Link href="/register" className="btn ghost">Create account</Link> : <Link href="/login" className="btn ghost">Sign in</Link>;

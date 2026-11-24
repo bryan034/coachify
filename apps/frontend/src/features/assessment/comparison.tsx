@@ -6,14 +6,11 @@ import { assessmentApi, skillMatches, skillOutcomes, type EvaluationStatus } fro
 
 type Command = { expected_version: number; mutation_id: string; allow_partial: boolean };
 type Current = { evaluation?: EvaluationStatus; version: number; operation: Operation | null; result: Assessment | null; stale: boolean; ready: boolean; issues: { message: string; href: string; source?: string }[] };
-/** The source revisions an evaluation was made from; comparing two of them says what changed. */
 export type InputRevisions = { cv_id: string | null; goal_id: string; goal_version: number; goal_selection_version?: number };
 type Context = { evaluation?: EvaluationStatus; ready: boolean; model_available: boolean; research_coverage?: string; goal?: { role: string; target_type?: string }; cv?: { name: string }; inputs?: InputRevisions; input_hash?: string; issues?: Current['issues']; cv_reviewed?: boolean | null; research_pending?: boolean | null };
 
-/** Fired when a source an evaluation depends on (active CV, career goal) changes, or an evaluation starts. Every comparison re-reads. */
 export const COMPARISON_REFRESH = 'elo:comparison-refresh';
 export function announceInputsChanged() { if (typeof window !== 'undefined') window.dispatchEvent(new Event(COMPARISON_REFRESH)); }
-/** Every consumer reads the same version-checked Assessment result. Reads never start one: only `compare` submits the explicit command. */
 export function useComparison(token: string | undefined, revision?: string) {
  const [current, setCurrent] = useState<Current | null>(null), [context, setContext] = useState<Context | null>(null);
  const [error, setError] = useState(''), [busy, setBusy] = useState(false), [attempt, setAttempt] = useState(0);

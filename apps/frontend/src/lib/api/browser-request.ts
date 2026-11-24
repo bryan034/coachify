@@ -1,4 +1,3 @@
-/** Browser storage holds a public session marker; only the gateway reads the HttpOnly credential. */
 export function browserRequest(init: RequestInit = {}, marker?: string): RequestInit {
  const headers = new Headers(init.headers);
  headers.delete('Authorization');

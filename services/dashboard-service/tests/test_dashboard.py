@@ -196,7 +196,7 @@ def test_past_period_replays_status_without_moving_planned_cohort():
     fake=Fake();event=fake.roadmap['active']['editable_tasks'][0]['history'][0]
     fake.roadmap['active']['editable_tasks'][0]['schedule']=[slot('2030-01-09',60)]
     fake.baseline['editable_tasks'][0]['schedule']=[slot('2030-01-09',60)]
-    event['at']='2030-01-10T00:00:00+00:00'  # completed on Jan 10, Singapore
+    event['at']='2030-01-10T00:00:00+00:00'
     fake.roadmap['active']['editable_tasks'][0]['completed_at']=event['at']
     with client(fake) as c:
         earlier=c.get('/api/v1/dashboard?period=daily&focus_date=2030-01-09',headers=H).json()

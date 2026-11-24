@@ -14,7 +14,6 @@ const planner = (extra: object = {}) => ({ config: { target_date: '2027-05-04', 
 const goal = (skills: object[]) => ({ goal: { _id: 'g', version: 1, target_type: 'career_exploration', role: 'Synthetic Analyst', field: 'Data', employment_type: 'internship', company: 'Example', location: null, seniority_level: null, job_url: null, skills, interests: [], preferences: [], readiness: 'ready', exploration_draft_id: null, exploration_draft_version: null }, selection_version: 1, dependent_results_need_review: false, skill_groups: {} });
 const skills = [{ item_id: 'a', name: 'SQL', category: 'x', priority: 'required', origin: 'employer' }, { item_id: 'b', name: 'Testing', category: 'x', priority: 'required', origin: 'employer' }, { item_id: 'c', name: 'Excel', category: 'x', priority: 'preferred', origin: 'employer' }];
 type Overrides = Record<string, unknown>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const liveData = (url: string, o: Overrides = {}): any => {
  for (const [key, value] of Object.entries(o)) if (url.includes(key)) return value;
  if (url.endsWith('/auth/session')) return { id: 'synthetic', name: 'Synthetic Person', provider: 'local_test', onboarding_complete: true };

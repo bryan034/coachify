@@ -47,7 +47,7 @@ def prepare(content, previous=None, *, extracted=False, map_skills=True):
                         try: item['skill_id'] = canonical_skill_id(item['name'], item['category'], ALIASES)
                         except ValueError: item['skill_id'] = None
                 if item.get('skill_id') in mapped_ids:
-                    item['skill_id']=None  # Keep ambiguous duplicate mentions for review.
+                    item['skill_id']=None
                 if item.get('skill_id'): mapped_ids.add(item['skill_id'])
                 if item['origin'] == 'employer' and item['priority'] == 'suggested':
                     raise GoalError('Label inferred skills as suggested guidance.', 422)
@@ -68,15 +68,12 @@ def prepare(content, previous=None, *, extracted=False, map_skills=True):
                 raise GoalError('AI planning importance must stay advisory.', 422)
             item['correction'] = 'extracted' if extracted else old.get(item[key], {}).get('correction', 'user') if comparable == original else 'user'
     result=JDExtraction.model_validate(data)
-    # Untouched skills keep their saved target; a change to the skill's or goal's target inputs recomputes it.
     role_same=previous is not None and all(getattr(previous,key)==getattr(result,key) for key in ('role','seniority_level','employment_type'))
     for skill in result.skills:
         prior=old.get(skill.item_id)
         unchanged=role_same and prior and all(getattr(skill,key)==prior.get(key) for key in
             ('name','evidence','context','origin','priority','required_proficiency','required_experience_months'))
-        # A missing saved target is computed rather than retained.
         kept=prior.get('competence_target') if unchanged and not extracted else None
         skill.competence_target=kept or target_for(skill,goal=result)
-    # Revalidate retained nested target dictionaries as well as freshly derived ones.
     result=JDExtraction.model_validate(result.model_dump(mode='json'))
     return result

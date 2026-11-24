@@ -122,7 +122,6 @@ async def upload(request: Request, account=Depends(authenticated)):
         data = await file.read(maximum + 1)
         if not data: raise HTTPException(422, 'Choose a non-empty PDF or DOCX file.')
         if len(data) > maximum: raise HTTPException(413, 'This file exceeds the configured upload limit.')
-        # Cheap signatures reject renamed files before queueing; the isolated worker performs complete checks.
         if extension == '.pdf' and not data.startswith(b'%PDF-'):
             raise HTTPException(422, 'The file content does not match PDF format.')
         if extension == '.docx' and not data.startswith(b'PK\x03\x04'):
@@ -177,7 +176,6 @@ async def edit(cv_id: str, item_id: str, mutation: ItemMutation, request: Reques
 async def clarifications(cv_id: str, request: Request, account=Depends(authenticated)):
     await run_in_threadpool(service(request).get, account['id'], cv_id)
     context = await request.app.state.target_provider.selected_context(account['authorization'])
-    # Read the CV after the network request.
     doc = await run_in_threadpool(service(request).get, account['id'], cv_id)
     return envelope(doc, context, account.get('cv_review_policy'))
 
@@ -248,7 +246,6 @@ async def capability_input(cv_id: str, request: Request, expected_version: int =
         raise Conflict('The selected CV changed or is not ready. Refresh its saved result.')
     manual = await declarations(request, account)
     if manual['version'] != expected_declarations_version: raise Conflict('Manual capabilities changed. Refresh before continuing.')
-    # Re-read each authority to capture a version vector.
     again = await declarations(request, account)
     latest = await run_in_threadpool(service(request).get, account['id'], cv_id)
     current_selection = await run_in_threadpool(repo.selection, account['id'])

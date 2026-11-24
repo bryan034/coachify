@@ -147,7 +147,7 @@ def test_period_crud_overlap_boundaries_and_proration(client):
     same=client.patch('/api/v1/profile/availability-periods/'+row['id'],headers={'Idempotency-Key':uuid4().hex},json={'expected_version':adjacent['version'],'weekly_hours':7})
     assert same.json()['version']==adjacent['version']
     window=inputs(client,start_date='2030-01-02',end_date='2030-01-08').json()
-    assert window['capacity_window']['available_hours']==10 # two days at half rate + one at zero
+    assert window['capacity_window']['available_hours']==10
     assert window['week_start']=='Monday'
     assert window['capacity_time_zone']=='Asia/Singapore'
     old=client.get('/api/v1/profile').json()

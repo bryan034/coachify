@@ -10,7 +10,6 @@ def role_level(requirement):
     target=requirement.get('competence_target') or {}
     if isinstance(target.get('level'),int) and 1<=target['level']<=10:
         return target['level']
-    # No Career target: moderate understanding, or good understanding when stated advanced.
     return 7 if requirement.get('required_proficiency')=='advanced' else MODERATE_LEVEL
 
 
@@ -21,7 +20,6 @@ def cv_level(records):
 
 
 def within_cv_level(level,records):
-    # Assessment never rates a skill above the CV review's own pessimistic level.
     own=cv_level(records)
     return level if level is None or own is None else min(level,own)
 
@@ -36,9 +34,7 @@ def source_level(record):
     if any(f['status']=='conflicting' and f['field'] in {'personal_contribution','skill_use','outcome'} for f in facts):
         return 3 if project else None
     known={f['field'] for f in facts if f['status']=='supported' and f['field'] not in {'self_rating','replication_confidence'}}
-    # Nothing explained about the skill: use alone shows only basic understanding.
     if not known: return 3
-    # Explained complexity and problem solving show depth.
     if not {'complexity','problem_solving'}<=known: return 5
     if not {'frequency','recency'}<=known or (record.get('experience_months') or 0)<24: return 7
     return 9
@@ -55,7 +51,6 @@ def evidence_level(records, proposed=None):
     return within_cv_level(min(proposed,ceiling) if proposed is not None else ceiling,records)
 
 
-# A finished review lets the model's own level stand, capped as a low-confidence estimate.
 MODEL_ESTIMATE_CEILING=5
 
 
@@ -73,5 +68,4 @@ def unreviewed(records):
 
 
 def goal_score(have,need):
-    # Only actual target attainment reaches 10.
     return min(10,math.floor(100*have/need)/10)

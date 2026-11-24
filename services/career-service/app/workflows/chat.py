@@ -21,7 +21,6 @@ from app.workflows.citations import fact_citations
 
 async def focused_chat(request,account,row,body):
     """Route -> projected retrieval -> answer."""
-    # Clarification answers belong to the active edit, whose model rejects unrelated requests.
     if row['workspace'].get('edit_draft'):
         return None
     if getattr(chat_models(request.app.state),'context_enabled',False):

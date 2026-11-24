@@ -1,4 +1,3 @@
-// Add scoped users without changing any existing user/password or domain data.
 const root = new Mongo('mongodb://elo_admin:' + encodeURIComponent(process.env.MONGO_ROOT_PASSWORD) + '@mongodb:27017/admin');
 for (const [service, password] of [['assessment', process.env.ASSESSMENT_DB_PASSWORD], ['roadmap', process.env.ROADMAP_DB_PASSWORD]]) {
   if (!password) throw new Error('Set the Assessment and Roadmap database passwords.');

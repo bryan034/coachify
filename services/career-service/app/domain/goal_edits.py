@@ -52,7 +52,6 @@ def apply_changes(content,changes,message):
             if (area,ref,None) in seen or any(k[0]==area and k[1]==ref for k in seen):invalid()
             seen.add((area,ref,None))
             if area=='responsibilities':
-                # Original refs remain stable even after another list item is removed.
                 del responsibility_values[ref]
             else:data[KEYS[area]]=[v for v in data[KEYS[area]] if v is not target]
             continue

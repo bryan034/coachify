@@ -14,7 +14,6 @@ from app.schemas.cv import Extraction, SourceExcerpt
 KINDS = ('education', 'experience', 'project', 'skill')
 MAX_SEMANTIC_REFERENCES = 1120
 MAX_ENTRIES = 160
-# Fixed wording only: never validator prose, model output or CV content.
 ISSUE_MESSAGE = ('This section could not be verified against your CV, so it is kept as unconfirmed. '
                  'Explain it in the review chat to confirm it.')
 
@@ -66,7 +65,6 @@ def _unverified_item(raw, code, source, cv_id):
             'provenance': 'inferred', 'evidence': evidence, 'skill_ids': list(names), 'skill_names': list(names.values()),
             'category': 'unspecified', 'proficiency': None, 'experience_months': None, 'context': None,
             'start_date': None, 'end_date': None, 'ongoing': False, 'removed': False, 'supporting_item_ids': [],
-            # Unverified skills stay uncertain, and the review chat asks about this section.
             'support_uncertain': True, 'uncertainties': ['claim'],
             'validation_issue': {'status': 'unverified', 'code': code, 'message': ISSUE_MESSAGE}}
 
@@ -94,7 +92,6 @@ def salvage(candidate, blocks, cv_id, verify_evidence=None, support=None):
         if not isinstance(raw, dict):
             outcome[index] = ('drop', None)
             continue
-        # Judge each item alone. Relationships between items are rebuilt below.
         single = {'items': [{**raw, 'supporting_items': []}]}
         try:
             pending[index] = evidence_requiring_semantic_check(single, blocks)

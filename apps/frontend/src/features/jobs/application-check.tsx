@@ -25,7 +25,6 @@ function writeVisits(accountId:string,visits:Visit[]){
 }
 const adding=(visits:Visit[],visit:Visit)=>[...visits.filter(other=>other.id!==visit.id),visit].slice(-MAX_VISITS);
 
-/** Remembers that the user left for an employer's form. */
 export function noteApplyVisit(accountId:string,{id,title,company}:Posting){
  const visit={id,title,company};
  writeVisits(accountId,adding(readVisits(accountId),visit));

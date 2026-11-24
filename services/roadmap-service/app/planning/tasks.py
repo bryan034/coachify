@@ -88,14 +88,12 @@ def project_assignments(plan):
                 return key
             attempt+=1
 
-    # Resolve repeated primary keys deterministically.
     for task in sorted(tasks,key=lambda item:item['id']):
         key=task.get('generated_key') or task['id']
         if key in used:key=allocate(task,0,'primary')
         else:used.add(key)
         primary[task['id']]=key
 
-    # Preallocate in task-id order; output remains in the user's original order.
     split={}
     for task in sorted(tasks,key=lambda item:item['id']):
         for i in range(1,len(task['schedule'])):
@@ -113,17 +111,13 @@ def project_assignments(plan):
         elif not explicit and legacy_inference_source_is_safe(plan,task) and source.get('gap_id'):
             matched=[gap['id'] for gap in gaps if gap['id']==source['gap_id']]
         elif not explicit and legacy_inference_source_is_safe(plan,task):
-            # Legacy sessions without a direct requirement may infer a skill
-            # from their milestone only when exactly one current gap matches.
             milestone=next((item for item in plan.get('milestones',[]) if item['key']==task['milestone_key']),{})
             milestone_gaps=set(milestone.get('gap_ids',[]))
             matched=[gap['id'] for gap in gaps if gap['id'] in milestone_gaps]
         else:
             matched=[]
         skill_gap_ids=matched if len(matched)==1 else []
-        # Reflect an explicit choice in the older gap_id field as well.
         gap_id=skill_gap_ids[0] if skill_gap_ids and (explicit or refs or source.get('gap_id')) else None
-        # Translate a copy of the history for callers reading the older assignment representation.
         history=copy.deepcopy(task.get('history',[]))
         for event in history:
             for field in ('from','to'):
@@ -163,7 +157,6 @@ def validate_links(plan,task,previous_refs=()):
     if len(prereqs)!=len(set(prereqs)) or any(p not in ids for p in prereqs) or task['id'] in prereqs:
         raise Problem('Choose existing, distinct prerequisite tasks.',422,'validation')
     edges={t['id']:t.get('prerequisites',[]) for t in tasks};edges[task['id']]=prereqs
-    # A cycle exists if any proposed prerequisite can already reach this task.
     pending=list(prereqs);visited=set()
     while pending:
         node=pending.pop()
@@ -205,7 +198,6 @@ def task_readiness(task,tasks,plan):
         members=[t for t in tasks if t.get('milestone_key')==key]
         prerequisite=next((m for m in plan.get('milestones',[]) if m['key']==key),None)
         valid=[t for t in members if not t.get('removed') and t['status']=='completed' and not t.get('definition_review_required')]
-        # Require an explicit, current self-reported milestone outcome.
         outcome=(prerequisite or {}).get('outcome') or {}
         enough=bool(outcome.get('demonstrated') and not outcome.get('definition_review_required'))
         if not members or len(valid)!=len(members) or not enough:
@@ -216,7 +208,6 @@ def task_readiness(task,tasks,plan):
 def schedule_warnings(plan,now):
     tasks=[t for t in ensure_tasks(plan) if not t.get('removed')];warnings={};slots=[];weeks={};windows_by_day={};bounds={}
     def add(code,message,ids):
-        # One warning per category, with all affected tasks.
         warning=warnings.setdefault(code,{'code':code,'message':message,'task_ids':{}})
         warning['task_ids'].update(dict.fromkeys(ids))
     capacity=Capacity(PlannerConfig.model_validate(plan['config']),now)
@@ -234,14 +225,12 @@ def schedule_warnings(plan,now):
             week['minutes']+=slot['duration_minutes'];week['task_ids'][task['id']]=None
             if day<capacity.start_date or (capacity.target and day>capacity.target):add('outside_plan','A session is outside the roadmap dates.',[task['id']])
             if day not in windows_by_day:
-                # Eligibility can be unknown (None) at the calendar limit.
                 found=capacity.eligible(day)
                 windows_by_day[day]=(capacity.blackout_windows(day),None if found is None else [(low,high) for low,high,_ in found])
             blackouts,eligible=windows_by_day[day]
             if any(begin<high and end>low for low,high in blackouts):add('blackout','A session overlaps a blackout.',[task['id']])
             if eligible is None:add('calendar_unavailable','Study-time eligibility cannot be calculated for this calendar date.',[task['id']])
             elif not any(begin>=low and end<=high for low,high in eligible):add('outside_study_time','A session is outside available study time.',[task['id']])
-    # For each date, track the previous interval with the latest end to find overlaps.
     last_day=None;latest_end=-1;latest_id=None
     for day,start,end,ident in sorted(slots):
         if day!=last_day:last_day=day;latest_end=-1;latest_id=None
@@ -257,7 +246,6 @@ def schedule_warnings(plan,now):
                 add('prerequisite_unscheduled','Scheduled work has an incomplete prerequisite without scheduled time.',[prerequisite_id,task['id']])
             elif bounds[prerequisite_id][1]>bounds[task['id']][0]:
                 add('prerequisite_order','Scheduled work begins before its incomplete prerequisite is scheduled to finish.',[prerequisite_id,task['id']])
-    # Summarise each prerequisite milestone once.
     milestone_work={}
     for task in tasks:
         key=task.get('milestone_key')

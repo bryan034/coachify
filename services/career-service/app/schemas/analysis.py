@@ -241,7 +241,6 @@ class ResearchSource(Contract):
     published_date: date | None = None
     role_match: Literal['exact', 'related', 'unknown'] = 'unknown'
     reliability: Literal['official', 'anecdotal', 'unverified'] = 'unverified'
-    # Assigned by retrieval/deduplication, never by the model.
     report_group: Text | None = None
 
     @field_validator('reported_date', 'published_date')
@@ -557,7 +556,6 @@ def mongo_document(model: Document):
             data['inputs'][name] = data['inputs'][name] if name == 'cv_id' and len(str(data['inputs'][name])) != OBJECT_ID_LENGTH else ObjectId(data['inputs'][name])
         for ref in data['inputs']['research']:
             ref['id'] = ObjectId(ref['id'])
-    # Mongo stores datetimes in UTC; ISO strings are reserved for API JSON.
     for name in ('created_at', 'updated_at', 'last_researched_at'):
         if data.get(name):
             data[name] = getattr(model, name)

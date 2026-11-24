@@ -112,7 +112,6 @@ def validate_skill_batch(output, skills, requirement_refs, evidence, requirement
                                     'Cite the supporting refs from its sources, or set competence_score to null.')
         proposed=score
         score=evidence_level(cited,score)
-        # A finished review (including skipped topics) lets the model's level stand where the evidence cannot set one.
         estimated = score is None and (score := reviewed_estimate(cited, proposed)) is not None
         if score is None: refs=[]
         none = item.relevance == 'none'

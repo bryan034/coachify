@@ -1,4 +1,3 @@
-# Profile runtime and test dependencies.
 [project]
 name = "elo-profile-service"
 version = "0.0.0"

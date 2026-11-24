@@ -93,11 +93,9 @@ def test_review_quotes_keep_case_spacing_and_unicode_tolerance(quote):
 
 
 @pytest.mark.parametrize('source,quote', [
-    # A PDF line break after a hyphen, rejoined by the model.
     ('Built a proof-of-\nconcept pipeline.', 'built a proof-of-concept pipeline'),
     ('Wrote evi-\ndence summaries.', 'wrote evidence summaries'),
     ('Wrote evi-\ndence summaries.', 'wrote evi-dence summaries'),
-    # A quote keeping the wrap still matches a source without it.
     ('Built a proof-of-concept pipeline.', 'proof-of- concept'),
 ])
 def test_review_quotes_tolerate_line_wrapped_hyphens(source, quote):
@@ -113,10 +111,8 @@ def test_review_quotes_tolerate_line_wrapped_hyphens(source, quote):
 
 
 @pytest.mark.parametrize('source,quote', [
-    # Spaced separators are not line-wrapped words.
     ('Python - SQL', 'Python-SQL'),
     ('Python - SQL', 'PythonSQL'),
-    # Words and punctuation must still match.
     ('Built a proof-of-\nconcept pipeline.', 'built a proof of concept pipeline'),
     ('Built a proof-of-\nconcept pipeline.', 'built a proof-of-product pipeline'),
 ])

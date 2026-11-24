@@ -57,7 +57,6 @@ def read_preview(parsed,url,deadline,fetch):
                 if posting.hostname!=parsed.hostname or posting.path.rstrip('/')!=parsed.path.rstrip('/'):raise ValueError
             elif posting.hostname in GREENHOUSE_HOSTS:
                 if posting.path.rstrip('/')!=parsed.path.rstrip('/'):raise ValueError
-            # Custom employer domains are provider-published metadata, never followed.
             destination(job['absolute_url'])
             lines=[]
             if isinstance(job.get('company_name'),str):lines.append('Company: '+html_text(job['company_name']))

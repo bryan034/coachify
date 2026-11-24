@@ -32,7 +32,6 @@ class ProviderHTTPClient(httpx.AsyncClient):
         self.upstream = upstream
 
     async def send(self, request, **kwargs):
-        # Bound the rejection body read before any SDK parsing.
         kwargs.update(stream=True, follow_redirects=False)
         response = await self.upstream.send(request, **kwargs)
         if response.status_code == 200:

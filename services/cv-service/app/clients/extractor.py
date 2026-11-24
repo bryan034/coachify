@@ -71,7 +71,6 @@ EXAMPLE = {
          'proficiency': 'native', 'evidence': [{'block_id': 'example2', 'excerpt': 'English (native)'}]},
     ]},
 }
-# The worked example includes the full property set, with explicit nulls and empty lists.
 EXAMPLE['extraction'] = Extraction.model_validate(EXAMPLE['extraction']).model_dump()
 
 
@@ -106,7 +105,6 @@ class Extractor:
             raise RuntimeError('CV_LLM_RESPONSE_MODE must be json_schema or json_object.')
         self.base_url = os.getenv('CV_LLM_BASE_URL', 'https://openrouter.ai/api/v1').rstrip('/')
         parsed = urlparse(self.base_url)
-        # Plain HTTP is only for synthetic fixture providers in development.
         development_http = os.getenv('APP_ENV') == 'development' and os.getenv('CV_LLM_ALLOW_HTTP') == 'true' and parsed.scheme == 'http'
         if (parsed.scheme != 'https' and not development_http) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise RuntimeError('CV_LLM_BASE_URL must be an HTTPS provider URL without credentials, query or fragment.')
@@ -154,7 +152,6 @@ class Extractor:
         if not self.configured:
             raise ExtractionFailure('CV extraction is not configured. Ask the administrator to configure the CV model, then retry this saved upload.',
                                     'model_request', 'not_configured')
-        # JSON-only mode puts the schema in the prompt; strict mode sends it in response_format.
         schema_in_prompt = self.response_mode == 'json_object'
         decoding_schema = extraction_schema()
         response_format = ({'type': 'json_schema', 'json_schema': {'name': 'cv_extraction', 'strict': True, 'schema': decoding_schema}}
@@ -176,7 +173,6 @@ class Extractor:
                 raise ExtractionFailure('CV extraction timed out. Your upload is saved; retry later.', stage, 'timeout')
             deadline = time.monotonic() + timeout
             request_timeout = httpx.Timeout(timeout, connect=min(10, timeout))
-            # Cloud requests need the deployment's proxy and CA trust.
             with Client(timeout=request_timeout, follow_redirects=False, trust_env=True) as client:
                 self.reserve_dispatch(payload)
                 with sync_model_response(client, self.base_url, self.api_key,
@@ -210,7 +206,6 @@ class Extractor:
                              'response_mode': self.response_mode}
         except ModelResponseError as exc:
             failure = classified_provider_failure(exc.reason, exc.parameter, stage)
-            # Credit exhaustion disables automatic retries.
             failure.auto_retry_allowed = not exc.quota_exhausted
             raise failure from None
         except httpx.HTTPStatusError as exc:

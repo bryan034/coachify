@@ -54,7 +54,6 @@ def classify(raw,status,provider):
         violations=item.get('fieldViolations',item.get('field_violations',[]))
         for violation in violations[:20] if isinstance(violations,list) else []:
             if isinstance(violation,dict):field_path(violation.get('field'))
-    # Extract rejected field names from fixed error forms only.
     message=error.get('message')
     if isinstance(message,str):
         message=message[:8192]

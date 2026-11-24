@@ -1,6 +1,5 @@
 "use client";
 import { useProfile } from './profile-provider';
-/** Only appears when there is something to act on or a development note. Sign out lives in the sidebar. */
 export function AccountPanel() {
  const { mode, configError, loadError, reload } = useProfile();
  const error = configError || loadError;

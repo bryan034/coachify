@@ -12,7 +12,6 @@ function pause(milliseconds:number,signal?:AbortSignal|null){
  });
 }
 
-/** Poll an owner-scoped job; only the server resumes the paused LLM call. */
 export async function careerOperation<T>(path:string,token:string,options:RequestInit,onProgress:(job:CareerOperation)=>void):Promise<T>{
  const headers=new Headers(options.headers);
  headers.set('Prefer','respond-async');

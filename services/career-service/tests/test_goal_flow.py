@@ -191,7 +191,6 @@ def test_grounded_partial_context_is_not_complete_and_forged_updates_cannot_publ
 def test_agent_can_collect_multiple_topics_in_one_message(flow):
     client,db,ai,cv=flow;original=ai.generate
     text='I want useful work. I studied computing. I built a project. I use SQL. I enjoy analysis. I prefer Singapore.'
-    # Make each evidence quote an exact substring, including the final punctuation.
     text=text.rstrip('.')
     async def grounded(data,operation,**kwargs):
         result=await original(data,operation,**kwargs)

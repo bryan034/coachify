@@ -13,7 +13,6 @@ class WorkspaceStore:
 
     def row(self,owner):
         row=self.rows.find_one({'_id':owner}) or {};workspace=row.get('workspace',{})
-        # Recover a goal CAS committed immediately before a worker/API restart.
         goal=self.goals.goals.find_one({'_id':row['goal_id'],'user_id':owner},{'version':1}) if row.get('goal_id') and workspace else None
         if goal and workspace.get('review_id')!=str(goal['_id']):
             version=max(goal['version'],workspace.get('revision',1))

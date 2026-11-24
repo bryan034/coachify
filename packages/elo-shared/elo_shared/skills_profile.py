@@ -91,7 +91,6 @@ class SkillsProfile(Strict):
     saved_at: str | None = None
     areas: dict[Area, Status] = Field(default_factory=dict, max_length=4)
     entries: list[ProfileEntry] = Field(default_factory=list, max_length=40)
-    # Display categories by skill name, derived on read and never stored; see skill_groups.
     skill_groups: dict[str, str] = Field(default_factory=dict)
     skill_subgroups: dict[str,str] = Field(default_factory=dict)
 

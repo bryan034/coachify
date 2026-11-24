@@ -17,7 +17,6 @@ def select_items(items,terms,limit=12):
         alias_ids={identifier for (_,name),identifier in ALIASES.items() if name in {t.casefold().strip() for t in terms}}
         selected=[v for v in items if meaningful & words(' '.join(str(v.get(k) or '') for k in ('name','description','category','assessment_type','interview_stage')))
             or v.get('skill_id') in alias_ids]
-        # Keep the other side of a saved AND/OR group when a named skill matches.
         groups={v['group_id'] for v in selected if v.get('group_id')}
         selected=[v for v in items if v in selected or (v.get('group_id') and v['group_id'] in groups)]
     else:selected=items
@@ -60,7 +59,6 @@ def facts_for(route,goal,research,include_evidence=False):
         if process.get('round_count') is not None:
             add('interview_round_count',{'round_count':process['round_count']},(process.get('round_count_evidence') or {}).get('source_ids',[]))
         for v in process.get('stages',[]):add('interview_stage',{k:v[k] for k in ('name','assessment_type') if v.get(k)},v.get('evidence',{}).get('source_ids',[]))
-        # Without a process field, fall back to explicit recorded stages.
         if not process.get('stages'):
             seen=set()
             for v in research.get('skills',[]):

@@ -28,7 +28,6 @@ MAX_QUESTION_SEARCHES = 3
 
 
 def question_queries(title, focus, terms=None):
-    # Only a bounded public subject produced by the router crosses the search boundary.
     if terms:
         if not re.fullmatch(r'[A-Za-z][A-Za-z -]{2,99}', terms) or re.search(
                 r'\b(?:my|email|phone|password|secret|passport|address|resume|cv)\b', terms, re.I):
@@ -38,7 +37,6 @@ def question_queries(title, focus, terms=None):
     place=target_place(title)
     market='Singapore' if place==SINGAPORE else place
     def query(place, suffix=''):
-        # Keep queries within 128 characters without truncating the market or subject.
         tail=' '.join(part for part in (subject,suffix) if part)
         place=place[:max(0,126-len(tail))].strip()
         budget=max(0,127-len(tail)-(len(place)+1 if place else 0))

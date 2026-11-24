@@ -100,7 +100,6 @@ def create_app(upstream=None,clock=None):
             except Problem as error:
                 source_failure(error)
                 out['warnings'].append('The saved pace baseline could not be read.')
-        # A bounded re-read detects concurrent source changes.
         try:
             latest_roadmap=await client.read('roadmap',ROADMAP,token)
             if identity_roadmap(roadmap)!=identity_roadmap(latest_roadmap):raise Problem('Roadmap changed.',409,'source_changed')

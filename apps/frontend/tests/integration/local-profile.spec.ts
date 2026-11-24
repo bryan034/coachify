@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test';
 import { createLocalAccount } from './account-helpers';
 
 test('local UI saves to MongoDB and restores after reload without Google', async ({ page }) => {
-  // No page.route mocks: browser → gateway → FastAPI → MongoDB.
   const auth = await page.request.get('/api/v1/profile/auth-config');
   expect(await auth.json()).toMatchObject({ mode: 'local_test',email_password_enabled:true,email_verification_required:true,google_enabled:false });
   const api = await createLocalAccount(page, 'Synthetic education user');

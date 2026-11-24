@@ -26,7 +26,6 @@ CATEGORY_LABELS={
     'conversion_outcomes':'Conversion rates',
     'company_intelligence':'Company culture',
 }
-# Career Goal tabs that hold the full research behind each summary topic.
 INTERVIEW_TAB=('Interview preparation','/career-goal/interview')
 ROLE_TAB=('About the role','/career-goal/role')
 CATEGORY_TABS={'interview_intelligence':INTERVIEW_TAB,'internship_insights':ROLE_TAB,'career_progression':ROLE_TAB,
@@ -150,7 +149,7 @@ async def summarize(request, account, body):
             identifier=next((key for key,value in sources.items() if value==url),None)
             if identifier is None:
                 identifier='goal_source_'+str(len(sources))
-                while identifier in sources:identifier+='_'  # Never collide with stored IDs.
+                while identifier in sources:identifier+='_'
                 sources[identifier]=url
             if identifier not in identifiers:identifiers.append(identifier)
         return identifiers
@@ -195,7 +194,6 @@ async def summarize(request, account, body):
         return saved_evidence_summary(goal,record)
     @structured_node
     async def present(state):
-        # Each repair rechecks ownership/version before another paid generation.
         await snapshot()
         result = await chat_models(request.app.state).generate(
             AIInput(stage='goal_summary', context=encoded),
@@ -224,7 +222,6 @@ async def summarize(request, account, body):
         point=text+(' '+citations if citations else '')
         points.append('#### '+block.label+'\n\n'+point)
         if block.label in LABEL_TABS:last_point[LABEL_TABS[block.label]]=len(points)-1
-    # Point to the tab with the full research once per tab, after its last summarised topic.
     for tab,index in last_point.items():points[index]+='\n\n'+find_out_more(tab)
     reply='## Your career goal\n\n'+'\n\n'.join(points)+'\n\n'+SUMMARY_CLOSING
     await snapshot()

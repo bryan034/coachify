@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { useProfile } from '@/features/profile/profile-provider';
 import { resetWorkspace } from '@/lib/api/dev-reset';
-/** Development-only strip: wipes this account's planning data so the whole journey can start again. */
 export function DevReset() {
   const { developmentToolsEnabled, token } = useProfile();
   const [step, setStep] = useState<'idle' | 'confirm' | 'working'>('idle');

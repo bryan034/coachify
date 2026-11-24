@@ -12,7 +12,6 @@ import type { CvDetail, CvItem, CvSummary } from './types';
 const stageRank: Record<string, number> = {queued: 0, source_read: 0, document_parse: 0, model_request: 1, extraction_validation: 2, model_repair: 2, publication: 2, ready: 3};
 const Tick = ({size = 11, color = 'currentColor'}: {size?: number; color?: string}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>;
 
-/** What the page promises before any CV exists: three plain steps and the cost of skipping. */
 export function FirstUploadNextSteps() {
  const steps: [string, string][] = [
   ['elo reads your CV', 'Usually takes a minute or two. You can leave this page while it works.'],
@@ -28,7 +27,6 @@ export function FirstUploadNextSteps() {
  </aside>;
 }
 
-/** Page-level view while the only CV is still being read. */
 export function SkillsProcessing({token, title, cv, items, busy, cancel, review, later}: {token?: string; title: ReactNode; cv: CvSummary; items: CvItem[]; busy: boolean; cancel: () => void; review?: () => void; later?: () => void}) {
  const comparison = useComparison(token, `processing:${cv.id}`);
  const goalRole = comparison.context?.goal?.role;
@@ -68,7 +66,6 @@ export function SkillsProcessing({token, title, cv, items, busy, cancel, review,
  </div>;
 }
 
-/** Shown once the guided review is finished; points at what the profile unlocks. */
 export function ReviewComplete({cv}: {cv: CvDetail | null}) {
  if (!cv) return null;
  const summary = cv.review_summary;
@@ -83,7 +80,6 @@ export function ReviewComplete({cv}: {cv: CvDetail | null}) {
  </section>;
 }
 
-/** Saved review topics for one CV, read from its current saved conversation. Never starts a conversation. */
 export function useReviewTopics(token: string | undefined, cvId: string | null, version: string) {
  const [state, setState] = useState<{key: string; topics: InterviewTopic[] | null; failed: boolean} | null>(null);
  const key = `${cvId}:${version}`;
@@ -105,7 +101,6 @@ export function useReviewTopics(token: string | undefined, cvId: string | null, 
 
 const lockIcon = <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3"/></svg>;
 
-/** A CV has been read but its review is unfinished: show where the review stands, and what it unlocks. */
 export function ReviewNotFinished({cv, topics, goalRole, review, saveCv, savingCv, pending, upload, chat}: {cv: CvDetail; topics: InterviewTopic[] | null; goalRole?: string; review: () => void; saveCv: () => void; savingCv: boolean; pending: boolean; upload: () => void; chat: () => void}) {
  const covered = (status: string) => ['reviewed', 'reviewed_with_gaps', 'deferred'].includes(status);
  const list = topics ?? [];

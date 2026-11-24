@@ -116,7 +116,6 @@ class CapabilityView(BaseModel):
     version: int
     declarations: list[Declaration]
     limits: CapabilityLimits = Field(default_factory=CapabilityLimits)
-    # Display categories by skill name, derived on read; see elo_shared.skill_groups.
     skill_groups: dict[str, str] = Field(default_factory=dict)
     skill_subgroups: dict[str,str] = Field(default_factory=dict)
 

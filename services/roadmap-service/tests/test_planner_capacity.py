@@ -4,7 +4,6 @@ from pydantic import ValidationError
 from app.planning.capacity import Capacity, add_duration, matched_duration
 from app.schemas.roadmap import Duration, PlannerConfig
 
-# 2030-01-09 is a Wednesday; 08:00 in Singapore.
 NOW=datetime(2030,1,9,0,0,tzinfo=timezone.utc)
 BLOCKS=[{'day':0,'start_time':'19:00','duration_minutes':120,'kind':'preferred'},
     {'day':2,'start_time':'19:00','duration_minutes':90,'kind':'preferred'},
@@ -66,7 +65,7 @@ def test_a_week_can_start_on_another_day():
     assert report['first_planning_week']=='2030-01-06'
 
 def test_time_already_passed_today_is_not_counted():
-    evening=datetime(2030,1,9,11,30,tzinfo=timezone.utc)  # 19:30 Wednesday in Singapore: 60 of the 90 minutes remain.
+    evening=datetime(2030,1,9,11,30,tzinfo=timezone.utc)
     assert Capacity(config(),evening).report()['weeks'][0]['usable_minutes']==60
 
 def test_skipped_daylight_saving_hour_is_removed_and_a_repeated_hour_counts_once():
@@ -85,8 +84,8 @@ def test_invalid_inputs_are_reported_as_generation_blockers():
     assert codes(target_date='2031-02-01')==['runway_too_long']
     assert codes(weekly_minutes=0)==['no_budget']
     assert codes(blocks=[])==['no_blocks']
-    assert codes(blocks=[BLOCKS[-1]])==['no_blocks']  # Only a retired backup block.
-    assert codes(blocks=[BLOCKS[2]],target_date='2030-01-13')==['no_usable_time']  # Its only Saturday is blacked out.
+    assert codes(blocks=[BLOCKS[-1]])==['no_blocks']
+    assert codes(blocks=[BLOCKS[2]],target_date='2030-01-13')==['no_usable_time']
 
 def test_start_defaults_to_today_and_duration_resolves_and_matches_the_target():
     report=Capacity(config(start_date=None,target_date=None,duration={'value':8,'unit':'weeks'}),NOW).report()
@@ -104,7 +103,6 @@ def test_completed_sessions_keep_their_time_and_count_against_that_week():
     assert capacity.week_left(date(2030,1,7))==40
     assert capacity.report()['weeks'][0]['completed_minutes']==60 and capacity.report()['weeks'][0]['usable_minutes']==30
 
-# Blackout rules, over the Monday 2030-01-14 to Sunday 2030-02-24 runway.
 EVENING={'day':1,'start_time':'19:00','duration_minutes':120,'kind':'preferred'}
 def usable(*rules,blocks=(EVENING,)):
     report=Capacity(config(blocks=list(blocks),start_date='2030-01-14',target_date='2030-02-24',weekly_minutes=600,blackouts=list(rules)),NOW).report()

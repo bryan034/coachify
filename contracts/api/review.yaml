@@ -1,4 +1,3 @@
-# Contract shell only: no endpoint or request/response schema is implemented.
 openapi: 3.1.0
 info:
   title: elo Review and scheduling API

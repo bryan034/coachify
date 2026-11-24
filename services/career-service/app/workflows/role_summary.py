@@ -12,9 +12,7 @@ from app.schemas.opportunity import FIELDS,plain_text
 from app.schemas.role_summary import FORMAT,Bullet,CardDigest,GeneratedCard,RoleSummary,markup_issue
 from app.workflows.structured import structured_node
 
-# The About the role page shows every category except interview research.
 ROLE_CATEGORIES=('internship_insights','career_progression','conversion_outcomes','company_intelligence')
-# Every topic the page shows, in page order; each is sourced, AI-made, or (only on failure) not filled.
 ROLE_FIELDS=tuple(dict.fromkeys(field for category in ROLE_CATEGORIES for field in FIELDS[category]))
 TITLES={'eligibility':'Eligibility and commitment','work':'What you would work on','compensation':'Salary','benefits':'Benefits',
     'projects':'What interns work on','mentorship':'Mentorship','work_life_balance':'Hours and workload','full_time_role':'Role after the internship',
@@ -82,7 +80,6 @@ def validator(cards,missing=()):
                 if not set(bullet.refs)<=refs:
                     raise AIError('invalid_output',True,reason='provenance',fields=('cards',),
                         violations=({'field':f'cards.{index}.bullets.{b}.refs','issue':'ref_outside_card'},))
-                # A summary may not introduce figures its own card does not state.
                 if numbers(bullet.text)-allowed:
                     raise AIError('invalid_output',True,reason='provenance',fields=('cards',),
                         violations=({'field':f'cards.{index}.bullets.{b}.text','issue':'unsupported_number'},))

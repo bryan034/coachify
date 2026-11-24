@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 TOPIC_COMMANDS = {'skip_topic', 'skip_remaining', 'review_topic'}
 MAX_PLAN_CALLS = 3
 MAX_CONTEXT_CALLS = 3
-# Whole-message refusals only: "I skipped the tests" or "skip, but I used Python" go to the model.
 SKIP_REQUEST = re.compile(r"(please\s+)?(let'?s\s+)?(skip|pass|(i\s+)?(don'?t|do\s+not)\s+(want|wish)\s+to\s+answer|(i'?d\s+)?(rather|prefer)\s+not\s+(to\s+)?(answer|say))"
                           r"(\s+(this|that|it))?(\s+(one|question))?(\s+please)?", re.I)
 
@@ -51,8 +50,8 @@ def is_side_question(text):
 class InterviewHarness:
     def __init__(self, service):
         self.service = service
-        self.lead = ''  # Fixed text placed before the next reply, e.g. confirming a skipped topic.
-        self.requested_topic = None  # A topic the user asked to review; the next question must be about it.
+        self.lead = ''
+        self.requested_topic = None
 
     async def call(self, app, account, conversation_id, route_id, token, payload):
         service = self.service
@@ -78,7 +77,6 @@ class InterviewHarness:
             or prior.get('review_policy'))
         policy = effective_policy(saved_policy or account.get('cv_review_policy'))
         retained = route.get('_interview_plan')
-        # Finish an already-admitted v1 question with its original receipt before upgrading.
         if saved_policy and saved_policy != policy and not retained:
             def migrate(current):
                 migrate_snapshot(current, saved_policy, prior.get('question_counts', {}))
@@ -92,7 +90,6 @@ class InterviewHarness:
         memory = reconcile_memory(conversation, document)
         memory.pop('previous_review_policy', None)
         if previous_policy and previous_policy.get('scope') == 'section' and not retained:
-            # Reopen only material job/project gaps the old shared section allowance exhausted.
             _, previous_counts = group_counts(document, previous_policy)
             reopened = False
             for item in effective_items(document):
@@ -130,7 +127,6 @@ class InterviewHarness:
                                        for item in effective_items(document))
                 if (existing and existing['status'] == 'unanswered' and not existing.get('reconciliation_required')
                         and source_available):
-                    # Reuse the receipt of a CV write whose conversation reply was interrupted.
                     recovered = deepcopy(retained['memory'])
                     recovered['review_policy'] = policy
                     recovered = reconcile_memory({**conversation, 'interview_memory': recovered}, document)
@@ -144,7 +140,6 @@ class InterviewHarness:
                     return await self.publish(account, identifier, route['id'], token, recovered,
                                               reply, active, retained['targets'])
                 if existing:
-                    # Another flow answered or skipped the issued question: acknowledge it without publishing.
                     recovered = deepcopy(retained['memory'])
                     recovered['review_policy'] = policy
                     recovered['focus_item_id'] = None
@@ -153,7 +148,6 @@ class InterviewHarness:
                         ('That question was already answered or skipped. Your saved review is up to date; continue when ready.'
                          if existing['status'] in {'answered', 'skipped'} else
                          'Your source changed after that question was saved. Your review is retained; continue with the latest evidence.'), None, [])
-                # Drop an unissued proposal made stale by another operation and plan against the latest state.
                 def clear_stale(current):
                     action = action_in(current, route['id'])
                     service.check_lease(action, token)
@@ -195,7 +189,6 @@ class InterviewHarness:
             if active:
                 document = await self.skip_active(account, conversation, document, route, token, memory)
                 conversation = {**conversation, 'active_question': None}
-                # Nothing left to ask here: close the topic now.
                 source = next((i for i in effective_items(document) if i['id'] == active['item_id'] and not i['removed']), None)
                 if source and not clarification_context(source, evidence_for(source))['clarification_targets']:
                     memory['coverage'][source['id']] = {'item_id': source['id'], 'status': 'reviewed_with_gaps', 'evidence_refs': []}
@@ -268,7 +261,6 @@ class InterviewHarness:
                 await run_in_threadpool(service.update, owner, identifier, remember)
             result = InterviewTurn.model_validate(evaluated['result'])
             if result.intent == 'side_question' and (result.topic_relevant or is_side_question(route['_text'])):
-                # Side replies do not create an evidence-question receipt.
                 text = route['_text'].casefold()
                 reply = safe_side_answer(result.reply) if result.topic_relevant else None
                 if not reply:
@@ -306,7 +298,7 @@ class InterviewHarness:
                 actions = []
                 for index, proposal in enumerate(result.actions):
                     if proposal.excerpt not in route['_text']:
-                        proposal.excerpt = route['_text']  # Anchor the action to the saved answer.
+                        proposal.excerpt = route['_text']
                     if proposal.item_id and proposal.item_id not in items: raise ValueError('The interview referred to another source.')
                     if any(i not in items for i in proposal.candidate_item_ids): raise ValueError('Invalid source choice.')
                     if proposal.question_id and (proposal.question_id not in questions or
@@ -384,7 +376,6 @@ class InterviewHarness:
             if (target not in memory.get('deferred_topics', {})
                     or memory['coverage'].get(target, {}).get('status') != 'deferred'):
                 raise Conflict('Only a skipped topic can be reviewed again.')
-            # Check before mutating.
             if not any(option['open_fields'] for option in question_options(items[target], memory)):
                 raise Conflict('elo has no questions left for this topic. Your CV is used as written for it.')
             document = await run_in_threadpool(self.service.cv.reopen_topic_skips, account['id'], document['_id'], target,
@@ -418,7 +409,6 @@ class InterviewHarness:
         self.lead = (f"Skipped {items[target]['title']}. I’ll use your CV as written for it. " if command == 'skip_topic'
                      else 'Skipped the remaining topics. I’ll use your CV as written for them. ')
         if active:
-            # Skipping another topic leaves the current question in place.
             memory['focus_item_id'] = active['item_id']
             return await self.publish(account, conversation['_id'], route['id'], token, memory,
                 f"Back to {active['title']}: {active['question']}", active, conversation.get('interview_targets', []))
@@ -433,11 +423,9 @@ class InterviewHarness:
             used_budget = topic_question_count(memory, item['id']) >= MAX_TOPIC_QUESTIONS
             settled = not any(option['open_fields'] for option in question_options(item, memory))
             if settled or used_budget or enough_context(item):
-                # A topic that used all its questions closes with gaps; an early close is reviewed only with proven ownership.
                 status = 'reviewed' if not used_budget and ownership_established(item) else 'reviewed_with_gaps'
                 memory['coverage'][item['id']] = {'item_id': item['id'], 'status': status, 'evidence_refs': []}
                 closed.append(item['title'])
-        # Focus stays on a just-closed topic so the planner can still cite its evidence when moving on.
         return closed
 
     async def plan(self, app, account, conversation, document, route, token, memory):
@@ -460,7 +448,6 @@ class InterviewHarness:
             memory['focus_item_id'] = None
             return await self.publish(account, conversation['_id'], route['id'], token, memory,
                 'Your baseline skill review is complete. Each project skill has an evidence-based estimate; details that could not be established remain unknown.', None, [])
-        # Offer the next viable topic when the current one has no remaining material question.
         current_focus = next((item for item in eligible if item['id'] == memory.get('focus_item_id')), None)
         if not current_focus or not any(option['open_fields'] for option in question_options(current_focus, memory)):
             focus_id = next((item['id'] for item in eligible
@@ -524,7 +511,6 @@ class InterviewHarness:
                 invalid_calls += 1
                 if invalid_calls >= MAX_PLAN_CALLS: break
                 continue
-            # Hydrate another chosen experience before validating a question.
             if (raw.get('action') == 'ask' and isinstance(source_id, str) and source_id in available_topics
                     and (context.get('focused_source') or {}).get('id') != source_id):
                 await record('hydrate_source', 'ask')
@@ -544,7 +530,6 @@ class InterviewHarness:
         if decision is None:
             skipped_topic = memory.get('focus_item_id')
             if route.get('_command') == 'skip' and skipped_topic:
-                # Close the skipped topic with gaps and plan once more without it.
                 memory['coverage'][skipped_topic] = {'item_id': skipped_topic, 'status': 'reviewed_with_gaps', 'evidence_refs': []}
                 memory['focus_item_id'] = None
                 return await self.plan(app, account, conversation, document, route, token, memory)
@@ -699,7 +684,6 @@ class InterviewHarness:
             logger.warning('CV skill level evaluation skipped reason=%s', type(exc).__name__)
 
     async def no_progress(self, app, account, conversation, document, route, token, memory, active):
-        # Keep the original question visible without issuing it again.
         if active:
             failures = memory.setdefault('no_progress', {})
             failures[active['id']] = failures.get(active['id'], 0) + 1
@@ -739,7 +723,6 @@ class InterviewHarness:
             document = self.service.cv.get(account['id'], current['cv_id'])
             if document['effective_version'] != memory['evidence_version']:
                 raise Conflict('Your evidence changed before the interview reply was saved. Continue with the latest evidence.')
-            # Publish the same canonical memory shape that status polling reads.
             normalized = reconcile_memory({**current, 'interview_memory': memory}, document)
             current.update(interview_memory=normalized, interview_progress=progress(normalized, document),
                            active_question=active, interview_targets=targets)

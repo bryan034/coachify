@@ -194,7 +194,6 @@ def extract_page(data):
 def import_url(url, fetch=request_page):
     deadline = time.monotonic() + URL_IMPORT_TIMEOUT
     raw_fetch=fetch
-    # Wrap the actual request once so redirects share the single timeout retry.
     fetch=lambda target,limit:fetch_with_timeout_retry(target,limit,raw_fetch)
     parsed, _, _, _ = destination(url)
     public_job=read_preview(parsed,url,deadline,fetch)

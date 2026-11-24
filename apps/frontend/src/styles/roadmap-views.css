@@ -1,4 +1,3 @@
-/* Roadmap views: Today, Week, Month, Milestones, Progress and the plan preview. */
 .rv{--rv-fill:var(--mint);--rv-track:var(--cloud);--rv-edge:rgb(71 85 105 / .35);--rv-hair:rgb(71 85 105 / .14);--rv-amber-line:color-mix(in srgb,var(--growing-ink) 28%,var(--growing-bg));--rv-amber-wash:color-mix(in srgb,var(--growing-bg) 45%,var(--white));--rv-mint-soft:color-mix(in srgb,var(--mint) 45%,var(--white));--rv-grey:color-mix(in srgb,var(--slate) 22%,var(--white));display:flex;flex-direction:column;gap:24px;color:var(--ink)}
 .rv :is(button,a,input,select,textarea,[contenteditable]):focus-visible{outline:2px solid var(--forest);outline-offset:2px}
 .rv-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px}
@@ -53,7 +52,6 @@
 .rv-link:disabled{opacity:.5;cursor:not-allowed}
 .rv-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-/* To-do rows */
 .rv-list{list-style:none;margin:4px 0 0;padding:0}
 .rv-task{display:flex;gap:14px;align-items:flex-start;padding:14px 8px;border-bottom:1px solid var(--rv-hair);scroll-margin-top:24px}
 .rv-ck{flex:0 0 auto;width:24px;height:24px;margin-top:1px;border-radius:50%;border:2px solid var(--slate);background:var(--white);display:grid;place-items:center;cursor:pointer;padding:0;color:var(--ink)}
@@ -70,7 +68,6 @@ button.rv-ttl:hover{text-decoration:underline;text-underline-offset:3px}
 .rv-ring{flex:0 0 auto;width:24px;height:24px;border-radius:50%;border:2px dashed var(--slate);box-sizing:border-box;opacity:.6}
 .rv-empty{margin:14px 8px;font-size:14px;color:var(--slate)}
 
-/* Task details form */
 .rv-backdrop{position:fixed;inset:0;z-index:20;border:0;padding:0;margin:0;background:rgb(15 23 42 / .06);cursor:default}
 .rv-det-wrap{list-style:none;position:relative;z-index:21}
 .rv-det{margin:0 0 10px 38px;padding:16px 18px;border-radius:12px;background:var(--snow);border:1px solid var(--line);display:flex;flex-direction:column;gap:16px}
@@ -114,7 +111,6 @@ textarea.rv-input{min-height:48px;resize:vertical}
 .rv-dialog p{margin:10px 0 0;font-size:14px;line-height:1.5}
 .rv-dialog-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:20px}
 
-/* Day timeline */
 .rv-dl{margin:18px 0 6px}
 .rv-dl h3{margin:0;font-size:14px;font-weight:600}
 .rv-dl-scroll{margin-top:10px;overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--white);scroll-behavior:auto}
@@ -132,7 +128,6 @@ textarea.rv-input{min-height:48px;resize:vertical}
 @media (prefers-reduced-motion:reduce){.rv-dl-hour,.rv-dl-task,.rv-dl-study,.rv-dl-now,.rv-bar>i{transition:none}.rv-dl-scroll{scroll-behavior:auto}}
 .rv-dl-any{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;font-size:12px;color:var(--slate)}
 
-/* Backlog and rescheduling */
 .rv-backlog{margin-top:18px;border-radius:12px;background:var(--rv-amber-wash);border:1px solid var(--rv-amber-line);padding:6px 14px 8px}
 .rv-backlog.panel{margin:0;padding:22px;border-radius:16px}
 .rv-backlog .rv-lab{color:var(--growing-ink)}
@@ -158,7 +153,6 @@ textarea.rv-input{min-height:48px;resize:vertical}
 .rv-auto-rows strong{white-space:nowrap;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
 .rv-auto-rows strong.none{color:var(--growing-ink)}
 
-/* Weekly goal */
 .rv-big{margin:16px 0 0;font-size:30px;font-weight:600;letter-spacing:-.01em}
 .rv-big span{font-size:15px;font-weight:400;color:var(--slate)}
 .rv-pips{display:flex;gap:4px;margin-top:16px}
@@ -187,7 +181,6 @@ textarea.rv-input{min-height:48px;resize:vertical}
 .rv-next li>span:first-child{flex:0 0 84px;font-size:12px;color:var(--slate);font-variant-numeric:tabular-nums;padding-top:2px}
 .rv-next small{display:block;font-size:12px;color:var(--slate)}
 
-/* Week */
 .rv-rings{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin:20px 0 6px}
 .rv-ring-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border-radius:14px;cursor:pointer;font:inherit;color:var(--ink);min-width:0;background:var(--white);border:1px solid var(--line)}
 .rv-ring-btn:hover{background:var(--snow)}
@@ -211,7 +204,6 @@ textarea.rv-input{min-height:48px;resize:vertical}
 .rv-day .rv-task{padding:11px 6px}
 .rv-day .rv-det{margin-left:34px}
 
-/* Month */
 .rv-month-scroll{overflow-x:auto}
 .rv-month{min-width:760px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .rv-month-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));background:var(--snow);border-bottom:1px solid var(--line)}
@@ -253,7 +245,6 @@ textarea.rv-input{min-height:48px;resize:vertical}
 .rv-stats dd span{font-size:14px;color:var(--slate);font-weight:400}
 .rv-plain{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:14px;font-size:14px}
 
-/* Milestones */
 .rv-route{background:var(--fill);border-color:var(--fill);color:var(--on-fill);padding:24px 28px}
 .rv-route h2{font-size:20px}
 .rv-route p{margin:0;font-size:14px;color:var(--cloud)}
@@ -311,7 +302,6 @@ textarea.rv-input{min-height:48px;resize:vertical}
 .rv-question legend{padding:0;font-size:14px;font-weight:600;margin-bottom:8px}
 .rv-question .rv-chips label{cursor:pointer}
 
-/* Progress */
 .rv-kpis{margin:0;display:flex;flex-wrap:wrap;gap:16px}
 .rv-kpi{flex:1 1 200px;min-width:0;padding:20px 22px}
 .rv-kpi dt{font-size:13px;color:var(--slate)}
@@ -345,7 +335,6 @@ textarea.rv-input{min-height:48px;resize:vertical}
 .rv-pace p{margin:10px 0 0;font-size:15px;line-height:1.5}
 .rv-pace p.rv-note{font-size:13px}
 
-/* Plan preview */
 .rv-preview-bar{position:sticky;top:0;z-index:3;background:var(--fill);color:var(--on-fill);padding:18px 24px;border-radius:16px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
 .rv-preview-bar p{margin:0;font-size:15px}
 .rv-preview-bar p.rv-lab{color:var(--mint);margin-bottom:4px}
@@ -383,5 +372,4 @@ textarea.rv-input{min-height:48px;resize:vertical}
  .rv-chart,.rv-chart-labels{gap:6px}
 }
 
-/* Shown on the planning page: what has changed since the active roadmap was prepared. */
 .plan-updates{list-style:none;margin:0 0 18px;padding:14px 18px;border-radius:12px;background:var(--growing-bg);color:var(--growing-ink);font-size:14px;display:flex;flex-direction:column;gap:6px}

@@ -43,22 +43,18 @@ function card(skill: ListedSkill): Skill {
   sources: [...new Set(titles)], details: skill.sources.map(detail)};
 }
 
-/** The backend's merged skill list as cards. Merging and identity are decided by the CV service. */
 export const skillCards = (list: SkillList | null): Skill[] => list?.skills.map(card) ?? [];
 export const skillCardGroups = (list: SkillList | null) => list?.skill_groups ?? {};
 
-/** Negative when `a` is the stronger skill: its 1-10 level first, then its application estimate, then established evidence. */
 export const compareStrength = (a: Skill, b: Skill) =>
  (b.ownLevel?.level ?? 0) - (a.ownLevel?.level ?? 0) || applicationRank(b.application) - applicationRank(a.application) || Number(b.established) - Number(a.established);
 
 export type Relevance='high'|'medium'|'low'|'none';
 export type Status={relevance:Relevance|null;state:'score'|'not_needed'|'not_recorded'|'unknown'|'not_compared';score?:number;need?:number|null;explanation?:string|null};
-/** The comparison's per-skill judgement, matched by registry identity or, failing that, by name. */
 export function evaluatedSkill(skill:Pick<Skill,'canonicalId'|'name'>,comparison?:Assessment|null):EvaluatedSkill|undefined{
  const skills=comparison?.skill_profile?.skills??[];
  return skills.find(item=>skill.canonicalId&&item.canonical_skill_id===skill.canonicalId)??skills.find(item=>(!skill.canonicalId || !item.canonical_skill_id) && sameSkillName(item.name,skill.name));
 }
-/** Exactly one competence state per skill, read from the saved goal comparison. */
 export function skillStatus(skill:Skill,comparison?:Assessment|null):Status{
  if(!comparison)return {relevance:null,state:'not_compared'};
  const judged=evaluatedSkill(skill,comparison);

@@ -138,7 +138,6 @@ def revision_basis(active,block,now,config):
     return plan,replaced
 
 def task_record(item,identifier,outline,week,*,routine_id=None):
-    # A task that names one gap is linked to that gap's assessed requirement, so its skill can be unlinked later.
     gap=next((g for g in outline['gaps'] if g['id']==item.get('gap_id')),None)
     result={'id':identifier,'title':item['title'],'instructions':item['instructions'],'description':item['description'],
         'completion_outcome':item['completion_outcome'],'estimated_minutes':item['duration_minutes'],
@@ -255,7 +254,6 @@ def check_week(draft,outline,config,existing,routines,pending,target,scope,*,fee
         if entry['action'] in ('carry','split') and minutes and carried+minutes<=carry_limit(config):carried+=minutes
     room=max(0,target['target_minutes']-sum(t['estimated_minutes'] for t in routines)-carried)
     if new_minutes>room:errors.append(f'New tasks total {new_minutes} minutes but this week has room for {room} after routines and carried work.')
-    # The weekly hours are a target: fill them while real work remains, within one short session or a tenth of the week.
     wanted=min(room,sum(scope.values()))
     if feedback and feedback.get('workload')=='too_much':wanted=wanted*7//10
     slack=max(shortest_session(config),target['target_minutes']//10)
@@ -280,7 +278,6 @@ def check_week(draft,outline,config,existing,routines,pending,target,scope,*,fee
         estimates[row['milestone_key']]=estimates.get(row['milestone_key'],0)+row['estimated_minutes']
     for key,minutes in estimates.items():
         if key in milestones and minutes>milestones[key]['estimated_minutes']:errors.append(f"Future objectives exceed milestone '{key}' estimated effort.")
-    # Revisions must obey the same date, skill and capacity rules as initial objectives.
     available=Capacity(config,week_opening(target['week_start'],config)).weeks() if draft.objective_changes else []
     available={row['week_start']:row['usable_minutes'] for row in available}
     for change in draft.objective_changes:
@@ -488,7 +485,6 @@ def accept_week(state,source,identifier,now):
     pending=unfinished(base,capacity);moved={entry['task_id'] for entry in candidate['carryover']}
     if candidate['basis']!=week_basis(outline,base,week,pending) or moved!={t['id'] for t in pending}:raise stale('Your progress on this week or on its unfinished work changed.')
     if candidate.get('unplaced'):raise Problem('Some tasks no longer fit this week. Change a carry-over choice or generate a fresh preview.',409,'week_unplaced')
-    # Sessions are placed by the service, but time has moved on since the preview: check each one again.
     start,end=week_interval(week,config,now)
     placer=Placer(config,now,reservations(base),start,end)
     proposed=[slot for task in candidate['tasks'] for slot in task['schedule']]+[slot for entry in candidate['carryover'] if entry['action'] in ('carry','split') for slot in entry['schedule']]
@@ -509,7 +505,6 @@ def accept_week(state,source,identifier,now):
         else:
             task['removed']=True;task['removal']={'at':at,'reason':entry['reason']}
         if entry['action']=='split':
-            # A reviewed split creates two explicit pieces.
             remaining=task['estimated_minutes']-entry['minutes']
             remainder=copy.deepcopy(task)
             remainder.update(id=str(uuid5(NAMESPACE_URL,task['id']+':remainder:'+candidate['id'])),

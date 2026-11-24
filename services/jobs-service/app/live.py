@@ -25,7 +25,6 @@ class LiveJobs:
         self._flight = None
 
     def read(self, query=None):
-        # Keep only an active operation; completed results are not cached.
         with self._lock:
             leader = self._flight is None
             if leader:

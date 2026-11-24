@@ -11,7 +11,6 @@ import requests
 DATA = Path(__file__).resolve().parents[1] / 'app' / 'data'
 ENDPOINT = 'https://query.wikidata.org/sparql'
 TYPES = ('Q4830453', 'Q783794', 'Q891723', 'Q6881511', 'Q167037', 'Q726870', 'Q18127', 'Q2085381', 'Q134161')
-# Withhold conspicuous single-observation outliers pending source review; names remain searchable.
 HEADCOUNTS_PENDING_REVIEW = {'Q12099588', 'Q4163110', 'Q20073341', 'Q12093389'}
 CANDIDATES = '''SELECT ?company (MAX(?count) AS ?employees) WHERE {
   VALUES ?type { %s }
@@ -89,7 +88,6 @@ def build(rows, seeds, snapshot_date):
                           'country_codes': countries, **({'singapore_based': True} if identifier in singapore_ids else {}),
                           **({'employee_count_note': note} if note else {})})
     ranked = sorted(companies, key=lambda row: (-(row['employees'] or 0), row['name'].casefold(), row['id']))
-    # Identical display names need only one suggestion.
     unique = {}
     for row in ranked:
         unique.setdefault(' '.join(row['name'].casefold().split()), row)

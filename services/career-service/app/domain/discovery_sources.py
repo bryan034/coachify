@@ -34,7 +34,6 @@ def candidates(values):
         source=DiscoverySource(**source.model_dump(),company=company)
         source.source_id='op-'+hashlib.sha256(source.url.encode()).hexdigest()[:24]
         if source.url not in result:result[source.url]=source
-        # Preserve evidence already used by completed extractions on a repeated URL.
     return list(result.values())
 
 

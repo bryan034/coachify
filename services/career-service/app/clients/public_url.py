@@ -59,7 +59,6 @@ def html_text(markup):
     for node in soup.find_all('br'): node.replace_with('\n')
     for node in soup.find_all('li'): node.insert(0, '• ')
     container = soup.select_one('[itemprop="description"]') or soup.find('main') or soup.find('article') or soup.body or soup
-    # Keep paragraphs/line structure while avoiding a newline around every inline span.
     for node in container.find_all(['p','div','section','li','h1','h2','h3','h4','tr']): node.append('\n')
     text = container.get_text('')
     return re.sub(r'\n[ \t]*\n(?:[ \t]*\n)+', '\n\n', text).strip()

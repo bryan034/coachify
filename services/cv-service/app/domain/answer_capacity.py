@@ -4,7 +4,6 @@ from bson import BSON
 from app.domain.errors import CvError
 
 
-# Covers the UTF-8/BSON maximum of SavedInterpretation plus publication metadata.
 RESULT_BYTES = 512 * 1024
 RETRY_BYTES = 64 * 1024
 RETRY_CLAIM_BYTES = 1024
@@ -29,7 +28,6 @@ def reserved_bytes(document):
     if any(type(value) is not int or not 0 <= value <= RETRY_BYTES for value in remaining):
         raise CvError('Saved interpretation capacity needs review. Your existing answers are retained.', 409)
     count = len(pending)
-    # Reserve one full snapshot per result plus the triangular growth of later snapshots.
     return count * len(BSON.encode(snapshot(document))) + RESULT_BYTES * count * (count + 1) // 2 + sum(remaining)
 
 
@@ -56,7 +54,6 @@ def preview_chat_answer(document, question_id, text, maximum):
                     interpretation_status='pending', interpretation_token='0' * 36,
                     interpretation_lease_until=1.0)
     reserve(question, question['interpretation_token'])
-    # Conservative copies of the two pre-answer snapshots; the padding is never persisted.
     for _ in range(2): candidate['history'].append(deepcopy(snapshot(document)))
     candidate['_admission_padding'] = 'x' * 4096
     if len(BSON.encode(candidate)) + reserved_bytes(candidate) > maximum:

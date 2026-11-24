@@ -13,7 +13,6 @@ import '@/styles/roadmap-views.css';
 const tabs: [ViewName, string][] = [['day', 'Today'], ['week', 'Week'], ['month', 'Month'], ['milestones', 'Milestones'], ['progress', 'Progress']];
 const isDay = (value: string | null): value is string => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`));
 
-/** Skills a task can name: this plan's gaps first, then the whole Skills Profile. */
 export function skillCatalog(plan: PlannedRoadmap, planner: Planner): SkillOption[] {
  const seen = new Set<string>(); const options: SkillOption[] = [];
  const add = (name: string | null | undefined, group: string) => { const key = name?.trim().toLowerCase(); if (key && !seen.has(key)) { seen.add(key); options.push({ name: name!.trim(), group }); } };
@@ -22,14 +21,12 @@ export function skillCatalog(plan: PlannedRoadmap, planner: Planner): SkillOptio
  planner.inputs.skills.forEach(skill => add(skill.name, 'Skills Profile'));
  return options;
 }
-/** The view and date live in the address, e.g. /roadmap?view=day&date=2026-11-26. */
 function readAddress(today: string): { view: ViewName; date: string } {
  if (typeof window === 'undefined') return { view: 'day', date: today };
  const params = new URLSearchParams(window.location.search); const view = params.get('view'); const date = params.get('date');
  return { view: tabs.some(([name]) => name === view) ? view as ViewName : 'day', date: isDay(date) ? date : today };
 }
 
-/** The active roadmap: one header, five views. Plan settings is the only way out to the planning page. */
 export function RoadmapViews({ plan, review, planner, goal, version, frozen, updates, openSettings, actions, weeklyPlanning }: {
  plan: PlannedRoadmap; review: PlanReview; planner: Planner; goal: string; version: number; frozen: boolean; updates: number; openSettings: () => void; actions: RoadmapActions; weeklyPlanning?: ReactNode;
 }) {
@@ -47,7 +44,6 @@ export function RoadmapViews({ plan, review, planner, goal, version, frozen, upd
  };
  const context: ViewContext = { plan, review, sessions, today, nowMinute, version, catalog, frozen, actions, go };
  const editor = useTaskEditor(context);
- // Moving to another view or day through the tabs follows the same unsaved-changes rule as closing the panel.
  const leave = (view: ViewName, date?: string) => editor.leave(() => { editor.cancelNew(); go(view, date); });
  useEffect(() => { const back = () => setPlace(readAddress(today)); window.addEventListener('popstate', back); return () => window.removeEventListener('popstate', back); }, [today]);
  const target = plan.config.target_date; const left = target ? daysBetween(today, target) : null;

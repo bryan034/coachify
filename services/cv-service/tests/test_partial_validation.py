@@ -160,7 +160,7 @@ def test_the_harness_keeps_a_partial_extraction_only_when_allowed():
     strict, calls = build(False)
     with pytest.raises(EvidenceValidationError):
         strict.run(b'synthetic')
-    assert len(calls) == 2                                   # extraction and its single repair
+    assert len(calls) == 2
     lenient, calls = build(True)
     result = lenient.run(b'synthetic')
     assert len(calls) == 2 and len(result['items']) == 3

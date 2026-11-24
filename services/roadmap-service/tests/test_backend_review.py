@@ -279,7 +279,6 @@ def test_accepted_future_week_is_marked_for_review_when_its_objective_changes():
     model=Scripted([long_draft()],weeks=[week_draft([assignment()]),next_week])
     with client_for(model,clock=clock) as client:
         state=accepted(client)
-        # A future accepted week from an earlier planning cycle; only its objective is revised.
         store=client.app.state.store
         block=copy.deepcopy(store.data[OWNER]['planner']['week_blocks'][0])
         block.update(id='future-week',week_start='2030-01-21',start_date='2030-01-21',end_exclusive='2030-01-28',task_ids=[])

@@ -26,7 +26,6 @@ class AISettings(BaseModel):
     retries: int = Field(default=1, ge=0, le=2)
     max_output_tokens: int | None = Field(default=None, ge=128)
     context_tokens: int | None = Field(default=None, ge=2048)
-    # Plain HTTP only for synthetic fixture providers in a development stack.
     allow_http: bool = False
 
     @model_validator(mode='after')
@@ -43,7 +42,6 @@ class AISettings(BaseModel):
     @classmethod
     def from_env(cls):
         """Load the single configured model used by every Career stage."""
-        # An explicitly empty canonical key overrides the deprecated alias.
         configured_base=os.getenv('CAREER_LLM_BASE_URL','').strip() or OPENROUTER_BASE_URL
         key=resolve_model_api_key(configured_base,os.getenv('CAREER_LLM_API_KEY','').strip())
         values={'api_key':key,'enabled':os.getenv('AI_ENABLED','true' if key else 'false'),

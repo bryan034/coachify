@@ -39,7 +39,6 @@ class Failure:
     @classmethod
     def capture(cls, error):
         if isinstance(error, AIError):
-            # Reconstruct once to detach mutable caller values.
             code=error.code if isinstance(error.code,str) and re.fullmatch(r'[a-z_]{1,80}',error.code) else 'unavailable'
             safe = AIError(code, bool(error.retryable), reason=error.reason,
                 fields=error.fields, violations=error.violations, provider=error.provider,
@@ -111,7 +110,6 @@ class Operations:
             job.aliases.add(key)
 
     def make_room(self, owner):
-        # Evict only terminal cache entries.
         for same_owner, limit in ((True,self.max_owner_jobs),(False,self.max_jobs)):
             candidates = [job for job in self.jobs.values() if not same_owner or job.owner == owner]
             if len(candidates) < limit: continue
@@ -141,7 +139,6 @@ class Operations:
                 return job.view()
             if job.kind == kind and job.status in ('running', 'repairing', 'waiting_quota'):
                 if kind in ('jd','summary') and job.digest==digest:
-                    # Reconnect a new key for the same retained JD to the owned operation.
                     self.alias(job,key)
                     return job.view()
                 raise OperationConflict('operation_in_progress','Another request is still being processed. Wait for it to finish before submitting different input.')

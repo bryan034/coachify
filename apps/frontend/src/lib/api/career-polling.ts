@@ -14,7 +14,6 @@ function pause(milliseconds:number,signal?:AbortSignal|null){
  });
 }
 
-/** Retry interrupted status reads only; never replay writes or terminal AI errors. */
 export async function retryCareerRead<T>(read:()=>Promise<T>,signal?:AbortSignal|null,onRetry?:()=>void):Promise<T>{
  for(let attempt=0;;attempt++){
   signal?.throwIfAborted();

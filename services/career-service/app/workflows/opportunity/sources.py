@@ -19,7 +19,6 @@ def pool(values):
     return list(result.values())[:MAX_RESEARCH_SOURCES]
 
 
-# Pages kept for a category with no supported finding, so "not found" still shows what was checked.
 CHECKED_SOURCE_LIMIT=3
 
 

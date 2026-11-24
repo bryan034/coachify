@@ -39,7 +39,6 @@ def preview_sessions(state,now):
 
 def planner_view(row,source,now,default_zone=None):
     state=planner_state(row)
-    # Legacy snapshots are converted only in the response; a read never saves an upgrade.
     active=copy.deepcopy(state['active'])
     if active is not None:
         ensure_tasks(active)

@@ -7,7 +7,6 @@ import type { Runway, Workspace } from './types';
 import { friendlyOperationError } from '@/lib/errors';
 import { humaniseText } from '@/lib/format';
 
-/** The required planner details, in the order the helper asks for them. Issue codes come from the backend's runway. */
 const required: { code: string; label: string; question: string; hint: string; starters: string[] }[] = [
  { code: 'missing_target', label: 'target date or duration', question: 'When would you like to be ready?', hint: 'Give me a date or a length of time, and I’ll fill in your timeline.', starters: ['I want to be ready in 8 weeks.', 'Help me choose a realistic target date.'] },
  { code: 'no_budget', label: 'weekly study budget', question: 'How many hours can you study each week?', hint: 'A rough number is fine. You can change it in the planner at any time.', starters: ['About five hours a week.', 'Help me find a realistic weekly pace.'] },
@@ -20,7 +19,7 @@ export function AdviserChat({ workspace, runway, text, setText, partial, setPart
 }) {
  const { transcript, resumeFollow, showJump, jumpToLatest, scrollProps } = useChatScroll();
  const input = useRef<HTMLTextAreaElement>(null);
- useEffect(() => { if (takeFocus) input.current?.focus(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+ useEffect(() => { if (takeFocus) input.current?.focus(); }, []);
  const { context } = workspace;
  const validResearch = ['available', 'no_findings'].includes(context.research_coverage || '');
  const failed = workspace.operation?.status === 'failed';

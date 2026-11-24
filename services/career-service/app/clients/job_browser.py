@@ -30,7 +30,6 @@ class BrowserAcquisition:
     def route(self,route):
         request=route.request
         try:
-            # No form submission, browser credentials, binary assets or background sockets.
             if request.method!='GET' or request.resource_type not in {'document','script','xhr','fetch'}:
                 route.abort();return
             if request.resource_type=='document' and request.frame!=request.frame.page.main_frame:
@@ -55,7 +54,6 @@ class BrowserAcquisition:
                 location=headers.get('location')
                 if not location:raise ValueError('The website returned an invalid redirect. Paste the description instead.')
                 safe_headers['location']=location
-            # No Set-Cookie, remote headers or browser-supplied cookies/Authorization are forwarded.
             route.fulfill(status=status,headers=safe_headers,body=data)
         except ValueError as exc:
             self.failure=exc
@@ -67,8 +65,6 @@ def render_url(url,deadline,fetch=job_url.request_page):
     acquisition=BrowserAcquisition(deadline,fetch)
     try:
         with sync_playwright() as playwright:
-            # Chromium has no direct network path: intercepted requests are fulfilled
-            # above, and all unintercepted HTTP traffic hits a closed loopback proxy.
             browser=playwright.chromium.launch(headless=True,chromium_sandbox=True,env={'HOME':tempfile.gettempdir(),'TMPDIR':tempfile.gettempdir()},
                 args=['--proxy-server=http://127.0.0.1:9','--proxy-bypass-list=<-loopback>',
                     '--disable-background-networking','--disable-quic','--host-resolver-rules=MAP * ~NOTFOUND',

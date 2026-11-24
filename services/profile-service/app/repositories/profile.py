@@ -62,7 +62,6 @@ class ProfileRepository:
         if any(record and record["fingerprint"] != fingerprint for record in (committed, receipt)):
             raise MutationConflict
         if committed or (receipt and receipt.get("completed_noop")):
-            # Changed-write receipts commit atomically inside profile snapshots.
             return self.current(owner)
         return None
 
@@ -72,7 +71,6 @@ class ProfileRepository:
             return replayed
         previous = self.current(owner)
         if (previous or {}).get("version", 0) != expected_version:
-            # Check a simultaneous duplicate's receipt before rejecting it.
             replayed = self.replay(owner, mutation_id, fingerprint)
             if replayed is not None:
                 return replayed

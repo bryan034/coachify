@@ -16,7 +16,6 @@ CLOSE_AFTER_MISSED_SYNCS = 3
 MAX_APPLICATIONS_PER_OWNER = 500
 MAX_HISTORY = 50
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
-# A word plus common endings, so "engineer" finds "engineers" without "intern" finding "international".
 WORD_ENDINGS = '(?:s|es|ing|ed|er|ers)?'
 INTERNAL_FIELDS = {'source_id', 'search_terms', 'first_seen_at', 'last_seen_at', 'closed_at', 'missed_syncs'}
 
@@ -74,7 +73,6 @@ class JobsStore:
         self.postings.create_index([('search_terms', ASCENDING)])
         self.applications.create_index([('user_id', ASCENDING), ('updated_at', DESCENDING)])
 
-    # Search
     def search(self, query, cursor=None, limit=20):
         total = self.postings.count_documents(query)
         page = dict(query)
@@ -101,7 +99,6 @@ class JobsStore:
                 'companies': sorted(counted('company'), key=lambda o: o['value'].casefold()),
                 'last_synced_at': latest['last_synced_at'] if latest else None}
 
-    # Sync
     def claim_source(self, source_id, now, lease_seconds=600):
         """Atomic per-board sync lease."""
         self.sources.update_one({'_id': source_id}, {'$setOnInsert': {'failures': 0, 'next_attempt_at': EPOCH, 'lease_until': EPOCH, 'last_synced_at': None}}, upsert=True)
@@ -148,7 +145,6 @@ class JobsStore:
         self.postings.delete_many({'source_id': {'$nin': enabled}})
         self.sources.delete_many({'_id': {'$nin': enabled}})
 
-    # Applications
     def _application_view(self, row, statuses):
         fallback = 'unknown' if self.live or row.get('source') == 'link' else 'removed'
         return {'id': row['_id'], 'posting_status': statuses.get(row['posting_id'], fallback),

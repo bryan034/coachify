@@ -1,7 +1,6 @@
 "use client";
 import {useCallback,useLayoutEffect,useRef,useState} from 'react';
 
-/** Follow new text until the reader scrolls away; content changes never re-enable it. */
 export function useChatScroll(){
  const transcript=useRef<HTMLDivElement|null>(null),following=useRef(true);
  const [showJump,setShowJump]=useState(false);

@@ -9,7 +9,6 @@ const iso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1)
 const target = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30);
 const blackout = { frequency: 'daily', start_date: iso(today), end_date: iso(today), interval: 1, weekdays: [], start_time: null, end_time: null };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const data = (url: string): any => {
  if (url.endsWith('/auth/session')) return { id: 'synthetic', name: 'Synthetic Person', provider: 'local_test', onboarding_complete: true };
  if (url.endsWith('/auth-config')) return { mode: 'local_test' };

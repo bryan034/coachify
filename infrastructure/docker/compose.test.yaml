@@ -1,5 +1,3 @@
-# Apply only to a disposable test project alongside compose.yaml.
-# The fixture refuses unlabelled documents and makes no external model calls.
 services:
   career-service:
     environment:
@@ -14,7 +12,6 @@ services:
       CV_LLM_ALLOW_HTTP: 'true'
     depends_on: [cv-model-fixture]
   jobs-service:
-    # Disable provider egress only in this disposable test stack.
     environment:
       ELO_SYNTHETIC_TEST_FIXTURES: '1'
   cv-model-fixture:

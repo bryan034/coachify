@@ -25,7 +25,6 @@ async def capture(upstream,account):
             'expected_declarations_version':manual['version']})
     else:
         cv=None
-        # Saved intake publishes through Profile's declaration authority. Draft intake is never evidence.
         source={'items':[], 'declarations':manual['declarations'], 'cv_version':None,
                 'extraction_version':None,'effective_version':None,'selection_version':selection['version'],
                 'declarations_version':manual['version']}
@@ -42,7 +41,6 @@ async def capture(upstream,account):
             elif interview.get('status')=='partial':coverage='partial'
         elif research.get('research_status') in ('succeeded','no_findings'):
             coverage='available' if research.get('skills') else 'no_findings'
-    # Evidence records keep exact source attribution and the original literal explanations.
     evidence={}
     for item in source['items']:
         if item.get('removed'):continue
@@ -58,7 +56,6 @@ async def capture(upstream,account):
                 **{k:claim.get(k) for k in ('attribution','assistance','proficiency','experience_months','support_uncertain','evidence_type')},
                 'application_level':next((estimate['level'] for estimate in (cv or {}).get('skill_estimates',[]) if estimate.get('item_id')==item['id'] and estimate.get('skill_name','').casefold()==claim['name'].casefold()),None),
                 'reviewed':bool(cv and cv.get('profile_reviewed_effective_version')==cv.get('effective_version')),**identity(claim['name'])}
-            # The CV review's own 1-10 level for this skill (null when unrated or uncertain).
             evidence[key]['cv_level']=(claim.get('skill_level') or {}).get('level')
             evidence[key]['source_kind']=item['kind']
             evidence[key]['review_facts']=[f for f in item.get('review_evidence',[])
@@ -85,7 +82,6 @@ async def capture(upstream,account):
         category=(research.get('intelligence') or {}).get('categories',{}).get('interview_intelligence',{})
         findings=category.get('findings',[]) or research.get('skills',[])
         for index,f in enumerate(findings):
-            # Only preparation-bearing fields enter skill comparison; timelines/stage counts stay context.
             if f.get('field') and f['field'] not in ('preparation_topics','interview_questions','difficulty'):continue
             name=f.get('value') or f.get('name')
             requirements.append({**f,'ref':'interview:'+str(f.get('finding_id') or index),'kind':'interview_preparation',

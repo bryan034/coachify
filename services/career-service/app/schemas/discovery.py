@@ -152,8 +152,6 @@ class ResearchDiscovery(Contract):
     confirmed: Literal[True]
     refresh: bool=False
 
-# Owner-scoped responses include the private transcript; worker leases remain private.
-
 class SkillFrequency(Contract):
     name: Text
     skill_id: str | None
@@ -164,7 +162,6 @@ class SkillFrequency(Contract):
     original_terms: list[Text] = Field(max_length=30)
 
 class DiscoverySource(ResearchSource):
-    # Employer metadata copied from Brave structured content, never generated.
     company: Text | None = None
 
 class DiscoverySession(Contract):

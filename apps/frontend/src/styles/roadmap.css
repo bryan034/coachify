@@ -5,7 +5,6 @@
 .roadmap-adviser .btn.primary{background:var(--fill);border-color:var(--fill);color:var(--on-fill)}
 .roadmap-adviser{overflow-wrap:anywhere}.adviser-message pre{max-width:100%;overflow:auto}
 
-/* The planner uses the whole screen; the chat helper takes its share only while open */
 .roadmap-heading-side{display:flex;align-items:flex-start;gap:24px;flex-shrink:0}
 
 .roadmap-settings{display:flex;flex-direction:column;gap:32px}
@@ -33,7 +32,6 @@
 .blackout-time>label:not(.settings-check){flex:1 1 110px}
 .blackout-time .btn{height:38px;margin-left:auto}
 
-/* Runway panel */
 .settings-runway .small{color:rgb(255 255 255 / .82)}
 .settings-runway .settings-link{color:var(--mint)}
 .runway-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px;margin:0 0 16px}
@@ -51,14 +49,11 @@
 .settings-runway .btn.ghost{color:var(--ink)}
 .settings-runway :is(button,summary,input):focus-visible{outline-color:var(--mint)}
 
-/* Chat helper: opened from the heading, docked beside the page on wide screens */
 .helper-open .adviser-conversation{position:sticky;top:var(--top-offset);display:flex;flex-direction:column;height:calc(100vh - var(--nav-height) - 210px);min-height:420px;background:var(--side)}
 .helper-open .adviser-messages{flex:1;min-height:0;max-height:none}
 .adviser-intro .adviser-close{margin-left:auto;flex-shrink:0;height:32px;padding:0 10px;font-size:12px}
 .helper-needed{padding:10px 24px;font-size:12px;background:var(--mint-mist);border-bottom:1px solid var(--line)}
 @media(max-width:1100px){.helper-open .adviser-conversation{position:fixed;z-index:90;top:0;right:0;bottom:0;left:auto;width:min(100%,440px);height:auto;border-radius:0;border-width:0 0 0 1px;box-shadow:0 0 0 100vmax rgba(17,24,39,.16)}}
-
-/* Generation */
 
 .roadmap-review{display:flex;flex-direction:column;gap:32px}
 .route-map{position:relative;height:190px;margin:64px 12px 26px;animation:route-reveal 1100ms cubic-bezier(.3,.7,.2,1) both}
@@ -124,7 +119,6 @@
 }
 @media(prefers-reduced-motion:reduce){.route-map{animation:none}}
 
-/* Heading: the page's views and the chat helper sit together as pills */
 .roadmap-heading{align-items:flex-end;flex-wrap:wrap;gap:16px 32px}
 .roadmap-heading-side{display:flex;flex-wrap:wrap;align-items:center;gap:10px;flex-shrink:1}
 .roadmap-heading-side>.small{flex-basis:100%;margin:0}
@@ -135,7 +129,6 @@
 .roadmap-heading .helper-launcher{background:var(--white)}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 
-/* What elo will use */
 .roadmap-settings{gap:22px}
 .planner-uses{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
 .planner-uses>h2{font-size:12px;font-weight:600;letter-spacing:0;margin:0;color:var(--slate)}
@@ -152,7 +145,6 @@
 .use-tags li{padding:3px 10px;border-radius:99px;background:var(--cloud);font-size:12.5px;line-height:1.45;overflow-wrap:anywhere}
 .use-panel-link{justify-self:start;font-size:12.5px;font-weight:500;text-decoration:underline;text-underline-offset:3px}
 
-/* The plan as one sentence travelling down a road. */
 .road-intro{margin-bottom:-8px}
 .road-intro h2{font-size:20px;font-weight:500;margin:0 0 2px}
 .road-intro .small{margin:0}
@@ -236,7 +228,6 @@
 .focus-chip:focus-within{outline:2px solid var(--ink);outline-offset:2px}
 .road-content>.small{margin-top:8px}
 
-/* The road ends at the runway, where generating happens */
 .road-end .road-dot.road-flag{top:24px;width:30px;height:30px;margin:-15px 0 0 -15px;background:var(--white);box-shadow:inset 0 0 0 2px #c3ccd6}
 .road-end.passed .road-dot.road-flag{background:var(--mint);box-shadow:inset 0 0 0 3px var(--ink),0 0 0 5px rgb(52 211 153 / .35)}
 .settings-section.settings-runway{display:flex;flex-direction:column;gap:12px;min-width:0;margin-bottom:0;padding:24px;border-radius:20px;color:var(--white);background:radial-gradient(90% 46% at 100% 8%,rgb(52 211 153 / .28),transparent 72%),#0d1a22}
@@ -270,7 +261,6 @@
 .settings-runway .plan-actions .btn{width:100%;justify-content:center}
 .roadmap-adviser .settings-runway .btn.primary:disabled{background:rgb(52 211 153 / .38);border-color:transparent;color:rgb(255 255 255 / .85);opacity:1}
 
-/* Roadmap page: a status line, then the to-do list as the working surface */
 .roadmap-review{display:flex;flex-direction:column;gap:18px}
 .review-status{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px 32px}
 .review-summary{flex:1 1 380px;min-width:0}
@@ -306,7 +296,6 @@
 .skill-progress li>i{display:block;height:5px;margin-top:6px;border-radius:3px;background:var(--cloud);overflow:hidden}
 .skill-progress li>i b{display:block;height:100%;background:#059669}
 
-/* To-do list */
 .task-planner{container-type:inline-size;min-width:0;background:var(--white);border:1px solid var(--line);border-radius:20px;padding:22px 24px}
 .task-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 20px}
 .task-title{min-width:0}
@@ -366,7 +355,6 @@
 .month-dots i.done{background:#059669;box-shadow:none}
 .day-strip button[aria-pressed=true] .month-dots i:not(.done){color:var(--white)}
 
-/* Monthly: a calendar with one row per week, read at a glance */
 .month-view{margin-top:14px}
 .month-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) 150px;padding:0 6px 6px;font-size:12px;color:var(--slate)}
 .month-head span{padding-left:4px}
@@ -413,7 +401,6 @@
 }
 @media(prefers-reduced-motion:reduce){.road-bed,.road-line,.road-dot,.task-progress i{transition:none}}
 
-/* Chat helper: beside the page heading and nearly the full screen, with most of it for reading */
 .roadmap-adviser .roadmap-heading{margin-bottom:20px}
 .roadmap-main>.roadmap-notice,.roadmap-main>.roadmap-prerequisites{margin-bottom:18px}
 @media(min-width:1101px){
@@ -427,7 +414,6 @@
  .helper-open .adviser-composer .adviser-compose-box{margin-top:0}
 }
 
-/* Session notes: a Word-like page with a formatting toolbar at the top. */
 .todo-notes{margin-top:10px}
 .todo-notes>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--forest)}
 .notes-editor{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--white);overflow:hidden}
@@ -453,7 +439,6 @@
 .note-choice input{accent-color:var(--forest)}
 .notes-status{margin:0;padding:6px 18px 10px}
 
-/* Add a task: a small page with a big title and a property list. */
 .add-task-open{display:flex;align-items:center;gap:10px;width:100%;margin-top:12px;padding:12px 14px;border:1.5px dashed var(--line);border-radius:16px;background:transparent;font:inherit;font-size:14px;font-weight:500;color:var(--slate);cursor:pointer}
 .add-task-open:hover{border-color:var(--forest);background:var(--white);color:var(--ink)}
 .add-task-open span{display:grid;place-items:center;width:26px;height:26px;border:1.5px dashed currentColor;border-radius:50%;line-height:1}
@@ -489,7 +474,6 @@
 .roadmap-heading p strong{color:var(--ink);font-weight:600}
 
 
-/* To-do rows: one card per task, time and length as pills. */
 .todo-list{display:flex;flex-direction:column;gap:10px;margin-top:8px}
 .todo-list>.todo,.todo-day .todo:first-child{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:6px 16px;align-items:center;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:var(--white)}
 .todo.done{background:var(--snow)}
@@ -507,7 +491,6 @@
 .todo-day h3{font-size:15px}
 .todo-day-link{font-weight:600}
 @container (max-width:620px){.todo-list>.todo,.todo-day .todo:first-child{grid-template-columns:28px minmax(0,1fr)}.todo-when{grid-column:2;justify-content:flex-start}.todo-time{min-width:0}.todo-length{min-width:0}}
-/* Chat helper: one Close button; the composer footer never clips Send. */
 .helper-launcher[hidden]{display:none!important}
 .adviser-composer .adviser-compose-foot{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .adviser-composer .adviser-compose-foot .btn{flex:none;white-space:nowrap}
@@ -515,7 +498,6 @@
 
 .prerequisite-list{list-style:none;padding:0;margin:16px 0 0}.prerequisite-list li{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--line)}.prerequisite-list li>div{flex:1;min-width:0}.prerequisite-list p{font-size:13px;color:var(--mute);margin-top:2px}.prerequisite-mark{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--line);flex-shrink:0}.prerequisite-list .done .prerequisite-mark{background:var(--green);border-color:var(--green);color:#fff}@media(max-width:600px){.prerequisite-list li{flex-wrap:wrap}}
 
-/* Weekly review */
 .weekly-journey{list-style:none;padding:0;margin:20px 0;display:grid;gap:16px}
 .weekly-journey>li{border-left:3px solid var(--forest);padding:4px 0 4px 20px}
 .weekly-journey>li.projected{border-left-style:dashed;border-left-color:var(--field-line)}

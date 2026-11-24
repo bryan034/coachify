@@ -68,25 +68,20 @@ function RequirementSources({urls=[]}:{urls?:string[]}){
 }
 const sentence=(value:string)=>value.charAt(0).toUpperCase()+value.slice(1);
 
-/** Importance in the page's words. Unstated importance that elo inferred is marked as inferred. */
 type Importance='essential'|'nice'|'unclear';
 const importanceLabels:Record<Importance,string>={essential:'Essential',nice:'Nice to have',unclear:'Conflicting requirements'};
 const skillImportance=(skill:ReviewSkill):Importance=>skill.priority==='required'||skill.priority==='preferred'?'essential':skill.priority==='conflicting'?'unclear':'nice';
 const inferredImportance=(skill:ReviewSkill)=>(skill.priority_origin??skill.origin)==='generated_guidance';
 const tidy=(value:number)=>Math.round(value*10)/10;
 
-/** A goal skill's level and the level the role needs, read from the saved evaluation. */
 export function goalSkillLevel(skill:ReviewSkill,outcome?:Requirement,profileLevels:ProfileLevel[]=[]):{level:number|null;target:number|null}{
  const target=outcome?.required_score??skill.competence_target?.level??null;
  const evaluated=outcome?.demonstrated_score??(outcome?.competence_score!=null&&target!=null?tidy(outcome.competence_score*target/10):outcome?.competence_score??null);
- // A skill the evaluation has not rated still shows the level its Skills Profile entry already has.
  const profile=profileLevels.find(item=>namesSkill([item],{name:skill.name,canonicalId:skill.canonical_skill_id}))?.level;
  return {level:evaluated??profile??null,target};
 }
-/** `linked`: the person's skills that count towards this one. `parts`: the smaller skills it breaks down into, and whether the person has each. */
 type Row={skill:ReviewSkill;outcome?:Requirement;level:number|null;target:number|null;status:LevelStatus;key:string;pending:boolean;linked:ProfileSkillRef[];parts:{name:string;reason:string;has:boolean}[]};
 
-/** Everything the evaluation and the goal hold about one skill; opened by "See evidence". */
 function Evidence({row,evidence}:{row:Row;evidence?:Record<string,{name?:string;text:string}>}){
  const {skill,outcome}=row,importance=skillImportance(skill),inferred=inferredImportance(skill);
  const refs=[...new Set((outcome?.components??[]).flatMap(component=>component.evidence_refs))].map(ref=>evidence?.[ref]).filter((item):item is {name?:string;text:string}=>!!item).slice(0,4);
@@ -112,7 +107,6 @@ function Evidence({row,evidence}:{row:Row;evidence?:Record<string,{name?:string;
  </div>;
 }
 const TARGET_BASIS:Record<NonNullable<ReviewSkill['competence_target']>['basis'],string>={job_description:'From the job description',research:'From role research',inferred:'Estimated by elo'};
-/** The employer's expectation, what people reported about the skill, and why elo chose the level. */
 function TargetReasons({target}:{target:NonNullable<ReviewSkill['competence_target']>}){
  const examples=(target.reported_examples??[]).filter(item=>item.text.trim());
  return <>
@@ -122,7 +116,6 @@ function TargetReasons({target}:{target:NonNullable<ReviewSkill['competence_targ
   <p><b>Why elo rated it {target.level}.</b> {target.rating_reason?.trim()||target.explanation} <small>{TARGET_BASIS[target.basis]}</small></p>
  </>;
 }
-/** Why the row shows its numbers: what the role's target rests on and why the person's level is what it is. */
 function RatingReasons({row}:{row:Row}){
  const {skill,outcome,level,target,status}=row,goal=skill.competence_target;
  const targetReason=goal&&target===goal.level&&goal.explanation.trim()?goal:null;
@@ -159,7 +152,6 @@ function SkillRow({row,evidence,talk}:{row:Row;evidence?:Record<string,{name?:st
   <SkillBreakdown row={row}/>
  </li>;
 }
-/** The person's skills behind a goal skill and the smaller skills it breaks into. Hidden when it would only repeat the skill's own name. */
 function SkillBreakdown({row}:{row:Row}){
  const same=(name:string)=>name.trim().toLowerCase()===row.skill.name.trim().toLowerCase();
  const linked=row.linked.some(item=>!same(item.name))?row.linked:[];
@@ -170,12 +162,10 @@ function SkillBreakdown({row}:{row:Row}){
  </div>;
 }
 const filters:{key:'all'|LevelStatus;label:string}[]=[{key:'all',label:'All'},{key:'ready',label:'Ready'},{key:'getting',label:'Getting there'},{key:'build',label:'To build'},{key:'unrated',label:'Not rated'}];
-/** Every skill the goal needs, grouped by category, with the person's level against the role's target. */
 export function SkillsNeeded({skills,categories,outcomes,profileLevels,profileSkills=profileLevels??[],evidence,pending=()=>false,talk=()=>{}}:{skills:ReviewSkill[];categories?:SkillGroupMap;outcomes?:Record<string,Requirement>|null;profileLevels?:ProfileLevel[];profileSkills?:ProfileSkillRef[];evidence?:Record<string,{name?:string;text:string}>;pending?:(skill:ReviewSkill)=>boolean;talk?:(row:Row,mode:'talk'|'build')=>void}){
  const [filter,setFilter]=useState<'all'|LevelStatus>('all');
  const rows=new Map<ReviewSkill,Row>(skills.map(skill=>{
   const outcome=skill.item_id?outcomes?.[skill.item_id]:undefined,{level,target}=goalSkillLevel(skill,outcome,profileLevels);
-  // Levels come from the Skills Profile, else from the evaluation's link.
   const linked=linkedProfileSkills(skill,outcome,profileSkills).map(item=>({...item,level:item.level??outcome?.profile_skills?.find(other=>namesSkill([other],item))?.competence_score??null}));
   const parts=skillParts(skill,skills).map(item=>({name:item.name,reason:item.reason,has:profileSkills.some(own=>namesSkill([item],{name:own.name}))}));
   return [skill,{skill,outcome,level,target,status:levelStatus(level,target),key:skill.item_id||skill.name,pending:pending(skill),linked,parts}];
@@ -199,7 +189,6 @@ export function SkillsNeeded({skills,categories,outcomes,profileLevels,profileSk
   {!skills.length&&<p className="ws-empty">No skills are listed for this goal yet. Refine your goal to add or clarify them.</p>}
  </section>;
 }
-/** Part-to-whole of the goal's own priorities. Every slice is named and counted beside the ring. */
 function PriorityRing({skills}:{skills:ReviewSkill[]}){
  const essential=skills.filter(skill=>skill.priority==='required'||skill.priority==='preferred').length;
  const slices=[{label:'Essential',count:essential,color:'#34D399'},{label:'Nice to have or not stated',count:skills.length-essential,color:'#64748B'}].filter(slice=>slice.count>0);

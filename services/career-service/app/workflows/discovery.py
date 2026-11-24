@@ -77,7 +77,6 @@ def citations(ids,sources):
 
 
 def plain_reply(value):
-    # Only server-resolved references can create external links.
     return re.sub(r'https?://\S+', '', re.sub(r'\[([^]]+)\]\([^)]*\)', r'\1', value)).strip() or 'What would you like to explore?'
 
 
@@ -109,7 +108,6 @@ def summary_message(scope,result,summary,sources,status=AUTO_SAVED):
     if result['warnings']:sections.append('### Research limitations\n\n'+'\n'.join('- '+plain_reply(w) for w in result['warnings']))
     if summary.question:sections.append('### A question for you\n\n'+plain_reply(summary.question))
     closing='**You can ask questions and refine your career goal through this chat.**'
-    # Reserve space for the invitation even when unusually long citations hit the bound.
     message=''
     for section in sections:
         if len(message)+len(section)+len(closing)+4<=MAX_SUMMARY_MESSAGE:message+=('\n\n' if message else '')+section
@@ -146,7 +144,6 @@ def aggregate(scope,listings,settings=None):
             name=item['name'];category=item['category']
             if item['kind']=='skill':
                 canonical=ALIASES.get((category.casefold(),name.casefold()))
-                # Alias lookup spans taxonomy categories only when unambiguous.
                 matches={v for (c,n),v in ALIASES.items() if n==name.casefold()}
                 canonical=canonical or (next(iter(matches)) if len(matches)==1 else None)
                 key=canonical or (normal(name),category)
@@ -269,7 +266,6 @@ class DiscoveryEngine:
                     'scope':row.get('scope'),'reply':social_reply,'question':question,'source_ids':[]})
                 return {'decision':decision.model_dump(mode='json'),'digest':digest}
             direction={k:v for k,v in previous.items() if k in ('scope','excluded_skills','requested_skills')}
-            # Preserve whole recent exchanges.
             history=[DiscoveryHistoryMessage(**m) for m in messages[-28:]]
             request=AIInput(stage='discovery_turn',context=json.dumps({
                 'previous':direction,'memory':previous.get('memory',{}),'understanding':DiscoveryUnderstanding.model_validate(previous.get('understanding',{})).model_dump(mode='json'),'scope':row.get('scope'),
@@ -304,7 +300,6 @@ class DiscoveryEngine:
             return {**state,'decision':decision.model_dump(mode='json'),'research_ready':ready_for_research(decision)}
         def clarify(state):
             decision=state['decision']
-            # Guidance and redirects remain available before the research gate passes.
             if decision['action'] in ('ANSWER','REJECT_OUT_OF_SCOPE'):return state
             questions=clarification_bundle(decision['understanding'])
             if decision['action'] not in ('ASK_CLARIFICATION','SUGGEST_ROLES'):
@@ -331,11 +326,9 @@ class DiscoveryEngine:
         decision=value['decision']
         rejected=decision['action']=='REJECT_OUT_OF_SCOPE'
         if rejected:
-            # Never persist model-proposed context or execute actions for an unrelated request.
             decision=Decision(action='REJECT_OUT_OF_SCOPE',scope=None,question=None,
                 reply='I can help with careers, jobs and internships. What kind of work or career question would you like to explore?').model_dump(mode='json')
         proposed=decision.get('scope')
-        # A question does not silently change the current research scope.
         if decision['action']=='ANSWER':proposed=row.get('scope') or proposed;decision['scope']=proposed
         values={'updated_at':now()}
         if not rejected:values['decision']=decision
@@ -426,7 +419,6 @@ class DiscoveryEngine:
 
     def research_queries(self,row):
         scope=Scope.model_validate(row['scope'])
-        # Retried older plans also gain field context.
         initial=[q if normal(scope.field) in normal(q) else scope.field+' '+q for q in row['plan']['queries']]
         prefix=' '.join(v for v in (scope.field,scope.area,scope.location,
             scope.career_stage.replace('_',' ') if scope.career_stage!='unspecified' else None,str(now().year)) if v)
@@ -443,7 +435,6 @@ class DiscoveryEngine:
         queries,initial=self.research_queries(row)
         remaining=[q for q in initial if q not in searched]
         if not remaining:
-            # A quota/restart resume finishes existing assessment/extraction first.
             if not row.get('followup_requested'):return state
             remaining=[q for q in queries if q not in searched][:2]
         async def fetch(query):
@@ -503,15 +494,12 @@ class DiscoveryEngine:
                 sources=[v for v in row.get('sources') or [] if v['source_id'] not in rejected])
             return False
         scope=Scope.model_validate(row['scope'])
-        # Replace only the rejected evidence in this same scope, keeping all other
-        # candidates, assessments and completed extractions. One retry per run.
         query=' '.join(v for v in (scope.field,scope.area,scope.location,
             scope.career_stage.replace('_',' ') if scope.career_stage!='unspecified' else None,
             str(now().year),'alternative employers individual job vacancies responsibilities required skills') if v)[:350]
         await thread(self.update,row,replacement_searches=1,rejected_source_ids=rejected,
             sources=[v for v in row.get('sources') or [] if v['source_id'] not in rejected],
             stage='search_job_listings',replacement_query=query)
-        # A durable marker lets quota/restart recovery resume this same search.
         await self.finish_replacement_search(state)
         return True
 
@@ -653,7 +641,6 @@ class DiscoveryEngine:
         return state
 
     async def target(self,state):
-        # Re-synthesise if a chat answer arrives while synthesis runs.
         for _ in range(3):
             row=await thread(self.research_row,state);result=row['aggregate'];scope=Scope.model_validate(row['scope'])
             if 'publication_selection_version' not in row:
@@ -718,7 +705,6 @@ class DiscoveryEngine:
                 employment_type=review.content.employment_type,review_id=review.id,expected_review_version=review.version,
                 expected_selection_version=row['publication_selection_version'])
             current=self.app.state.goal_store.current(owner).get('goal')
-            # Refining (or replaying) this chat's own goal needs no consent; replacing another goal does.
             own_goal=current and current.discovery and current.discovery.research_id.split(':')[0]==row['_id']
             if not own_goal and self.publication_selection(row)!=row['publication_selection_version']:
                 raise GoalError('The current goal changed during discovery. Review this direction again.')

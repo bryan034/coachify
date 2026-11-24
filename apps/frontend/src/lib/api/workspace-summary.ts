@@ -11,7 +11,6 @@ import { listApplications } from './jobs';
 import { roadmapApi } from './roadmap';
 import { errorText } from '@/lib/errors';
 
-/** Read-only views of other services for pages that summarise them. Each loads and fails on its own. */
 export type Section<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 'error'; message: string };
 
 export function useSection<T>(load: (token: string, signal: AbortSignal) => Promise<T>, token: string | undefined) {
@@ -34,21 +33,16 @@ export function useSection<T>(load: (token: string, signal: AbortSignal) => Prom
 
 export const loadGoal = (token: string, signal: AbortSignal) => careerApi<CurrentGoal>('/goals/current', token, { signal });
 
-/** The Skills Profile's own numbers, shared by every page that mentions the user's skills. */
 export type ProfileLevel = { name: string; canonicalId?: string | null; level: number };
-/** `skills`: every Skills Profile entry, rated or not. */
 export type SkillsSummary = { reviewNeeded?: boolean; total: number; experiences: number; levels?: ProfileLevel[]; skills?: { name: string; canonicalId?: string | null; level: number | null }[]; groups: { name: string; count: number; skills: string[] }[] };
 export async function loadSkills(token: string, signal: AbortSignal): Promise<SkillsSummary> {
  const [profile, merged, ratings] = await Promise.all([cvApi.skillsProfile(token, signal), cvApi.skills(token, signal),
-  // The person's own ratings are optional here: without them only the CV and review levels are shown.
   skillRatings(token, signal).catch(() => null)]);
  const cv = merged.cv_id ? await cvApi.get(merged.cv_id, token, signal) : null;
  const skills = skillCards(merged);
  const groups = groupSkills(skills, skill => skill.name, skillCardGroups(merged));
- // Same rule as the Skills Profile page: CV items that are not skills, plus profile entries.
  const experiences = (cv ? cv.items.filter(item => !item.removed && item.kind !== 'skill').length : 0) + profile.entries.length;
  const own = new Map((ratings?.ratings ?? []).map(rating => [rating.key, rating.score]));
- // The level the Skills Profile shows for a skill: the CV or review level, else the person's own rating.
  const all = skills.map(skill => ({ name: skill.name, canonicalId: skill.canonicalId, level: skill.ownLevel?.level ?? own.get(ratingKey(skill)) ?? null }));
  const levels = all.flatMap((skill): ProfileLevel[] => skill.level == null ? [] : [{ ...skill, level: skill.level }]);
  return { levels, skills: all, reviewNeeded: Boolean(cv && cv.profile_reviewed_effective_version !== cv.effective_version), total: skills.length, experiences, groups: groups.map(group => ({ name: group.name, count: group.items.length, skills: group.items.map(skill => skill.name) })) };

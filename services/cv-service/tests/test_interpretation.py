@@ -109,7 +109,6 @@ def test_pending_answer_is_durable_before_provider_and_recoverable(harness):
     app.state.interpreter.before_return = inspect_durable_answer
     app.state.interpreter.payload = mixed_output
     assert client.put(path, json=mutation(cv['version'], action='answer', answer=PERSONAL)).status_code == 200
-    # Reproduce a process death after the first write using the persisted state.
     current = app.state.service.get('owner-a', cv['id'])
     changed = deepcopy(current)
     q = next(q for q in changed['clarifications'] if q['id'] == question['id'])

@@ -115,7 +115,6 @@ class GoalStore:
         payload=mongo_document(CareerGoal.model_validate(goal))
         draft=self.goals.find_one({'_id':payload['_id'],'user_id':goal.user_id,'record_type':'requirement_review'})
         if draft:
-            # Promote the same record: source content is replaced by the canonical goal.
             payload.update({k:draft[k] for k in ('source_hash','receipts') if k in draft})
             result=self.goals.replace_one({'_id':payload['_id'],'user_id':goal.user_id,'record_type':'requirement_review','version':goal.version},payload)
             if not result.matched_count:raise GoalError('The goal changed while saving.')
@@ -146,7 +145,6 @@ class GoalStore:
         if discovery_id:selection_query['active_discovery']=discovery_id
         if state['version'] != data.expected_selection_version:
             raise GoalError('Your selected goal changed. Reload before confirming.')
-        # Metadata-equivalent confirmation is a no-op, not a new selection/version.
         previous = self.current(owner)['goal']
         fields = ('job_dates','discovery','target_type','field','role','employment_type','company','location','seniority_level','job_url','interests','preferences','source_cv_id','source_cv_version','source_extraction_version','source_profile_version','exploration_draft_id','exploration_draft_version','skills','non_skill_requirements','summary','responsibilities','readiness','requirements_need_review','skill_mapping_version')
         if previous and all(getattr(previous, f) == getattr(goal, f) for f in fields):

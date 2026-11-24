@@ -1,4 +1,3 @@
-/** The three connected points of the elo mark. The last point is always the goal, in Mint. */
 export function PathMark({ reversed = false }: { reversed?: boolean }) {
  const line = reversed ? '#FFFFFF' : '#111827';
  return <svg className="path-mark" viewBox="0 0 240 160" fill="none" aria-hidden="true">

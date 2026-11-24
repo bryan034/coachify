@@ -4,7 +4,6 @@ from app.planning.state import ASSESSMENT_FIELDS
 
 MAX_ATTEMPTS=3
 PLAN_MAX_TOKENS=24000
-# Total operation budget, including up to 60 Assessment polls at two-second intervals.
 PLANNING_SECONDS=240
 
 def planning_assessment(result):

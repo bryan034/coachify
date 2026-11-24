@@ -13,5 +13,4 @@ class QuestionRoute(Contract):
 class FocusedAnswer(Contract):
     status:Literal['answered','not_found','off_topic']='answered'
     reply:ChatText
-    # Answers may cite every supplied fact; the workflow validates membership.
     references:list[Text]=Field(default_factory=list)

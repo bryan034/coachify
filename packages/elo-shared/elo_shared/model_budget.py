@@ -60,7 +60,6 @@ def _charge(subject, calls_limit):
                      'calls INTEGER NOT NULL, units INTEGER NOT NULL)')
         now = datetime.now(timezone.utc)
         day = now.date().isoformat()
-        # A backwards clock must never renew capacity.
         watermark = conn.execute("SELECT day FROM daily_usage WHERE subject='deployment'").fetchone()
         if watermark and day > watermark[0]:
             conn.execute('DELETE FROM daily_usage')

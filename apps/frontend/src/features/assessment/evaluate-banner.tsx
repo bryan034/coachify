@@ -7,7 +7,6 @@ import '@/styles/evaluate.css';
 type Page = '/career-goal' | '/cv';
 type Step = { title: string; text: string; href: Page; action: string };
 
-/** The one setup step still open, if any; a goal comes first. */
 function setupStep(c: Comparison): Step | null {
  const context = c.context!;
  const issues = context.issues ?? [];
@@ -20,10 +19,6 @@ function setupStep(c: Comparison): Step | null {
  return null;
 }
 
-/**
- * Shown on Career Goal and Skills Profile until a current evaluation exists. It is either a pointer to the setup
- * step still open, or the button that starts the evaluation; never both. A current result hides it.
- */
 export function EvaluateBanner({ comparison: c, here }: { comparison: Comparison; here: Page }) {
  if (c.error && !c.current) return <section className="evaluate-banner is-setup" role="alert"><div><h2>Your evaluation could not be loaded</h2><p>{c.error}</p></div><div className="evaluate-banner-actions"><button type="button" className="btn" onClick={c.retry}>Reload</button></div></section>;
  if (!c.current || !c.context || c.result) return null;

@@ -27,7 +27,6 @@ def fingerprint(value):
 
 @contextmanager
 def operation_scope(identifier, *, inherit=False):
-    # Hash the caller's operation ID into a scoped opaque ID.
     opaque = (_operation_id.get() if inherit and _operation_id.get() is not None else
               fingerprint('elo-model-operation:' + identifier) if isinstance(identifier, str) and identifier else None)
     token = _operation_id.set(opaque)
@@ -45,7 +44,6 @@ def schema_fingerprint(payload):
     fmt = response_format.get('format')
     if schema is None and isinstance(fmt, dict): schema = fmt.get('schema')
     if schema is None:
-        # JSON-object compatibility sends its schema as the final system suffix.
         for message in payload.get('messages', payload.get('input', [])):
             if isinstance(message, dict) and message.get('role') == 'system' and isinstance(message.get('content'), str):
                 parts = message['content'].rsplit('\nJSON schema: ', 1)

@@ -12,13 +12,11 @@ import type { Section, SkillsSummary } from '@/lib/api/workspace-summary';
 import { formatDate, formatDuration, formatRunwaySpan } from '@/lib/format';
 
 export const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-/** Durations and dates read the same on every page; see lib/format. */
 export const hours = formatDuration;
 export const longDate = (value: string) => formatDate(value);
 const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? '' : 's'}`;
 const focuses: [LearningFocus, string][] = [['interview_practice', 'Interview practice'], ['portfolio_work', 'Portfolio work'], ['hands_on_projects', 'Hands-on projects'], ['courses_and_reading', 'Courses and reading'], ['certification', 'Certification'], ['networking', 'Networking']];
 
-/** The unsaved settings draft. */
 export function useSettingsDraft(workspace: Workspace | null, token: string) {
  const planner = workspace?.planner;
  const [draft, setDraft] = useState<PlannerConfig | null>(null);
@@ -42,12 +40,10 @@ export function useSettingsDraft(workspace: Workspace | null, token: string) {
   calculating: !!draft && !current && !previewError,
   update: (patch: Partial<PlannerConfig>) => { if (config) setDraft({ ...config, ...patch }); },
   clear: () => setDraft(null),
-  // Only clears the version that was saved.
   clearIf: (saved: PlannerConfig) => setDraft(current => current === saved ? null : current),
  };
 }
 
-/** A date written into the sentence. The native input takes over while it has focus, and clicking opens its picker. */
 function DateToken({ name, value, shown, warn, required, onChange }: { name: string; value: string; shown: string; warn?: boolean; required?: boolean; onChange: (value: string) => void }) {
  return <label className={`token date-token${warn ? ' warn' : ''}${value ? '' : ' empty'}`}>
   <span aria-hidden="true">{shown}{warn && <i> ⚠</i>}</span>
@@ -55,12 +51,10 @@ function DateToken({ name, value, shown, warn, required, onChange }: { name: str
  </label>;
 }
 
-/** Sizes an input to its text. */
 function FittedInput({ value, ...input }: React.InputHTMLAttributes<HTMLInputElement> & { value: number | '' }) {
  return <span className="token-fit"><span className="token-ghost" aria-hidden="true">{value === '' ? '0' : value}</span><input type="number" placeholder="0" value={value} {...input} /></span>;
 }
 
-/** A number written into the sentence, sized to what it holds. */
 function NumberToken({ name, value, suffix, attached, onChange, ...limits }: { name: string; value: number | ''; suffix: string; attached?: boolean; onChange: (value: string) => void; min: number; max: number; step: number | 'any' }) {
  return <label className={`token${value === '' ? ' empty' : ''}`}>
   <FittedInput aria-label={name} value={value} onChange={event => onChange(event.target.value)} {...limits} />
@@ -74,7 +68,6 @@ const blockEnd = (block: StudyBlock) => clockOf(clockMinutes(block.start_time) +
 const blockHours = (block: StudyBlock) => `${block.start_time}–${blockEnd(block)}`;
 const MIN_BLOCK = 15, MAX_BLOCK = 480;
 
-/** The end time drives the block's minutes. A time that makes the block too short or long waits here until it's corrected. */
 function BlockEnd({ block, name, change }: { block: StudyBlock; name: string; change: (patch: Partial<StudyBlock>) => void }) {
  const saved = blockEnd(block);
  const [typed, setTyped] = useState(saved);
@@ -96,10 +89,8 @@ function BlockRow({ block, index, change, remove, close }: { block: StudyBlock; 
  </div>;
 }
 
-/** Breaks after the dash, so a narrow week shows the start above the end. */
 const Hours = ({ text }: { text: string }) => { const [from, to] = text.split('–'); return <strong>{to ? <>{from}–<wbr />{to}</> : text}</strong>; };
 
-/** The week of study blocks and blocked times. Choosing one opens its details underneath. */
 function StudyWeek({ blocks, blackouts, startDate, setBlocks, setBlackouts }: { blocks: StudyBlock[]; blackouts: BlackoutRule[]; startDate: string; setBlocks: (blocks: StudyBlock[]) => void; setBlackouts: (rules: BlackoutRule[]) => void }) {
  const [editing, setEditing] = useState<{ type: 'study' | 'blocked'; index: number } | null>(null);
  const isOpen = (type: 'study' | 'blocked', index: number) => editing?.type === type && editing.index === index;
@@ -135,7 +126,6 @@ function StudyWeek({ blocks, blackouts, startDate, setBlocks, setBlackouts }: { 
  </>;
 }
 
-/** A chip that opens a small panel. Escape or a click anywhere else closes it. */
 function UseMenu({ label, children }: { label: string; children: ReactNode }) {
  const [open, setOpen] = useState(false);
  const root = useRef<HTMLDivElement>(null); const button = useRef<HTMLButtonElement>(null); const id = useId();
@@ -152,7 +142,6 @@ function UseMenu({ label, children }: { label: string; children: ReactNode }) {
  </div>;
 }
 
-/** Start to target as a line of months. The stats beside it carry the numbers. */
 function RunwayLine({ start, target }: { start: string; target: string }) {
  const months = monthsBetween(start, target);
  if (target <= start || months.length > 14) return null;
@@ -164,7 +153,6 @@ function RunwayLine({ start, target }: { start: string; target: string }) {
  })}</ol>;
 }
 
-/** Each stop's road runs from its own lane to the next stop's, so the stops zigzag gently down the page. */
 const lane = (index: number) => index % 2 ? 72 : 28;
 function Road({ index, travelled }: { index: number; travelled: boolean }) {
  const path = `M${lane(index)} 0C${lane(index)} 50 ${lane(index + 1)} 50 ${lane(index + 1)} 100`;
@@ -207,11 +195,9 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
  const blackoutPeriods = defaults.availability_periods.filter(period => period.weekly_hours === 0);
  const reduced = defaults.availability_periods.filter(period => period.weekly_hours > 0);
  const jobDates = (context.goal?.job_dates || []).filter(date => date.date && date.date > runway.resolved.today);
- // Focus options are the skills the Career goal expects; the roadmap accepts at most 12 topics.
  const themes = [...new Set((planner.inputs.goal?.skills ?? []).map(skill => skill.name).filter((name): name is string => !!name))].slice(0, 12);
  const topics = config.learning_topics ?? [];
  const allChosen = themes.length > 0 && themes.every(theme => topics.includes(theme));
- // Themes come from the Skills Profile; earlier saved generic focuses still show until removed.
  const chosenFocus = [...(config.learning_topics ?? []), ...focuses.filter(([value]) => config.learning_focus.includes(value)).map(([, label]) => label)];
  const showFocus = choosingFocus || !!config.learning_notes.trim();
 
@@ -246,7 +232,6 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
    </div>}
   </> },
  ];
- // The road is travelled up to the first required detail still missing. Filling that in moves it on.
  const firstMissing = stops.findIndex(stop => stop.required && !stop.filled);
  const reached = firstMissing < 0 ? stops.length : firstMissing;
 

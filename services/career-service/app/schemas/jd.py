@@ -42,7 +42,6 @@ class JDExtraction(Contract):
     company: Text | None
     location: Text | None = None
     seniority_level: Text | None = None
-    # Set from the supplied source URL by the API, never invented by the model.
     job_url: SourceUrl | None = None
     summary: Evidence | None = None
     responsibilities: list[Evidence] = Field(default_factory=list, max_length=20)

@@ -47,7 +47,7 @@ def run_flow(monkeypatch,base,*,parameter=None):
 
 def test_openrouter_requests_use_the_openai_sdk_and_json_output(monkeypatch):
     requests=run_flow(monkeypatch,'https://openrouter.ai/api/v1')
-    assert len(requests)==3  # chat, then the outline and its first week
+    assert len(requests)==3
     for request,body in requests:
         assert str(request.url)=='https://openrouter.ai/api/v1/chat/completions'
         assert request.headers['authorization']=='Bearer synthetic-key'

@@ -28,7 +28,6 @@ def store(request):
 
 async def state(request,account):
     repo=store(request);row=await thread(repo.row,account);w=row.get('workspace',{})
-    # Adopt an existing active goal once, without exposing a session chooser.
     if not w and row.get('goal_id'):
         review=await thread(repo.reviews.get,str(row['goal_id']),account)
         await thread(repo.adopt_goal,account,row['goal_id'],review)
@@ -159,7 +158,6 @@ async def answer_message(body,request,account,key):
         return {'reply':'Your requested career goal changes have already been saved.','proposed_skills':None,'edit_status':'saved','workspace':await state(request,account)}
     row=await thread(repo.check,account,body.session_id,body.expected_version);w=row['workspace']
     if w.get('expires_at',now())<=now():raise GoalError('Temporary workflow expired. Resume your saved career goal.')
-    # focused_chat returns None for edit requests (and pending edit clarifications), which go to the guided edit flow.
     answer=await focused_chat(request,account,row,body)
     if answer is not None:
         await thread(repo.check,account,body.session_id,body.expected_version)
@@ -186,7 +184,6 @@ async def answer_message(body,request,account,key):
         request.app.state.workflow.launch(account,replace=True)
     else:
         await thread(repo.edit_draft,account,body.session_id,body.expected_version,None)
-        # The requested values already match the goal; do not create another version.
         await thread(repo.record_chat_receipt,account,body.session_id,{'key':key,'hash':digest})
     await thread(repo.touch,account,body.session_id)
     return {'reply':decision.reply,'proposed_skills':None,'edit_status':'saved','workspace':await state(request,account)}

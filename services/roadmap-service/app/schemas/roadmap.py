@@ -100,7 +100,6 @@ class PlannerConfig(Contract):
         if any(period.end_date<period.start_date for period in self.reduced_periods):raise ValueError('A reduced-availability period ends before it starts.')
         return self
 
-# The patch fields stay loose; invalid patches are rejected at the merge step.
 class PatchBlock(Contract):
     day:int
     start_time:str
@@ -323,7 +322,6 @@ class OperationView(Contract):
 class OperationAccepted(Contract):
     version:int
     operation:OperationView|None
-# Stored records can predate these models; unexpected extras stay readable.
 class SavedRecord(Contract):
     model_config=ConfigDict(extra='allow')
 class MilestoneOutcomeRecord(SavedRecord):

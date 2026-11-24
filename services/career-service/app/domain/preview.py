@@ -32,8 +32,6 @@ def run_preview(kind, data, extension=''):
 def run_browser_preview(url,deadline):
     remaining=deadline-time.monotonic()
     if remaining<=0:raise HTTPException(422,'The import timed out. Paste the description or upload a document.')
-    # Parent owns the temporary profile directory and always kills the whole process
-    # group before deleting it, including browser descendants after a hard timeout.
     with tempfile.TemporaryDirectory(prefix='elo-browser-') as directory:
         process=subprocess.Popen([sys.executable,'-m','app.workers.browser_preview',str(remaining)],
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
@@ -48,7 +46,6 @@ def run_browser_preview(url,deadline):
         except (subprocess.SubprocessError,ValueError):
             raise HTTPException(422,'The JavaScript preview could not be prepared within the import limits. Paste the description or upload a document.') from None
         finally:
-            # Include Chromium's descendants before terminating the supervisor group.
             descendants=child_processes(process.pid)
             for child in reversed(descendants):
                 with suppress(ProcessLookupError):os.kill(child,signal.SIGKILL)

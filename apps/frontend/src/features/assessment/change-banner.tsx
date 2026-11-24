@@ -10,7 +10,6 @@ import '@/styles/evaluate.css';
 
 export type Change = 'cv' | 'goal' | 'cv_and_goal' | 'details';
 
-/** What differs between the inputs an evaluation used and the current ones. */
 export function describeChange(before: InputRevisions | undefined, now: InputRevisions | undefined): Change {
  if (!before || !now) return 'details';
  const cv = before.cv_id !== now.cv_id;
@@ -21,24 +20,13 @@ export function describeChange(before: InputRevisions | undefined, now: InputRev
 type Roadmap = { active: { assessment_hash: string } | null } | null;
 const DISMISSED = 'elo:change-banner-dismissed';
 const remembered = () => { try { return window.sessionStorage.getItem(DISMISSED); } catch { return null; } };
-/** Input hashes an automatic update was already started for in this page load. */
 const attempted = new Set<string>();
-/** Test hook: forget automatic attempts between cases. */
 export function resetAutomaticEvaluations() { attempted.clear(); }
 
-/** Career Goal and Skills Profile keep the skill evaluation in step with the goal and CV automatically. */
 const evaluates = (path: string) => path === '/cv' || path.startsWith('/cv/') || path === '/career-goal' || path.startsWith('/career-goal/');
 const showsProgress = (path: string) => evaluates(path) && !path.startsWith('/career-goal/chat') && !path.startsWith('/career-goal/discovery');
 const isHome = (path: string) => path === '/dashboard';
 
-/**
- * Keeps the skill evaluation in step with the active CV and career goal.
- * - On Career Goal and Skills Profile, a changed CV or goal starts a new evaluation on its own once the
- *   new skills are rated (the CV review is finished) and goal research is done. While it runs, a banner says so;
- *   otherwise nothing is shown here.
- * - On Home, once the active roadmap was built from older inputs, it points to the roadmap to regenerate it.
- *   Roadmap shows its own out-of-date banner. Other pages show nothing.
- */
 export function ChangeBanner() {
  const { token } = useProfile();
  const pathname = usePathname();
@@ -54,7 +42,6 @@ export function ChangeBanner() {
   window.addEventListener('focus', load); window.addEventListener(COMPARISON_REFRESH, load);
   return () => { abort.abort(); window.removeEventListener('focus', load); window.removeEventListener(COMPARISON_REFRESH, load); };
  }, [token]);
- // A route change is a fresh look at the workspace: re-read the evaluation and roadmap.
  const lastPath = useRef(pathname);
  useEffect(() => { if (pathname !== lastPath.current) { lastPath.current = pathname; announceInputsChanged(); } }, [pathname]);
 
@@ -84,7 +71,6 @@ export function ChangeBanner() {
    <span className="evaluate-banner-mark is-busy" aria-hidden="true"/>
    <div><h2 id="change-banner-title">Evaluating the skill gap between you and your career goal…</h2><p role="status">This usually takes a minute or two. You can leave this page and come back.</p></div>
   </section>;
-  // An automatic update that failed is not retried on its own; say so once, with a way to retry.
   const failed = outdated && operation?.status === 'failed' && !!hash && attempted.has(hash);
   if (failed || (outdated && c.error)) return <section className="evaluate-banner change-banner" role="alert" aria-labelledby="change-banner-title">
    <span className="evaluate-banner-mark" aria-hidden="true">!</span>
