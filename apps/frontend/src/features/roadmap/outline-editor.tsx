@@ -1,18 +1,16 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Outline, RoutineRule } from './types';
 const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 function draftOf(outline: Outline) {
  return { weeks: (outline.weeks || []).map(({week_start,objective,expected_outcome,estimated_minutes,milestone_key,gap_ids})=>({week_start,objective,expected_outcome,estimated_minutes,milestone_key,gap_ids})), summary: outline.summary, gaps: outline.gaps, milestones: outline.milestones.map(({ id: _id, outcome: _outcome, checkpoints, ...m }) => ({ ...m, ...(checkpoints ? { checkpoints: checkpoints.map(({ reached_at: _reachedAt, ...checkpoint }) => checkpoint) } : {}) })), routine_rules: outline.routine_rules, deadline_outcome: outline.deadline_outcome, beyond_deadline: outline.beyond_deadline, exclusions: outline.exclusions };
 }
 
-export function OutlineEditor({outline,frozen,change,onEditingChange}: {outline: Outline; frozen: boolean; onEditingChange:(editing:boolean)=>void; change: (path:string,data:Record<string,unknown>,method?:'PATCH')=>Promise<boolean>}) {
- const [draft,setDraft]=useState(()=>draftOf(outline)); const [editing,setEditing]=useState(false);
- useEffect(()=>{setDraft(draftOf(outline));setEditing(false);onEditingChange(false);},[outline.id,onEditingChange]);
+export function OutlineEditor({outline,frozen,change,finishEditing}: {outline: Outline; frozen: boolean; finishEditing:()=>void; change: (path:string,data:Record<string,unknown>,method?:'PATCH')=>Promise<boolean>}) {
+ const [draft,setDraft]=useState(()=>draftOf(outline));
  const updateRule=(index:number,patch:Partial<RoutineRule>)=>setDraft({...draft,routine_rules:draft.routine_rules.map((r,i)=>i===index?{...r,...patch}:r)});
  const addRule=()=>{const first=draft.milestones[0];if(first)setDraft({...draft,routine_rules:[...draft.routine_rules,{id:crypto.randomUUID(),revision:1,milestone_key:first.key,activity:'',weekdays:[0],duration_minutes:30,topic_progression:[],difficulty:'',start_date:first.projected_start,end_date:first.projected_end,user_wording:''}]});};
- const save=async()=>{if(await change(`/planner/outlines/${outline.id}`,{outline:draft},'PATCH')){setEditing(false);onEditingChange(false);}};
- if(!editing)return <button className="btn ghost" disabled={frozen} onClick={()=>{setEditing(true);onEditingChange(true);}}>Edit outline</button>;
+ const save=async()=>{if(await change(`/planner/outlines/${outline.id}`,{outline:draft},'PATCH'))finishEditing();};
  return <div className="outline-editor"><p className="small">Saving changes keeps your accepted work and clears the first-week preview. Plan it again after accepting the outline.</p>
   {draft.milestones.map((m, i) => <fieldset key={m.key} disabled={frozen}><legend>Milestone {i + 1}</legend>
    <label>Title <input value={m.title} onChange={e => setDraft({ ...draft, milestones: draft.milestones.map((item, n) => n === i ? { ...item, title: e.target.value } : item) })} /></label>
@@ -31,8 +29,8 @@ export function OutlineEditor({outline,frozen,change,onEditingChange}: {outline:
    <label>Topics, separated by commas <input value={r.topic_progression.join(',')} onChange={e => updateRule(i, { topic_progression: e.target.value ? e.target.value.split(',') : [] })} /></label>
    <label>Start <input type="date" value={r.start_date} onChange={e => updateRule(i, { start_date: e.target.value })} /></label><label>End <input type="date" value={r.end_date} onChange={e => updateRule(i, { end_date: e.target.value })} /></label>
    <div>{days.map((day, n) => <label key={day}><input type="checkbox" checked={r.weekdays.includes(n)} onChange={e => updateRule(i, { weekdays: e.target.checked ? [...r.weekdays, n].sort() : r.weekdays.filter(d => d !== n) })} />{day}</label>)}</div>
-   {editing && <button type="button" onClick={() => setDraft({ ...draft, routine_rules: draft.routine_rules.filter((_, n) => n !== i) })}>Remove routine</button>}
+   <button type="button" onClick={() => setDraft({ ...draft, routine_rules: draft.routine_rules.filter((_, n) => n !== i) })}>Remove routine</button>
   </fieldset>)}
-  {editing ? <div><button className="btn ghost" disabled={frozen} onClick={addRule}>Add routine</button><button className="btn" disabled={frozen} onClick={() => void save()}>Save outline changes</button><button className="btn ghost" onClick={() => { setDraft(draftOf(outline)); setEditing(false); onEditingChange(false); }}>Cancel</button></div> : <button className="btn ghost" disabled={frozen} onClick={() => setEditing(true)}>Edit outline</button>}
+  <div><button className="btn ghost" disabled={frozen} onClick={addRule}>Add routine</button><button className="btn" disabled={frozen} onClick={() => void save()}>Save outline changes</button><button className="btn ghost" onClick={finishEditing}>Cancel</button></div>
 </div>;
 }

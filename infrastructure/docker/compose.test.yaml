@@ -1,4 +1,9 @@
 services:
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    profiles: [mailpit]
+    ports: ["127.0.0.1:8026:8025"]
+    networks: [backend]
   career-service:
     environment:
       ELO_SYNTHETIC_TEST_FIXTURES: '1'

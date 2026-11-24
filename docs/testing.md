@@ -122,16 +122,16 @@ duplicate signup, code expiry and guess limits, concurrent resets, authenticatio
 mode isolation, and session/old-password invalidation without losing profile data.
 Frontend recovery coverage is in `password-recovery.test.tsx`.
 
-The `local-ui-integration` job tests real Gmail OTP delivery, account isolation,
-onboarding, session revocation, and saved profile and planning data. The tests
-create unique `+elo-…` aliases of a dedicated Gmail account. Profile sends the
-codes over Gmail SMTP, and Playwright reads them from that account's inbox over
-IMAP. Use a dedicated Gmail account with an [App Password](https://support.google.com/accounts/answer/185833).
+The `local-ui-integration` job tests OTP delivery, account isolation, onboarding,
+session revocation, and saved profile and planning data. When both
+`ELO_TEST_GMAIL_ADDRESS` and `ELO_TEST_GMAIL_APP_PASSWORD` are available as GitHub
+Actions secrets, Profile sends codes over Gmail SMTP to unique `+elo-…` aliases
+and Playwright reads them over IMAP. Use a dedicated Gmail account with an
+[App Password](https://support.google.com/accounts/answer/185833).
 
-Add `ELO_TEST_GMAIL_ADDRESS` and `ELO_TEST_GMAIL_APP_PASSWORD` as GitHub Actions
-secrets. GitHub withholds those secrets from fork and Dependabot runs, so they
-skip the Gmail job. Same-repository runs require both secrets. Gmail test traces
-stay disabled to keep verification codes out of uploaded artifacts.
+Runs without both secrets use Mailpit on the disposable Compose stack, including
+fork and Dependabot runs. Playwright reads codes through Mailpit's loopback API.
+Integration traces stay disabled to keep verification codes out of artifacts.
 
 For a local run, export the same two variables in your shell and install
 Python 3.12. Start a disposable Compose project with the settings from the

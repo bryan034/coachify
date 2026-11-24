@@ -238,7 +238,6 @@ jobs:
 
   local-ui-integration:
     name: Local UI and MongoDB integration
-    if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
@@ -270,15 +269,19 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
         working-directory: apps/frontend
-      - name: Start the Gmail-backed test stack
+      - name: Start the browser integration stack
         env:
           SMTP_USERNAME: ${{ secrets.ELO_TEST_GMAIL_ADDRESS }}
           SMTP_FROM: ${{ secrets.ELO_TEST_GMAIL_ADDRESS }}
           SMTP_PASSWORD: ${{ secrets.ELO_TEST_GMAIL_APP_PASSWORD }}
         run: |
           if [[ -z "$SMTP_USERNAME" || -z "$SMTP_PASSWORD" ]]; then
-            echo "::error::Set ELO_TEST_GMAIL_ADDRESS and ELO_TEST_GMAIL_APP_PASSWORD in GitHub Actions secrets."
-            exit 1
+            echo "Gmail credentials are unavailable. Using the disposable SMTP inbox."
+            export COMPOSE_PROFILES=mailpit
+            export SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_SECURITY=plain
+            export SMTP_FROM=no-reply@elo.test SMTP_USERNAME='' SMTP_PASSWORD=''
+            echo "COMPOSE_PROFILES=mailpit" >> "$GITHUB_ENV"
+            echo "MAILPIT_BASE_URL=http://127.0.0.1:8026" >> "$GITHUB_ENV"
           fi
           docker compose --env-file /dev/null -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml up --build -d
       - name: Wait for the gateway and API
@@ -313,7 +316,6 @@ jobs:
           STATIC_RESULT: ${{ needs.static-analysis.result }}
           UNUSED_RESULT: ${{ needs.unused-code.result }}
           LOCAL_UI_RESULT: ${{ needs.local-ui-integration.result }}
-          GMAIL_SECRETS_UNAVAILABLE: ${{ github.actor == 'dependabot[bot]' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
           ANALYSIS_RESULT: ${{ needs.analysis-integration.result }}
           INTEGRATION_RESULT: ${{ needs.profile-integration.result }}
         run: |
@@ -325,8 +327,5 @@ jobs:
           test "$STATIC_RESULT" = success
           test "$UNUSED_RESULT" = success
           test "$INTEGRATION_RESULT" = success
-          if [[ "$LOCAL_UI_RESULT" != success ]]; then
-            test "$GMAIL_SECRETS_UNAVAILABLE" = true
-            test "$LOCAL_UI_RESULT" = skipped
-          fi
+          test "$LOCAL_UI_RESULT" = success
           test "$ANALYSIS_RESULT" = success

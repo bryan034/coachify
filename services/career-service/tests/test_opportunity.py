@@ -361,17 +361,40 @@ def test_global_validation_failure_reports_specific_code_and_ends_workspace_spin
 
 
 def test_quota_pause_does_not_reset_the_invalid_response_repair_budget(opportunity_flow):
-    flow=opportunity_flow;primary=flow[2];primary.invalid=True;original=primary.generate;attempts={}
-    async def generate(request,operation,**kwargs):
-        if request.stage=='opportunity_structure':
-            category=json.loads(request.context)['category'];attempts[category]=attempts.get(category,0)+1
-            if attempts[category]==2:raise AIError('rate_limited',limit_scope='user',retry_after=1)
-        return await original(request,operation,**kwargs)
-    primary.generate=generate;ingest(flow)
-    _,result,_=research(flow)
-    assert result['finished'] and result['status']=='failed'
-    assert all(count%2==1 for count in attempts.values()) and set(attempts)==set(CATEGORIES)
-    assert all(v['error_code']=='invalid_output' for v in result['categories'].values())
+    client, _, primary, _, _ = opportunity_flow
+    engine = client.app.state.opportunities
+    job_id = 'repair-budget-test'
+    engine.store.rows.insert_one({
+        '_id': job_id, 'owner': OWNER, 'goal_id': 'synthetic-goal',
+        'finished': False, 'next_attempt_at': now(),
+    })
+    errors = [
+        AIError('invalid_output', reason='provenance'),
+        AIError('rate_limited', limit_scope='user', retry_after=1),
+        AIError('invalid_output', reason='provenance'),
+    ]
+    requests = []
+
+    async def generate(request, operation, **kwargs):
+        requests.append(request.context)
+        if errors:
+            raise errors.pop(0)
+        return SimpleNamespace(data='unexpected extra repair')
+
+    primary.generate = generate
+    data = {'category': 'company_intelligence', 'evidence': [{'text': 'Synthetic report'}]}
+    first_worker = engine.store.claim(job_id, 'first-worker')
+    with pytest.raises(AIError) as paused:
+        client.portal.call(engine.generate, first_worker, 'opportunity_structure', data)
+    assert paused.value.code == 'rate_limited'
+    assert len(requests) == 2
+
+    engine.store.release(job_id, 'first-worker')
+    resumed_worker = engine.store.claim(job_id, 'resumed-worker')
+    with pytest.raises(AIError) as failed:
+        client.portal.call(engine.generate, resumed_worker, 'opportunity_structure', data)
+    assert failed.value.code == 'invalid_output'
+    assert requests == [json.dumps(data, separators=(',', ':'))] * 3
 
 
 def test_one_invalid_citation_does_not_discard_independently_supported_findings():
