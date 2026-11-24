@@ -4,7 +4,7 @@ x-model-budget: &model-budget
 
 services:
   gateway:
-    image: nginx:1.28-alpine
+    image: nginx:1.30.8-alpine
     ports: ["127.0.0.1:${GATEWAY_PORT:-8080}:80"]
     volumes: ["../gateway/nginx.conf:/etc/nginx/nginx.conf:ro"]
     depends_on: [frontend, profile-service, career-service, cv-service, assessment-service, roadmap-service, dashboard-service, jobs-service, socials-service]
@@ -306,7 +306,7 @@ services:
     networks: [database]
     restart: "no"
   mailpit:
-    image: axllent/mailpit:v1.32.0
+    image: axllent/mailpit:v1.34.0
     profiles: [development]
     ports: ["127.0.0.1:${MAILPIT_PORT:-8025}:8025"]
     networks: [backend]
