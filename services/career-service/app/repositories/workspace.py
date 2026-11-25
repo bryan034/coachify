@@ -2,7 +2,7 @@
 from datetime import timedelta
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
-from app.repositories.goals import GoalError,now,stable_id,require_new_goal
+from app.repositories.goals import GoalError,discovery_cleanup,now,stable_id,require_new_goal
 from app.schemas.goals import SaveGoal
 from app.schemas.analysis import CareerGoal
 
@@ -45,7 +45,9 @@ class WorkspaceStore:
 
     def claim_input(self,owner,key,digest,plan=None):
         self.ensure(owner);row,claim=self.check_input(owner,key,digest,plan)
-        if not claim:return False
+        if not claim:
+            self.goals.clear_discoveries(owner)
+            return False
         incoming=row.get('incoming',{})
         if incoming.get('key')==key and incoming.get('until',now())>now():raise GoalError('This description is already being extracted. Retry shortly.')
         self.rows.update_one({'_id':owner},{'$set':{'incoming':{'key':key,'hash':digest,'until':now()+timedelta(seconds=75)},'active_discovery':None}})
@@ -62,7 +64,9 @@ class WorkspaceStore:
         if not input_key and workspace.get('session_id')!=session:raise GoalError('This conversation was replaced by a new job description.')
         if not review.content.role or not review.content.field:raise GoalError('The description needs an identifiable role and field. Add more detail and retry.',422)
         selected=row.get('selected_review',{}) or {}
-        if not input_key and selected=={'id':review.id,'version':review.version}:return row
+        if not input_key and selected=={'id':review.id,'version':review.version}:
+            self.goals.clear_discoveries(owner)
+            return row
         command=SaveGoal(target_type=review.target_type,role=review.content.role,field=review.content.field,company=review.content.company,
             location=review.content.location,seniority_level=review.content.seniority_level,job_url=review.content.job_url,employment_type=review.content.employment_type,
             review_id=review.id,expected_review_version=review.version,expected_selection_version=row.get('version',0))
@@ -80,12 +84,14 @@ class WorkspaceStore:
         if direction_receipt:workspace['direction_receipt']=direction_receipt
         if not keep_run:workspace.pop('worker_until',None)
         update={'$set':{'goal_id':ObjectId(goal.id),'workspace':workspace,'selected_review':{'id':goal.id,'version':goal.version},'dependent_results_need_review':True},'$inc':{'version':1}}
+        if row.get('goal_id')!=ObjectId(goal.id):update['$set']['discovery_cleanup']=discovery_cleanup(goal)
         if input_key:
             update['$unset']={'incoming':''}
             update['$push']={'workspace_inputs':{'$each':[{'key':input_key,'hash':digest}],'$slice':-100}}
         if chat_receipt:
             update.setdefault('$push',{})['chat_receipts']={'$each':[chat_receipt],'$slice':-100}
         if not self.rows.update_one(query,update).matched_count:raise GoalError('Newer career-goal changes arrived. Reload the current conversation.')
+        self.goals.clear_discoveries(owner)
         return self.row(owner)
 
     def check(self,owner,session,review_version=None):

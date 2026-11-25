@@ -437,3 +437,22 @@ def test_interview_synthesis_repairs_repeatedly_without_repeating_search(flow):
     assert saved_research(flow,done) and done['error'] is None
     assert len([r for r in ai.calls if r.stage=='interview_synthesis'])==3
     assert len(sources.calls)==2
+
+
+@pytest.mark.parametrize('flow',['free','premium'],indirect=True)
+def test_a_job_description_goal_removes_discovery_chats_and_their_checkpoints(flow):
+    client,db,_,_=flow;discoveries='/api/v1/career/discoveries'
+    chats=[client.post(discoveries,headers=headers(),json={'consent':True}).json()['session']['id'] for _ in range(2)]
+    for identifier in chats:
+        db.career_checkpoints.insert_one({'thread_id':'discovery:'+identifier+':run','checkpoint_ns':''})
+        db.career_checkpoint_writes.insert_one({'thread_id':'discovery-conversation:'+identifier+':key','checkpoint_ns':''})
+    db.career_checkpoints.insert_one({'thread_id':'discovery:unrelated:run','checkpoint_ns':''})
+    key=str(uuid4())
+    assert ingest(flow,key=key).status_code==202
+    assert db.research_contexts.count_documents({'owner':OWNER,'kind':'career_discovery'})==0
+    assert db.career_checkpoints.count_documents({'thread_id':{'$regex':'^discovery'}})==1
+    assert db.career_checkpoint_writes.count_documents({'thread_id':{'$regex':'^discovery'}})==0
+    assert all(client.get(discoveries+'/'+identifier,headers=headers()).status_code==404 for identifier in chats)
+    view=client.get(discoveries+'/current',headers=headers()).json()
+    assert view.get('session') is None and view['introduction']
+    assert ingest(flow,key=key).status_code==202

@@ -744,7 +744,8 @@ class DiscoveryEngine:
             async with asyncio.timeout(seconds):
                 with tracing_context(enabled=False):await contained(self.graph.ainvoke({'id':identifier,'run':row['run'],'lease':row['lease']},config={'configurable':{'thread_id':'discovery:'+identifier+':'+row['run']}}),(AIError,SourceRateLimit,TimeoutError,ValueError,GoalError,PublicationPending))
         except asyncio.CancelledError:
-            await thread(self.update,row,lease_until=now());raise
+            with suppress(GoalError):await thread(self.update,row,lease_until=now())
+            raise
         except PublicationPending:
             with suppress(GoalError):await thread(self.update,row,next_attempt_at=now()+timedelta(seconds=1),lease_until=now())
         except (AIError,SourceRateLimit,TimeoutError,ValueError) as error:
@@ -767,8 +768,18 @@ class DiscoveryEngine:
                     await thread(resume_obsolete_model_waits,self.rows,'career_discovery')
                 rows=await thread(lambda:list(self.rows.find({'kind':'career_discovery','status':{'$in':['researching','waiting']},'next_attempt_at':{'$lte':now()},'lease_until':{'$lte':now()}},{'_id':1}).limit(10)))
                 for row in rows:self.launch(row['_id'])
+                await self.stop_removed()
             except PyMongoError:log.warning('discovery_recovery_unavailable')
             await asyncio.sleep(2)
+
+    async def stop_removed(self):
+        """Cancel research whose discovery chat was deleted, so it makes no further model calls."""
+        running=list(self.tasks)
+        if not running:return
+        live={row['_id'] for row in await thread(lambda:list(self.rows.find({'_id':{'$in':running}},{'_id':1})))}
+        for identifier in running:
+            task=self.tasks.get(identifier)
+            if identifier not in live and task:task.cancel()
 
     async def close(self):
         self.stopping=True;self.sweeper.cancel()

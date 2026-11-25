@@ -625,7 +625,7 @@ def test_distinct_start_keys_create_isolated_chats_with_no_inherited_memory(flow
     request,context=[v for v in flow[2].contexts if v[0].stage=='discovery_turn'][-1]
     assert context['previous']=={} and context['memory']=={} and context['facts']==[]
     assert all('problem solving' not in message.content for message in request.conversation)
-    assert flow[0].get(f"{BASE}/{previous['id']}",headers=headers()).json()['session']['messages']==previous['messages']
+    assert flow[0].get(f"{BASE}/{previous['id']}",headers=headers()).status_code==404
 
 
 def test_introduction_is_display_only_and_never_sent_to_ai(flow):

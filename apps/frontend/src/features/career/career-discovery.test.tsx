@@ -304,3 +304,28 @@ it('clears private history on account changes and ignores an earlier account rea
  expect(screen.queryByText('Old private conversation')).toBeNull();
  expect(screen.getByText('New account conversation')).toBeInTheDocument();
 });
+function removedChat(session:Record<string,unknown>){
+ const gone=Object.assign(new Error('Career discovery was not found.'),{status:404});let reads=0;
+ vi.mocked(careerApi).mockImplementation(async(path)=>{
+  if(path==='/discoveries/current')return (reads++?{available:true,session:null,introduction}:{available:true,session}) as never;
+  throw gone;
+ });
+}
+it('replaces a discovery removed during research with the new chat entry',async()=>{
+ removedChat({...base,status:'researching',stage:'plan_research',messages:[{role:'user',content:'Software engineering, keep it broad'},{role:'assistant',content:'Researching Software Engineering.'}]});
+ render(<CareerDiscovery/>);
+ await screen.findByText('Software engineering, keep it broad');
+ await screen.findByText(introduction,{},{timeout:4000});
+ expect(screen.queryByText('Software engineering, keep it broad')).toBeNull();
+ expect(screen.queryByRole('alert')).toBeNull();
+});
+it('keeps an unsent message and opens the new chat entry when its discovery was removed',async()=>{
+ removedChat({...base,messages:[{role:'user',content:'Software engineering, keep it broad'},{role:'assistant',content:'Tell me more.'}]});
+ render(<CareerDiscovery/>);
+ await screen.findByText('Tell me more.');
+ send('I prefer backend work');
+ await screen.findByText(introduction);
+ expect(screen.queryByText('Tell me more.')).toBeNull();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('I prefer backend work');
+ expect(screen.queryByRole('alert')).toBeNull();
+});

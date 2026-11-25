@@ -227,6 +227,7 @@ class cv_conversations {
 
 class career_state {
     +String active_discovery? [null when superseded by JD]
+    +Object discovery_cleanup? [at, keep: discoveries replaced by the latest goal activation]
     <<operational>>
     +String _id [Profile_UUID]
     +ObjectId goal_id?

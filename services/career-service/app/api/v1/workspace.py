@@ -217,6 +217,7 @@ async def direction(body:Direction,request:Request,account=Depends(owner),key=De
     receipt=w.get('direction_receipt') or {}
     if receipt.get('key')==key:
         if receipt['hash']!=digest:raise GoalError('This direction key was used for a different choice.')
+        await thread(repo.goals.clear_discoveries,account)
         return await state(request,account)
     require_new_goal(account_type,row)
     if w.get('kind')!='exploration' or not w.get('exploration_id'):raise GoalError('Start career exploration first.')
