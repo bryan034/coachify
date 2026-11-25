@@ -1,0 +1,65 @@
+{
+  "properties": {
+    "account_type": {
+      "default": "free",
+      "enum": [
+        "free",
+        "premium"
+      ],
+      "title": "Account Type",
+      "type": "string"
+    },
+    "cv_review_policy_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Cv Review Policy Version",
+      "type": "integer"
+    },
+    "cv_review_scope": {
+      "const": "item",
+      "default": "item",
+      "title": "Cv Review Scope",
+      "type": "string"
+    },
+    "email": {
+      "title": "Email",
+      "type": "string"
+    },
+    "email_verified": {
+      "title": "Email Verified",
+      "type": "boolean"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "provider": {
+      "enum": [
+        "google",
+        "local_test",
+        "email"
+      ],
+      "title": "Provider",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "email",
+    "email_verified",
+    "provider",
+    "expires_at"
+  ],
+  "title": "AccountView",
+  "type": "object"
+}

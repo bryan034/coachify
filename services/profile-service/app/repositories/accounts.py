@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
+from elo_shared.plans import account_type
 from app.core.mail import normalize_email
 from app.core.passwords import hasher, password_matches
 from app.core.security import digest, keyed, now
@@ -139,7 +140,8 @@ class AccountRepository:
         identifier = str(uuid4())
         candidate = {'id': identifier, 'identity': identity, 'provider': provider, 'email': email,
                      'name': name, 'owner': identity if google else provider + ':' + identifier,
-                     'created_at': now(), 'created_by': digest(data.attempt_id), 'email_verified': False}
+                     'created_at': now(), 'created_by': digest(data.attempt_id), 'email_verified': False,
+                     'account_type': 'free'}
         if not google:
             candidate['password_hash'] = hasher.hash(data.password)
         return candidate, True, account['id'] if account else None, False
@@ -155,7 +157,7 @@ class AccountRepository:
     def reclaimable_reservation(self, account):
         """Only the old, empty email-signup record may be replaced after OTP proof."""
         allowed = {'_id', 'id', 'identity', 'provider', 'email', 'name', 'owner',
-                   'created_at', 'created_by', 'email_verified', 'password_hash'}
+                   'created_at', 'created_by', 'email_verified', 'password_hash', 'account_type'}
         provider = account.get('provider')
         if (provider not in ('email', 'local_test') or account.get('email_verified') is not False
             or set(account) - allowed
@@ -250,7 +252,8 @@ class AccountRepository:
             raise HTTPException(401, 'Verify your email and sign in again.')
         if session.get('credential_hash') != account.get('password_hash'):
             raise HTTPException(401, 'Your password changed. Please sign in again.')
-        return {**account, 'expires_at': session['expires_at'].replace(tzinfo=now().tzinfo)}
+        return {**account, 'account_type': account_type(account),
+                'expires_at': session['expires_at'].replace(tzinfo=now().tzinfo)}
 
     def logout(self, token):
         key = digest(token)
