@@ -94,7 +94,11 @@ class UploadCapacity:
         return document['entries'].get(identifier)
 
     def reserve(self, owner, identifier, byte_count, key, fingerprint, existing=False, *, plan=None):
-        """Caller holds the file lock through publication and commit/recovery."""
+        """Caller holds the file lock through publication and commit/recovery.
+
+        A free owner's one slot stays used by any saved record, deletion tombstones included. A tombstone
+        completes before its entry leaves the ledger, so reading records after the ledger keeps the check atomic.
+        """
         def change(document):
             if document.get('blocked'): raise CapacityError(document['blocked'])
             entries = document['entries']
@@ -107,7 +111,7 @@ class UploadCapacity:
                     return current['generation']
             owner_entries = [entry for entry in entries.values() if entry['owner'] == owner]
             new_record = current is None
-            if new_record and owner_entries and plan == 'free':
+            if new_record and plan == 'free' and (owner_entries or self.repository.ever_saved(owner)):
                 raise PremiumRequired()
             if new_record and len(entries) >= MAX_LEDGER_ENTRIES:
                 raise CapacityUnavailable()

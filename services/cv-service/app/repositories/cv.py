@@ -69,6 +69,9 @@ class CvRepository:
     def capacity_record(self, identifier):
         return self.collection.find_one({'_id': identifier}, CAPACITY_FIELDS)
 
+    def ever_saved(self, owner):
+        return self.collection.find_one({'user_id': owner}, {'_id': 1}) is not None
+
     def visible_ids(self, identifiers):
         return {row['_id'] for row in self.collection.find({'_id': {'$in': identifiers}, **VISIBLE}, {'_id': 1})}
 

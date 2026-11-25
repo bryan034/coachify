@@ -54,3 +54,30 @@ def test_concurrent_first_uploads_get_one_free_slot(harness):
         responses = list(pool.map(lambda _: upload(client), range(2)))
     assert sorted(response.status_code for response in responses) == [202, 402]
     assert len(client.get('/api/v1/cv').json()['cvs']) == 1
+
+
+def test_deleting_the_only_cv_does_not_free_the_slot(harness):
+    client, app, _, _, profile = harness
+    profile.account_type = 'free'
+    cv = upload(client).json()
+    app.state.worker.run_once()
+    version = client.get('/api/v1/cv/' + cv['id']).json()['version']
+    deleted = client.request('DELETE', '/api/v1/cv/' + cv['id'], json=mutation(version))
+    assert deleted.status_code == 200, deleted.text
+    assert client.get('/api/v1/cv').json()['cvs'] == []
+    blocked = upload(client, name='second.docx')
+    assert blocked.status_code == 402 and blocked.json()['code'] == 'premium_required'
+    profile.account_type = 'premium'
+    assert upload(client, name='second.docx').status_code == 202
+
+
+def test_a_cv_deleted_before_the_limit_still_counts(harness, repository):
+    client, app, _, _, profile = harness
+    cv = upload(client).json()
+    app.state.worker.run_once()
+    version = client.get('/api/v1/cv/' + cv['id']).json()['version']
+    assert client.request('DELETE', '/api/v1/cv/' + cv['id'], json=mutation(version)).status_code == 200
+    assert repository.admission.read()['entries'] == {}
+    profile.account_type = 'free'
+    blocked = upload(client, name='second.docx')
+    assert blocked.status_code == 402 and blocked.json()['code'] == 'premium_required'

@@ -2,7 +2,7 @@
 
 Saves owner-scoped CV extractions and effective evidence for review and Career inputs. Uses the existing Profile session and account declarations; it never imports CV claims into another profile authority.
 
-Free plan: a free account can analyse one CV. Another `POST /uploads`, including a new file for an existing CV, returns 402 with code `premium_required`; replaying the first upload and retrying its failed operation still work.
+Free plan: a free account can analyse one CV, counted over every CV it has saved: a deleted CV keeps its tombstone record, so deleting it does not free the slot. Another `POST /uploads`, including a new file for an existing CV, returns 402 with code `premium_required`; replaying the first upload and retrying its failed operation still work.
 
 ## API by Jira story
 
