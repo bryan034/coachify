@@ -2736,6 +2736,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "Generating later roadmap week details requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
           }
         },
         "security": [
