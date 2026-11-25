@@ -645,6 +645,7 @@ class PlannerView(Contract):
     retry_week:RetryWeek|None=None
     confirmations:dict[str,ConfirmationRecord]
     signals:list[Signal]
+    outline_generated:bool=Field(default=False,description='Whether this workspace has ever generated a roadmap outline, including discarded or replaced ones.')
 
 class SessionChanges(Contract):
     """Only the fields sent are changed. A null start_time makes the task anytime on its day."""

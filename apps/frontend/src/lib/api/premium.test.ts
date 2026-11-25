@@ -13,6 +13,7 @@ const calls:[string,()=>Promise<unknown>][]=[
  ['career',()=>importCareer('url',JSON.stringify({url:'https://example.test/job'}),'token',new AbortController().signal)],
  ['cv',()=>cvApi.upload(new FormData(),'token',new AbortController().signal)],
  ['roadmap',()=>roadmapApi('/planner/weeks/generate','token',{week_start:'2030-01-21'})],
+ ['roadmap_outline',()=>roadmapApi('/planner/outlines/generate','token',{auto_accept:true})],
 ];
 it.each(calls)('announces a %s premium limit and still rejects with its status and code',async(feature,call)=>{
  respond(premium,402);const {heard,stop}=listen();

@@ -2,7 +2,7 @@
 
 Prepares a personal study roadmap towards the user's career goal. A fixed planner form collects the schedule, with an optional chat helper to guide the user through it. The service calculates the runway, the LLM writes the plan, and the service validates it before the user reviews it. Owns settings, plan revisions, session progress and adviser chat in a separate MongoDB database.
 
-Free plan: task details are generated only for the first two weeks of the active outline. `POST /planner/weeks/generate` for a later week returns 402 with code `premium_required`, and a queued later week fails with the same code. Weekly objectives stay visible and manual task changes are allowed in every week.
+Free plan: task details are generated only for the first two weeks of the active outline. `POST /planner/weeks/generate` for a later week returns 402 with code `premium_required`, and a queued later week fails with the same code. Weekly objectives stay visible and manual task changes are allowed in every week. A free account generates one roadmap outline, counted across discards and replacements (`planner.first_outline_operation`; rows saved before it count an existing outline or plan). Another `POST /planner/outlines/generate` returns 402 `premium_required`, and an adviser chat turn that would revise the outline fails with the same code. Replaying or retrying the operation that generated the first outline, editing and accepting or discarding it still work.
 
 ## API by capability
 

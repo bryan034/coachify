@@ -6,11 +6,12 @@ const COPY: Record<PremiumFeature, { title: string; free: string }> = {
  career: { title: 'Changing your career goal', free: 'You can keep refining your current goal and asking questions about it.' },
  cv: { title: 'Analysing another CV', free: 'Your first CV stays available, and you can retry its analysis if it fails.' },
  roadmap: { title: 'Task breakdowns after your first two weeks', free: 'Every week keeps its goal, and you can add your own tasks to any week.' },
+ roadmap_outline: { title: 'Generating another roadmap', free: 'You can keep editing your current roadmap and its tasks.' },
 };
 
 function feature(value: unknown): PremiumFeature | null {
  const detail = value && typeof value === 'object' && 'feature' in value ? value.feature : null;
- return detail === 'career' || detail === 'cv' || detail === 'roadmap' ? detail : null;
+ return detail === 'career' || detail === 'cv' || detail === 'roadmap' || detail === 'roadmap_outline' ? detail : null;
 }
 
 export function PremiumDialog() {

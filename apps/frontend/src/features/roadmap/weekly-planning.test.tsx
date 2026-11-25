@@ -113,3 +113,17 @@ it('lets premium accounts plan any later week',async()=>{
  await waitFor(()=>expect(api.mock.calls.find(c=>c[0]==='/planner/weeks/generate')?.[2]).toMatchObject({week_start:'2030-01-21'}));
  expect(screen.queryByRole('button',{name:'Unlock task breakdown'})).toBeNull();
 });
+it('opens the premium dialog without a request when a free account already generated its roadmap',async()=>{
+ profile.account={id:'owner',account_type:'free'};serve(workspace({planner:planner({outline_generated:true})}));
+ const heard=vi.fn();window.addEventListener('elo:premium-required',heard);render(<RoadmapPlanner/>);
+ const create=await screen.findByRole('button',{name:'Create roadmap'});const calls=api.mock.calls.length;
+ fireEvent.click(create);
+ expect(heard.mock.calls[0][0].detail).toEqual({feature:'roadmap_outline'});
+ expect(api.mock.calls).toHaveLength(calls);
+ window.removeEventListener('elo:premium-required',heard);
+});
+it('lets a premium account generate another roadmap',async()=>{
+ profile.account={id:'owner',account_type:'premium'};serve(workspace({planner:planner({outline_generated:true})}));render(<RoadmapPlanner/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Create roadmap'}));
+ await waitFor(()=>expect(api.mock.calls.some(c=>c[0]==='/planner/outlines/generate')).toBe(true));
+});

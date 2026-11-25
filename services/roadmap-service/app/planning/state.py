@@ -186,6 +186,10 @@ def revision_signals(state,source):
         add('progress','This roadmap was made before weekly planning. Generate an updated roadmap to plan week by week; your progress is kept.')
     return signals
 
+def outline_generated(state):
+    """Whether this workspace ever produced an outline. Rows saved before the marker count any saved outline or plan."""
+    return bool(state.get('first_outline_operation') or state['active'] or state['outline_active'] or state['outline_candidate'])
+
 def retry_body(row,kind):
     last=row.get('last_operation') or {}
     if last.get('status')=='failed' and last.get('kind','message')==kind:return last.get('body')

@@ -2211,6 +2211,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "Generating another roadmap requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -8812,6 +8822,12 @@
             },
             "type": "array",
             "title": "Signals"
+          },
+          "outline_generated": {
+            "type": "boolean",
+            "title": "Outline Generated",
+            "description": "Whether this workspace has ever generated a roadmap outline, including discarded or replaced ones.",
+            "default": false
           }
         },
         "additionalProperties": false,

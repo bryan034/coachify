@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useProfile } from '@/features/profile/profile-provider';
 import { deviceTimeZone } from '@/features/profile/planning-preferences';
 import { roadmapApi, RoadmapError } from '@/lib/api/roadmap';
+import { openPremium } from '@/lib/api/premium';
 import { useComparison, COMPARISON_REFRESH } from '@/features/assessment/comparison';
 import { EvaluationStatusPanel } from '@/features/assessment/evaluation-status';
 import { EvidenceProposals } from './evidence-proposals';
@@ -183,6 +184,7 @@ function Planner({ token, premium }: { token: string; premium: boolean }) {
  }
  const [starting, setStarting] = useState(false);
  async function generate() {
+  if (!premium && workspace?.planner.outline_generated) { openPremium('roadmap_outline'); return; }
   setStarting(true);
   try { if (await saveSettings()) await change('/planner/outlines/generate', { allow_partial_assessment: partial, auto_accept: true }); } finally { if (mounted.current) setStarting(false); }
 

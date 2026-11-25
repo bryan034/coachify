@@ -1,4 +1,4 @@
-export type PremiumFeature = 'career' | 'cv' | 'roadmap';
+export type PremiumFeature = 'career' | 'cv' | 'roadmap' | 'roadmap_outline';
 export const PREMIUM_REQUIRED_EVENT = 'elo:premium-required';
 export const PREMIUM_REQUIRED = 'premium_required';
 
