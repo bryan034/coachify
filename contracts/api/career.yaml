@@ -111,6 +111,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "Changing a saved career goal requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PremiumRequiredView"
+                }
+              }
+            }
           }
         }
       },
@@ -236,6 +246,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Changing a saved career goal requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PremiumRequiredView"
                 }
               }
             }
@@ -1191,6 +1211,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "Changing a saved career goal requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PremiumRequiredView"
+                }
+              }
+            }
           }
         }
       }
@@ -1494,6 +1524,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "Changing a saved career goal requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PremiumRequiredView"
+                }
+              }
+            }
           }
         }
       }
@@ -1574,6 +1614,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Changing a saved career goal requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PremiumRequiredView"
                 }
               }
             }
@@ -1844,6 +1894,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "Changing a saved career goal requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PremiumRequiredView"
+                }
+              }
+            }
           }
         }
       }
@@ -2088,6 +2148,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "Changing a saved career goal requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PremiumRequiredView"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -2214,6 +2284,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "Changing a saved career goal requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PremiumRequiredView"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -2237,6 +2317,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Preview"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Changing a saved career goal requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PremiumRequiredView"
                 }
               }
             }
@@ -8197,6 +8287,25 @@
         "additionalProperties": false,
         "type": "object",
         "title": "RoundPreview"
+      },
+      "PremiumRequiredView": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "code": {
+            "type": "string",
+            "const": "premium_required",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "code"
+        ],
+        "title": "PremiumRequiredView"
       }
     },
     "securitySchemes": {

@@ -1,6 +1,7 @@
 """Resumable goal-setting and market research using existing Career stores/providers."""
 from contextlib import suppress
 from elo_shared.model_budget import budget_owner
+from elo_shared.plans import account_type
 import asyncio
 import json
 import logging
@@ -213,8 +214,11 @@ class DiscoveryEngine:
             if active:return active
         return self.rows.find_one({'owner':owner,'kind':'career_discovery'},sort=[('created_at',-1)])
 
-    def start(self,owner,key):
+    def start(self,owner,key,plan):
         identifier=stable_id(owner,key,'career-discovery');stamp=now()
+        existing=self.rows.find_one({'_id':identifier,'owner':owner,'kind':'career_discovery'})
+        if existing:return existing
+        self.app.state.goal_store.check_replacement(owner,plan)
         row={'_id':identifier,'kind':'career_discovery','owner':owner,'version':1,'status':'conversation','decision':None,
             'messages':[],'created_at':stamp,'updated_at':stamp,'receipts':[]}
         inserted=self.rows.update_one({'_id':identifier},{'$setOnInsert':row},upsert=True)
@@ -243,7 +247,7 @@ class DiscoveryEngine:
             return result
         finally:quota_progress.reset(token)
 
-    async def converse(self,identifier,owner,key,body):
+    async def converse(self,identifier,owner,key,body,plan='free'):
         row=await thread(self.get,identifier,owner);digest=fingerprint(body.model_dump(mode='json'))
         receipt=next((v for v in row['receipts'] if v['key']==key),None)
         if receipt:
@@ -338,7 +342,7 @@ class DiscoveryEngine:
         ready=not value.get('partial') and ready_for_research(decision) and proposed and (decision['action'] in ('START_RESEARCH','CONFIRM_AREA','REFINE_SKILLS') or preference_changed and row['status'] in ('review','confirmed'))
         changed_scope=proposed and proposed!=row.get('scope')
         if ready and (changed_scope or row['status'] in ('conversation','failed') or decision['action']=='REFINE_SKILLS' or preference_changed and row['status'] in ('review','confirmed')):
-            values.update(await thread(self.research_values,row,proposed,False,decision['understanding']))
+            values.update(await thread(self.research_values,row,proposed,False,decision['understanding'],plan))
         if changed_scope and not ready and row['status'] in ('researching','waiting','review','confirmed'):
             values.update(run=uuid4().hex,status='conversation',stage=None,scope=proposed,review_id=None,summary=None,summary_version=None,sources=[],aggregate=None)
             decision['source_ids']=[]
@@ -373,14 +377,14 @@ class DiscoveryEngine:
         if selection.get('active_discovery')!=row['_id']:raise GoalError('A newer conversation replaced this discovery. Start a new chat to change your goal.')
         return selection.get('version',0)
 
-    def research_values(self,row,scope,refresh,understanding=None):
+    def research_values(self,row,scope,refresh,understanding,plan):
         selection_version=self.publication_selection(row)
         context=research_context(understanding)
         scope_key=fingerprint({'scope':{k:normal(v) if isinstance(v,str) else v for k,v in scope.items()},'context':context})
         cached=None if refresh else self.rows.find_one({'kind':'career_discovery','owner':row['owner'],'scope_key':scope_key,
             'research_policy':self.policy,'aggregate':{'$ne':None},'researched_at':{'$gt':now()-timedelta(hours=self.settings.freshness_hours)}},sort=[('researched_at',-1)])
         if not refresh and row.get('scope_key')==scope_key and row.get('research_policy')==self.policy and row['status'] in ('failed','researching','waiting'):cached=row
-        values={'publication_selection_version':selection_version,'run':uuid4().hex,'scope':scope,'scope_key':scope_key,'status':'researching','stage':'plan_research',
+        values={'publication_selection_version':selection_version,'account_type':plan,'run':uuid4().hex,'scope':scope,'scope_key':scope_key,'status':'researching','stage':'plan_research',
             'research_policy':self.policy,'next_attempt_at':now(),'lease':None,'lease_until':now(),'error_code':None,'limit_scope':None,'provider':None,'updated_at':now()}
         for field in ('plan','sources','searched','listings','evaluated','aggregate','generation','researched_at','search_failures','candidates','assessments','split_batches','narrowed_sources','extraction_failures','followup_requested','rejected_source_ids','replacement_searches','replacement_query','replacement_shortfall'):
             values[field]=cached.get(field) if cached else None
@@ -388,7 +392,7 @@ class DiscoveryEngine:
         values.update(summary=None,summary_version=None,review_id=None,attempts={},research_question=None,partial_research=False)
         return values
 
-    def begin(self,identifier,owner,key,body):
+    def begin(self,identifier,owner,key,body,plan):
         row=self.get(identifier,owner);digest=fingerprint(body.model_dump(mode='json'))
         receipt=next((v for v in row['receipts'] if v['key']==key),None)
         if receipt:
@@ -399,7 +403,7 @@ class DiscoveryEngine:
         decision=Decision.model_validate(row['decision']) if row['decision'] else None
         if not decision or decision.scope!=body.scope:raise GoalError('Research must match the current direction.',422)
         if not ready_for_research(decision):raise GoalError('Complete the discovery context in chat before researching; unsure or skip answers are allowed.',422)
-        values=self.research_values(row,body.scope.model_dump(mode='json'),body.refresh,decision.understanding.model_dump())
+        values=self.research_values(row,body.scope.model_dump(mode='json'),body.refresh,decision.understanding.model_dump(),plan)
         changed=self.rows.update_one({'_id':identifier,'owner':owner,'version':body.expected_version,'status':row['status'],
             '$or':[{'publication_until':{'$exists':False}},{'publication_until':{'$lte':now()}}]},
             {'$set':values,'$inc':{'version':1},'$push':{'receipts':{'$each':[{'key':key,'hash':digest}],'$slice':-100}}})
@@ -706,9 +710,11 @@ class DiscoveryEngine:
                 expected_selection_version=row['publication_selection_version'])
             current=self.app.state.goal_store.current(owner).get('goal')
             own_goal=current and current.discovery and current.discovery.research_id.split(':')[0]==row['_id']
+            plan=account_type(row)
+            same_direction=own_goal and normal(current.field)==normal(review.content.field) and normal(current.discovery.selected_area)==normal(evidence.selected_area)
             if not own_goal and self.publication_selection(row)!=row['publication_selection_version']:
                 raise GoalError('The current goal changed during discovery. Review this direction again.')
-            if current and not own_goal and not row.get('publication_approved'):
+            if current and (not own_goal and not row.get('publication_approved') or plan=='free' and not same_direction):
                 changed=self.rows.update_one(query,{'$set':{'summary':summary.model_dump(),'summary_version':row['version'],
                     'review_id':review.id,'status':'review','aggregate':result,'stage':'awaiting_goal_confirmation',
                     'researched_at':evidence.researched_at,'error_code':None,'lease_until':now(),'updated_at':now()},
@@ -717,7 +723,7 @@ class DiscoveryEngine:
             goal=self.app.state.review_store.goal(review,owner,key,command)
             memory=(row.get('decision') or {}).get('memory',{})
             goal.interests=memory.get('interests',[]);goal.preferences=memory.get('preferences',[])
-            self.app.state.goal_store.confirm(owner,key,command,goal,discovery_id=row['_id'])
+            self.app.state.goal_store.confirm(owner,key,command,goal,discovery_id=row['_id'],plan=None if own_goal else plan)
             changed=self.rows.update_one(query,{'$set':{'summary':summary.model_dump(),'summary_version':row['version'],
                 'review_id':review.id,'status':'review','aggregate':result,'stage':'career_goal_updated',
                 'researched_at':evidence.researched_at,'error_code':None,'lease_until':now(),'updated_at':now()},

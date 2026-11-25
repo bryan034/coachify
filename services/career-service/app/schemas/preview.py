@@ -1,5 +1,6 @@
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
+from elo_shared.plans import PREMIUM_REQUIRED
 
 MAX_TEXT = 20_000
 MAX_JD_TEXT = 8_000
@@ -18,6 +19,13 @@ class UrlInput(BaseModel):
 
 class ImportErrorView(BaseModel):
     detail: str
+
+
+class PremiumRequiredView(ImportErrorView):
+    code: Literal[PREMIUM_REQUIRED]
+
+
+PREMIUM_RESPONSE = {402: {'model': PremiumRequiredView, 'description': 'Changing a saved career goal requires elo Premium.'}}
 
 
 class Preview(BaseModel):

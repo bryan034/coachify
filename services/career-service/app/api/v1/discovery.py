@@ -2,11 +2,12 @@
 from fastapi import APIRouter,Depends,Request,Query
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
-from app.api.v1.dependencies import owner, request_key, identifier, review_view
+from app.api.v1.dependencies import owner, plan, request_key, identifier, review_view
 from app.repositories.goals import GoalError,now
 from app.schemas.goals import SaveGoal
 from pydantic import BaseModel,Field
 from app.schemas.discovery import StartDiscovery,DiscoveryMessage,ResearchDiscovery,DiscoveryView
+from app.schemas.preview import PREMIUM_RESPONSE
 
 from app.domain.discovery_conversation import INTRODUCTION
 
@@ -44,11 +45,11 @@ async def current(request:Request,account=Depends(owner)):
     if row is None or not row.get('messages'):result['introduction']=INTRODUCTION
     return result
 
-@router.post('',response_model=DiscoveryView,response_model_exclude_unset=True)
-async def start(body:StartDiscovery,request:Request,account=Depends(owner),key=Depends(request_key)):
+@router.post('',response_model=DiscoveryView,response_model_exclude_unset=True,responses=PREMIUM_RESPONSE)
+async def start(body:StartDiscovery,request:Request,account=Depends(owner),key=Depends(request_key),account_type=Depends(plan)):
     """Persist a distinct empty chat immediately; retries with the same key reuse it."""
     service=engine(request)
-    result=await view(service,await thread(service.start,account,key))
+    result=await view(service,await thread(service.start,account,key,account_type))
     if not result['session']['messages']:result['introduction']=INTRODUCTION
     return result
 
@@ -65,20 +66,22 @@ async def sessions(request:Request,before:str|None=None,limit:int=Query(20,ge=1,
             'last_message':(row.get('messages') or [{}])[-1].get('content',''),'updated_at':row['updated_at']} for row in rows[:limit]]
     return jsonable_encoder({'items':items,'next_cursor':rows[limit-1]['_id'] if len(rows)>limit else None})
 
-@router.post('/{session_id}/publish',response_model=DiscoveryView,response_model_exclude_unset=True)
-async def publish(session_id:str,body:PublishDiscovery,request:Request,account=Depends(owner),key=Depends(request_key)):
+@router.post('/{session_id}/publish',response_model=DiscoveryView,response_model_exclude_unset=True,responses=PREMIUM_RESPONSE)
+async def publish(session_id:str,body:PublishDiscovery,request:Request,account=Depends(owner),key=Depends(request_key),account_type=Depends(plan)):
     service=engine(request);row=await thread(service.get,identifier(session_id),account)
-    if row['version']!=body.expected_version:raise GoalError('This discovery changed. Reload it before replacing your goal.')
+    if row.get('published_key')==key:return await view(service,row)
+    store=service.app.state.goal_store
+    await thread(store.check_replacement,account,account_type)
     if row.get('stage')!='awaiting_goal_confirmation':
-        if row.get('published_key')==key:return await view(service,row)
         raise GoalError('There is no completed direction awaiting confirmation.')
+    if row['version']!=body.expected_version:raise GoalError('This discovery changed. Reload it before replacing your goal.')
     review=await thread(service.app.state.review_store.get,row['review_id'],account)
     content=review.content
     command=SaveGoal(target_type='career_exploration',role=content.role,field=content.field,company=None,
         job_url=None,location=content.location,seniority_level=content.seniority_level,employment_type=content.employment_type,
         review_id=review.id,expected_review_version=review.version,expected_selection_version=body.expected_selection_version)
     goal=await thread(service.app.state.review_store.goal,review,account,key,command)
-    await thread(service.app.state.goal_store.confirm,account,key,command,goal,discovery_id=row['_id'])
+    await thread(store.confirm,account,key,command,goal,discovery_id=row['_id'],plan=account_type)
     await thread(service.mark_published,row['_id'],account,body.expected_version,key)
     return await view(service,await thread(service.get,row['_id'],account))
 
@@ -91,13 +94,13 @@ async def get(session_id:str,request:Request,account=Depends(owner)):
     return result
 
 @router.post('/{session_id}/messages',response_model=DiscoveryView,response_model_exclude_unset=True)
-async def message(session_id:str,body:DiscoveryMessage,request:Request,account=Depends(owner),key=Depends(request_key)):
+async def message(session_id:str,body:DiscoveryMessage,request:Request,account=Depends(owner),key=Depends(request_key),account_type=Depends(plan)):
     """Converse/refine; validated synthesis updates this chat's own goal, but replacing another goal awaits /publish."""
-    service=engine(request);row=await service.converse(identifier(session_id),account,key,body)
+    service=engine(request);row=await service.converse(identifier(session_id),account,key,body,account_type)
     if row['status'] in ('researching','waiting'):service.launch(row['_id'])
     return await view(service,row)
 
 @router.post('/{session_id}/research',status_code=202,response_model=DiscoveryView,response_model_exclude_unset=True)
-async def research(session_id:str,body:ResearchDiscovery,request:Request,account=Depends(owner),key=Depends(request_key)):
-    service=engine(request);row=await thread(service.begin,identifier(session_id),account,key,body)
+async def research(session_id:str,body:ResearchDiscovery,request:Request,account=Depends(owner),key=Depends(request_key),account_type=Depends(plan)):
+    service=engine(request);row=await thread(service.begin,identifier(session_id),account,key,body,account_type)
     service.launch(row['_id']);return await view(service,row)
