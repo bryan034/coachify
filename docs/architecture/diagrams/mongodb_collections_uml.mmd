@@ -7,6 +7,7 @@ class users["elo_profile.accounts (logical users)"] {
     +String name
     +String email
     +String auth_provider
+    +String account_type? [free | premium; missing reads as free]
     +Date created_at
     +Date updated_at
     +CapabilityDeclaration[] capability_declarations
