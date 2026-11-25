@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from fastapi.testclient import TestClient
 from app.main import create_app
+from app.schemas.accounts import AccountView
 
 BASE = '/api/v1/profile/auth'
 BODY = {'flow_id': 'f' * 32, 'attempt_id': 'a' * 32, 'session_token': 'm' * 64}
@@ -48,6 +49,11 @@ class Accounts:
                     'expires_at': expiry, 'resend_at': expiry}
         return {'id': 'synthetic', 'name': 'Synthetic', 'email': 'person@example.test', 'email_verified': True,
                 'provider': 'email', 'expires_at': expiry}
+
+
+def test_account_schema_matches_the_session_view():
+    schema = Path(__file__).resolve().parents[3] / 'contracts/api/models/account.schema.json'
+    assert json.loads(schema.read_text()) == AccountView.model_json_schema()
 
 
 def test_session_exposes_legacy_and_premium_account_types():

@@ -116,6 +116,17 @@ def test_cv_review_policy_is_the_same_for_all_accounts(setup):
     assert client.patch(BASE, headers=other, json={'expected_version': 0, 'cv_review_scope': 'section'}).status_code == 422
 
 
+def test_new_accounts_are_free_and_premium_is_read_from_the_account_record(setup):
+    client, repository = setup
+    account, headers, _, _ = register(client)
+    assert repository.accounts.find_one({'id': account['id']})['account_type'] == 'free'
+    assert client.get(BASE + '/auth/session', headers=headers).json()['account_type'] == 'free'
+    repository.accounts.update_one({'id': account['id']}, {'$set': {'account_type': 'premium'}})
+    assert client.get(BASE + '/auth/session', headers=headers).json()['account_type'] == 'premium'
+    repository.accounts.update_one({'id': account['id']}, {'$unset': {'account_type': ''}})
+    assert client.get(BASE + '/auth/session', headers=headers).json()['account_type'] == 'free'
+
+
 def test_logout_revokes_replay_and_preserves_history_and_reentry(setup):
     client, _ = setup
     a, headers, _, _ = register(client)
