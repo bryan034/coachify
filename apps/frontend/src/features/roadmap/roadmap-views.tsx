@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { MonthView, TodayView, WeekView } from './calendar-views';
 import { useNowMinute, useTaskEditor, type RoadmapActions, type ViewContext, type ViewName } from './day-list';
 import { MilestonesView, ProgressView } from './progress-views';
-import { PartialOutlineNotice } from './weekly-planning';
-import { fullDate } from './roadmap-calendar';
+import { LockedWeek, PartialOutlineNotice, detailLocked } from './weekly-planning';
+import { fullDate, weekStart } from './roadmap-calendar';
 import { currentMilestone, daysBetween, planSessions } from './roadmap-day';
 import type { SkillOption } from './task-form';
 import type { PlanReview, PlannedRoadmap, Planner } from './types';
@@ -27,8 +27,8 @@ function readAddress(today: string): { view: ViewName; date: string } {
  return { view: tabs.some(([name]) => name === view) ? view as ViewName : 'day', date: isDay(date) ? date : today };
 }
 
-export function RoadmapViews({ plan, review, planner, goal, version, frozen, updates, openSettings, actions, weeklyPlanning }: {
- plan: PlannedRoadmap; review: PlanReview; planner: Planner; goal: string; version: number; frozen: boolean; updates: number; openSettings: () => void; actions: RoadmapActions; weeklyPlanning?: ReactNode;
+export function RoadmapViews({ plan, review, planner, goal, version, frozen, updates, openSettings, actions, weeklyPlanning, premium = false }: {
+ plan: PlannedRoadmap; review: PlanReview; planner: Planner; goal: string; version: number; frozen: boolean; updates: number; openSettings: () => void; actions: RoadmapActions; weeklyPlanning?: ReactNode; premium?: boolean;
 }) {
  const today = review.remaining.resolved.today;
  const [place, setPlace] = useState(() => readAddress(today));
@@ -48,6 +48,8 @@ export function RoadmapViews({ plan, review, planner, goal, version, frozen, upd
  useEffect(() => { const back = () => setPlace(readAddress(today)); window.addEventListener('popstate', back); return () => window.removeEventListener('popstate', back); }, [today]);
  const target = plan.config.target_date; const left = target ? daysBetween(today, target) : null;
  const { list, index } = currentMilestone(plan);
+ const viewedWeek = place.view === 'week' ? weekStart(place.date, plan.config.week_start_day) : null;
+ const lockedObjective = viewedWeek && detailLocked(planner, premium, viewedWeek) ? planner.outline_active?.weeks?.find(week => week.week_start === viewedWeek) : undefined;
  return <div className="rv">
   <header className="rv-head">
    <div><h1>Roadmap</h1>
@@ -61,7 +63,7 @@ export function RoadmapViews({ plan, review, planner, goal, version, frozen, upd
   {weeklyPlanning}
   <nav className="rv-tabs" aria-label="Roadmap views">{tabs.map(([name, label]) => <button key={name} type="button" className="rv-tab" aria-current={place.view === name ? 'page' : undefined} onClick={() => leave(name, name === 'day' ? today : name === 'week' || name === 'month' ? (place.view === 'day' || place.view === 'week' || place.view === 'month' ? place.date : today) : undefined)}>{label}</button>)}</nav>
   {place.view === 'day' && <TodayView context={context} day={place.date} editor={editor} />}
-  {place.view === 'week' && <WeekView context={context} day={place.date} editor={editor} />}
+  {place.view === 'week' && <>{lockedObjective && <LockedWeek weekStart={lockedObjective.week_start} objective={lockedObjective}/>}<WeekView context={context} day={place.date} editor={editor} /></>}
   {place.view === 'month' && <MonthView context={context} day={place.date} />}
   {place.view === 'milestones' && <MilestonesView context={context} planner={planner} />}
   {place.view === 'progress' && <ProgressView context={context} />}

@@ -1,15 +1,27 @@
 "use client";
 import { OutlineEditor } from './outline-editor';
 import { useState } from 'react';
-import type { Outline, Planner } from './types';
+import type { Outline, Planner, WeeklyObjective } from './types';
 import { hours, longDate } from './settings-panel';
+import { openPremium } from '@/lib/api/premium';
 type Change = (path: string, data: Record<string, unknown>, method?: 'PATCH') => Promise<boolean>;
 export function PartialOutlineNotice({outline}: {outline?: Outline | null}) {
  const review=outline?.partial_review;
  if (!review) return null;
  return <section className="roadmap-notice" role="status" aria-label="Partial roadmap"><h3>Partial roadmap</h3><p>Two generation attempts included invalid assessment references. The affected items were omitted; Some parts of your goal are not included in this roadmap.</p><details><summary>What was omitted ({review.omitted_items.length})</summary><ul>{review.omitted_items.map((item,i)=><li key={`${item.kind}:${item.id}:${i}`}><strong>{item.title}</strong><p>{item.reason}</p></li>)}</ul></details>{review.uncovered_requirements.length>0 && <p>{review.uncovered_requirements.length} assessment {review.uncovered_requirements.length===1?'priority is':'priorities are'} not covered. This plan covers only part of your goal.</p>}</section>;
 }
-export function WeeklyPlanning({ planner, frozen, change, settings, acceptBlocked }: {planner: Planner; frozen: boolean; change: Change; settings: () => void; acceptBlocked?: boolean}) {
+const FREE_DETAIL_WEEKS = 2;
+export function detailLocked(planner: Planner, premium: boolean, weekStart: string) {
+ return !premium && !(planner.outline_active?.weeks || []).map(week => week.week_start).sort().slice(0, FREE_DETAIL_WEEKS).includes(weekStart);
+}
+export function LockedWeek({ weekStart, objective }: { weekStart: string; objective?: WeeklyObjective }) {
+ return <div className="locked-week" role="group" aria-label={`Task breakdown for the week of ${longDate(weekStart)}`}>
+  {objective && <p><strong>Week goal:</strong> {objective.objective}</p>}
+  <p className="small">The task breakdown for this week is part of elo Premium. You can still add your own tasks to it.</p>
+  <button type="button" className="btn ghost" onClick={() => openPremium('roadmap')}>Unlock task breakdown</button>
+ </div>;
+}
+export function WeeklyPlanning({ planner, frozen, change, settings, acceptBlocked, premium = false }: {planner: Planner; frozen: boolean; change: Change; settings: () => void; acceptBlocked?: boolean; premium?: boolean}) {
  const [editingOutlineId, setEditingOutlineId] = useState<string | null>(null);
  const [workload, setWorkload] = useState(''); const [difficulty, setDifficulty] = useState(''); const [note, setNote] = useState('');
  const outline = planner.outline_candidate; const week = planner.week_candidate; const next = planner.week_planning;
@@ -32,8 +44,8 @@ export function WeeklyPlanning({ planner, frozen, change, settings, acceptBlocke
  return <section className="weekly-continuation review-card" aria-label="Weekly planning"><h2>{next?.action === 'plan_this' ? 'Plan this week' : 'Plan next week'}</h2>
   <p>Use this week's progress and your feedback to curate the next plan. Review the schedule and unfinished work before accepting.</p>
   {next?.notice && <p role="status">{next.notice}</p>}
-  {!next ? null : !next.available ? <p className="small">Available on {longDate(next.plan_day)}, or when all this week's tasks are complete.</p> : <><p className="small">{next.unfinished_count} unfinished tasks to review. No progress yet? You can still plan a lighter week and review what to carry.</p><div className="weekly-feedback"><label>Workload <select value={workload} onChange={e => setWorkload(e.target.value)}><option value="">Optional</option><option value="too_much">Too much</option><option value="about_right">About right</option><option value="too_light">Too light</option></select></label><label>Difficulty <select value={difficulty} onChange={e => setDifficulty(e.target.value)}><option value="">Optional</option><option value="too_hard">Too hard</option><option value="about_right">About right</option><option value="too_easy">Too easy</option></select></label><label>Anything to adjust? <textarea maxLength={500} value={note} onChange={e => setNote(e.target.value)}/></label></div><button className="btn primary" disabled={frozen} onClick={() => void change('/planner/weeks/generate', {week_start: next.week_start, feedback: {workload: workload || null, difficulty: difficulty || null, note}})}>{next?.action === 'plan_this' ? 'Plan this week' : 'Plan next week'}</button></>}
-  {revisions.map(block => <div key={block.id} className="plan-actions"><button className="btn ghost" disabled={frozen} onClick={() => void change('/planner/weeks/generate', {week_start:block.week_start,revision:true})}>Review revised week of {longDate(block.week_start)}</button></div>)}
+  {!next ? null : next.week_start && detailLocked(planner, premium, next.week_start) ? <LockedWeek weekStart={next.week_start} objective={planner.outline_active?.weeks?.find(week => week.week_start === next.week_start)}/> : !next.available ? <p className="small">Available on {longDate(next.plan_day)}, or when all this week's tasks are complete.</p> : <><p className="small">{next.unfinished_count} unfinished tasks to review. No progress yet? You can still plan a lighter week and review what to carry.</p><div className="weekly-feedback"><label>Workload <select value={workload} onChange={e => setWorkload(e.target.value)}><option value="">Optional</option><option value="too_much">Too much</option><option value="about_right">About right</option><option value="too_light">Too light</option></select></label><label>Difficulty <select value={difficulty} onChange={e => setDifficulty(e.target.value)}><option value="">Optional</option><option value="too_hard">Too hard</option><option value="about_right">About right</option><option value="too_easy">Too easy</option></select></label><label>Anything to adjust? <textarea maxLength={500} value={note} onChange={e => setNote(e.target.value)}/></label></div><button className="btn primary" disabled={frozen} onClick={() => void change('/planner/weeks/generate', {week_start: next.week_start, feedback: {workload: workload || null, difficulty: difficulty || null, note}})}>{next?.action === 'plan_this' ? 'Plan this week' : 'Plan next week'}</button></>}
+  {revisions.map(block => <div key={block.id} className="plan-actions"><button className="btn ghost" disabled={frozen} onClick={() => detailLocked(planner, premium, block.week_start) ? openPremium('roadmap') : void change('/planner/weeks/generate', {week_start:block.week_start,revision:true})}>Review revised week of {longDate(block.week_start)}</button></div>)}
   {!!planner.week_blocks?.some(b => b.needs_review) && <p className="small">Your outline changed. Review affected accepted weeks before replacing future tasks.</p>}
  </section>;
 }

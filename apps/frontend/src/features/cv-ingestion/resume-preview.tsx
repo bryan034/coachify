@@ -16,6 +16,7 @@ import { SkillsProfileSummary } from './skills-profile-summary';
 import { FirstUploadNextSteps, SkillsProcessing } from './skills-states';
 import type { CvDetail, CvList, CvPolicy, Declarations, Questions, SkillsProfile } from './types';
 import { errorText } from '@/lib/errors';
+import { isPremiumRequired } from '@/lib/api/premium';
 import { announceInputsChanged } from '@/features/assessment/comparison';
 
 const processing=(status:string)=>status==='queued'||status==='processing';
@@ -137,7 +138,7 @@ function ResumeWorkspace({token}:{token:string}) {
   if(hasDraft()&&!window.confirm('Upload this CV and discard unsaved CV or capability drafts?'))return;
   const form=new FormData();form.set('file',picked);form.set('mutation_id',uploadKey.current);if(reuploadTarget){form.set('cv_id',reuploadTarget.id);form.set('expected_version',String(reuploadTarget.version));}setBusy('upload');pendingUpload.current=true;
   try{const value=await cvApi.upload(form,token,lifetime.current.signal);if(lifetime.current.signal.aborted)return;viewedCv.current=value.id;detailSequence.current++;detailController.current?.abort();setViewId(value.id);setDetail(value);setQuestions(null);setDetailError('');setChatDraft('');setChatCvId(value.id);setChatOpen(true);reviewUrl(value.id);setFile(null);setReuploadTarget(null);if(fileInput.current)fileInput.current.value='';uploadKey.current=crypto.randomUUID();pendingUpload.current=false;setNotice('Upload saved. Your CV review will start when processing finishes. New CVs become active once processed.');await getList();}
-  catch(cause){if(!lifetime.current.signal.aborted)setError(`${errorText(cause, 'The upload response was interrupted.')} Check saved status before retrying this file. Retry keeps the same request identity.`);}
+  catch(cause){if(isPremiumRequired(cause)){pendingUpload.current=false;uploadKey.current=crypto.randomUUID();}else if(!lifetime.current.signal.aborted)setError(`${errorText(cause, 'The upload response was interrupted.')} Check saved status before retrying this file. Retry keeps the same request identity.`);}
   finally{if(!lifetime.current.signal.aborted)setBusy('');}
  }
  async function select(id:string){

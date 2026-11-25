@@ -11,6 +11,7 @@ import {careerOperation,type CareerOperation} from '@/lib/api/career-operation';
 import {retryCareerRead} from '@/lib/api/career-polling';
 import {careerApi,refreshWorkspace,type OpportunityView,type CareerWorkspace} from '@/lib/api/career';
 import { errorText } from '@/lib/errors';
+import { isPremiumRequired } from '@/lib/api/premium';
 import { ProcessingCard, type ProcessingStep } from '@/components/ui/processing-card';
 import '@/styles/goal.css';
 
@@ -110,7 +111,7 @@ export function JobReviewChat(){
    const value=jd?await careerOperation<CareerWorkspace>('/workspace/jd',token,{signal:abort.signal,method:'POST',headers:{'Idempotency-Key':key.current},body:JSON.stringify({text:jd.text,source_url:jd.url||null,source_kind:jd.kind})},operationProgress):await careerApi<CareerWorkspace>('/workspace',token,{signal:abort.signal});
    if(abort.signal.aborted)return;receive(value);
    if(jd){setExtractionSteps(previous=>[...new Set([...previous,'saving_goal'])]);source.current=null;latest.current.chooseJD(null);}
-  }catch(cause){if(!abort.signal.aborted)reportError(cause,'Could not open your career goal.');}
+  }catch(cause){if(abort.signal.aborted)return;if(isPremiumRequired(cause)&&source.current){source.current=null;latest.current.chooseJD(null);setReload(v=>v+1);return;}reportError(cause,'Could not open your career goal.');}
    finally{if(!abort.signal.aborted){setBusy(false);setOperation(null);}}})();return()=>abort.abort();
  },[token,reload]);
  useEffect(()=>{

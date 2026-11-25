@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, ty
 import { ApiError, profileApi } from '@/lib/api/profile';
 import type { Category, Profile } from './types';
 import { errorText } from '@/lib/errors';
-export type Account = { id: string; name: string; email?: string; email_verified?: boolean; provider: 'google' | 'local_test' | 'email'; expires_at?: string };
+export type Account = { id: string; name: string; email?: string; email_verified?: boolean; provider: 'google' | 'local_test' | 'email'; expires_at?: string; account_type?: 'free' | 'premium' };
 type Access = { flow_id: string; attempt_id: string; marker: string; nonce: string; epoch: string };
 type Mode = 'google' | 'email' | 'local_test';
 export type Verification = { verification_required: true; challenge_id: string; masked_email: string; expires_at: string; resend_at: string };

@@ -28,12 +28,12 @@ const explanation = (error: unknown) => errorText(error, 'Your saved work could 
 export function RoadmapPlanner() {
  const { account, token } = useProfile();
  if (!account || !token) return null;
- return <Planner key={`${account.id}:${token}`} token={token} />;
+ return <Planner key={`${account.id}:${token}`} token={token} premium={account.account_type === 'premium'} />;
 }
 function workspacePath() {
  try { return `/workspace?time_zone=${encodeURIComponent(deviceTimeZone())}`; } catch { return '/workspace'; }
 }
-function Planner({ token }: { token: string }) {
+function Planner({ token, premium }: { token: string; premium: boolean }) {
  const [workspace, setWorkspace] = useState<Workspace | null>(null);
  const profileSkills = useSection(loadSkills, token);
  const evaluation = useComparison(token);
@@ -225,7 +225,7 @@ function Planner({ token }: { token: string }) {
 
   retry={() => void send(workspace.operation?.error?.code === 'inputs_changed' ? { ...workspace.retry_request!, expected_version: workspace.version, mutation_id: crypto.randomUUID() } : workspace.retry_request!)} />;
  const legacy = earlier || earlierDraft;
- const weeklyPlanning = <WeeklyPlanning planner={planner} frozen={frozen} change={(path,data,method) => change(path,data,false,method)} acceptBlocked={sourceChanged || !context.ready || (!!context.evaluation && context.evaluation.freshness !== 'current')} settings={() => setConfiguring(true)}/>;
+ const weeklyPlanning = <WeeklyPlanning planner={planner} premium={premium} frozen={frozen} change={(path,data,method) => change(path,data,false,method)} acceptBlocked={sourceChanged || !context.ready || (!!context.evaluation && context.evaluation.freshness !== 'current')} settings={() => setConfiguring(true)}/>;
  return <section className="roadmap-adviser">
   <div className={`roadmap-workspace${helperOpen ? ' helper-open' : ''}`}><div className="roadmap-main">
   {!showRoadmap && <header className="roadmap-heading"><div><h1>Roadmap</h1><p>{plan ? 'Plan settings: change your schedule, then update your roadmap.' : 'Make room for the career you want.'}</p></div>
@@ -250,7 +250,7 @@ function Planner({ token }: { token: string }) {
   {(failedOutline || failedWeek) && <div className="roadmap-notice" role="status"><p>{friendlyOperationError(workspace.operation?.error, 'Your roadmap could not be created. Your saved work is unchanged.')}</p><button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after} onClick={() => retryPlanning(failedOutline ? '/planner/outlines/generate' : '/planner/weeks/generate', (failedOutline || failedWeek)!, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
   <div id="plan-panel">
    {!configuring && !activeView && weeklyPlanning}
-   {activeView ? <RoadmapViews plan={plan!} review={review!} planner={planner} goal={goalName} version={workspace.version} frozen={frozen} updates={updates} openSettings={() => setConfiguring(true)} actions={actions} weeklyPlanning={weeklyPlanning} />
+   {activeView ? <RoadmapViews plan={plan!} review={review!} planner={planner} goal={goalName} version={workspace.version} frozen={frozen} updates={updates} openSettings={() => setConfiguring(true)} actions={actions} weeklyPlanning={weeklyPlanning} premium={premium} />
    : blocked || showOutline || (!configuring && !!planner.week_candidate) ? null : <>{!!plan && !preview && signals.length > 0 && <ul className="plan-updates" aria-label="Changes since this roadmap was prepared">{signals.map(signal => <li key={signal.kind + signal.message}>{signal.message}</li>)}</ul>}<SettingsPanel profileSkills={profileSkills.state} workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} autosave={autosave} returnToReview={plan || planner.outline_active || planner.outline_candidate ? () => setConfiguring(false) : null} /></>}
    {activeView && <TaskEditor tasks={(planner.active?.editable_tasks || []).filter((task): task is EditableRoadmapTask & typeof task => typeof task.title === 'string' && typeof task.instructions === 'string' && typeof task.completion_outcome === 'string' && typeof task.estimated_minutes === 'number' && Array.isArray(task.schedule) && !!task.status && task.milestone_key !== undefined)} milestones={planner.active!.milestones} frozen={frozen} change={(path, data) => change(path, data)} />}
 

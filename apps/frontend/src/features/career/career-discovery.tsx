@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {useProfile} from '@/features/profile/profile-provider';
 import {careerApi,type CurrentGoal,type SavedReview,type ResearchSource} from '@/lib/api/career';
+import { isPremiumRequired } from '@/lib/api/premium';
 import {AgentActivity,AgentMarkdown,AgentReply} from './agent-message';
 import {ChatScrollControl,useChatScroll} from './use-chat-scroll';
 import { ChatSkeleton } from '@/components/ui/workspace-ui';
@@ -29,7 +30,7 @@ function DiscoveryConversation({token}:{token:string|undefined}){
  const [sessions,setSessions]=useState<{id:string;title:string;last_message:string}[]>([]),[historyOpen,setHistoryOpen]=useState(false);
  useEffect(()=>{if(!token||!historyOpen)return;const abort=new AbortController();void careerApi<{items:typeof sessions}>('/discoveries',token,{signal:abort.signal}).then(value=>{if(!abort.signal.aborted)setSessions(value.items);}).catch(()=>{});return()=>abort.abort();},[token,historyOpen]);
  async function openHistory(id:string){if(!token)return;try{receive(await careerApi<View>(`/discoveries/${id}`,token));setHistoryOpen(false);}catch{setError('This conversation could not be loaded. Try again.');}}
- async function publishDirection(){if(!token||!view?.session)return;setBusy(true);setError('');try{const current=await careerApi<CurrentGoal>('/goals/current',token);const next=await post<View>(`/discoveries/${view.session.id}/publish`,{expected_version:view.session.version,expected_selection_version:current.selection_version});receive(next);}catch{setError('Your goal or discovery changed. Reload before trying again.');}finally{setBusy(false);}}
+ async function publishDirection(){if(!token||!view?.session)return;setBusy(true);setError('');try{const current=await careerApi<CurrentGoal>('/goals/current',token);const next=await post<View>(`/discoveries/${view.session.id}/publish`,{expected_version:view.session.version,expected_selection_version:current.selection_version});receive(next);}catch(c){if(!isPremiumRequired(c))setError('Your goal or discovery changed. Reload before trying again.');}finally{setBusy(false);}}
 
  const [introduction,setIntroduction]=useState('');
  const [view,setView]=useState<View>(),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[reload,setReload]=useState(0);
@@ -66,7 +67,7 @@ function DiscoveryConversation({token}:{token:string|undefined}){
    if(!current){const started=await post<View>('/discoveries',{consent:true});current=started.session;receive(started);}
    const result=await post<View>(`/discoveries/${current!.id}/messages`,{expected_version:current!.version,message:input});
    if(active.current){receive(result);receipt.current=null;}
-  }catch(c){if(active.current){setFailedMessage(input);setError(c instanceof Error?c.message:'Your message could not be completed. Retry.');}}
+  }catch(c){if(active.current){if(isPremiumRequired(c)){if(!retry)setMessage(input);}else{setFailedMessage(input);setError(c instanceof Error?c.message:'Your message could not be completed. Retry.');}}}
   finally{sending.current=false;if(active.current){setBusy(false);setPending('');}}
  }
  async function newChat(){
@@ -78,7 +79,7 @@ function DiscoveryConversation({token}:{token:string|undefined}){
    receipt.current=null;
    setMessage('');setPending('');setFailedMessage('');
    setDetails(false);setSeconds(0);receive(value,true);
-  }catch(c){if(active.current)setError(c instanceof Error?c.message:'A new chat could not be started. Try New chat again.');}
+  }catch(c){if(active.current&&!isPremiumRequired(c))setError(c instanceof Error?c.message:'A new chat could not be started. Try New chat again.');}
   finally{sending.current=false;if(active.current)setBusy(false);}
  }
  async function research(refresh=false){
