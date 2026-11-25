@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, ty
 import { ApiError, profileApi } from '@/lib/api/profile';
 import type { Category, Profile } from './types';
 import { errorText } from '@/lib/errors';
+import { PREMIUM_REQUIRED_EVENT } from '@/lib/api/premium';
 export type Account = { id: string; name: string; email?: string; email_verified?: boolean; provider: 'google' | 'local_test' | 'email'; expires_at?: string; account_type?: 'free' | 'premium' };
 type Access = { flow_id: string; attempt_id: string; marker: string; nonce: string; epoch: string };
 type Mode = 'google' | 'email' | 'local_test';
@@ -159,9 +160,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }
   function visible() { if (document.visibilityState === 'visible') void validateSession(); }
   function restored(event: PageTransitionEvent) { if (event.persisted) void validateSession(true); }
-  window.addEventListener('storage', changed); window.addEventListener('elo:expired', expired);
+  function limited() { void validateSession(false, false); }
+  window.addEventListener('storage', changed); window.addEventListener('elo:expired', expired); window.addEventListener(PREMIUM_REQUIRED_EVENT, limited);
   document.addEventListener('visibilitychange', visible); window.addEventListener('pageshow', restored);
-  return () => { window.removeEventListener('storage', changed); window.removeEventListener('elo:expired', expired); document.removeEventListener('visibilitychange', visible); window.removeEventListener('pageshow', restored); };
+  return () => { window.removeEventListener('storage', changed); window.removeEventListener('elo:expired', expired); window.removeEventListener(PREMIUM_REQUIRED_EVENT, limited); document.removeEventListener('visibilitychange', visible); window.removeEventListener('pageshow', restored); };
  }, [cancelAccess, clear, reload, signOut, validateSession]);
  useEffect(() => {
   sessionStorage.removeItem('elo.pending-logout');

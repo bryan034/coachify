@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
 import { PREMIUM_REQUIRED_EVENT, type PremiumFeature } from '@/lib/api/premium';
+import { useProfile } from '@/features/profile/profile-provider';
 
 const COPY: Record<PremiumFeature, { title: string; free: string }> = {
  career: { title: 'Changing your career goal', free: 'You can keep refining your current goal and asking questions about it.' },
@@ -15,7 +16,8 @@ function feature(value: unknown): PremiumFeature | null {
 }
 
 export function PremiumDialog() {
- const [open, setOpen] = useState<PremiumFeature | null>(null);
+ const premium = useProfile().account?.account_type === 'premium';
+ const [open, setOpen] = useState<{ feature: PremiumFeature; premium: boolean } | null>(null);
  const close = useRef<HTMLButtonElement>(null);
  const returnTo = useRef<HTMLElement | null>(null);
  useEffect(() => {
@@ -23,15 +25,16 @@ export function PremiumDialog() {
    const next = feature((event as CustomEvent).detail);
    if (!next) return;
    if (document.activeElement instanceof HTMLElement && !document.activeElement.closest('.premium-dialog')) returnTo.current = document.activeElement;
-   setOpen(next);
+   setOpen({ feature: next, premium });
   };
   window.addEventListener(PREMIUM_REQUIRED_EVENT, show);
   return () => window.removeEventListener(PREMIUM_REQUIRED_EVENT, show);
- }, []);
+ }, [premium]);
  useEffect(() => { if (open) close.current?.focus(); }, [open]);
- if (!open) return null;
  const dismiss = () => { setOpen(null); returnTo.current?.focus(); returnTo.current = null; };
- const copy = COPY[open];
+ useEffect(() => { if (open && premium && !open.premium) dismiss(); }, [open, premium]);
+ if (!open) return null;
+ const copy = COPY[open.feature];
  return <div className="premium-dialog-veil" onClick={event => { if (event.target === event.currentTarget) dismiss(); }}>
   <div className="premium-dialog" role="dialog" aria-modal="true" aria-labelledby="premium-dialog-title" aria-describedby="premium-dialog-description"
    onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); dismiss(); } else if (event.key === 'Tab') { event.preventDefault(); close.current?.focus(); } }}>

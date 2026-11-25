@@ -2,6 +2,7 @@ import {act,fireEvent,render,screen} from '@testing-library/react';
 import {expect,it,vi} from 'vitest';
 import {PremiumDialog} from './premium-dialog';
 import {openPremium} from '@/lib/api/premium';
+vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({account:null})}));
 it('names the blocked feature, makes no request and returns focus when closed',()=>{
  const fetch=vi.fn();vi.stubGlobal('fetch',fetch);
  render(<><button>Upload CV</button><PremiumDialog/></>);
