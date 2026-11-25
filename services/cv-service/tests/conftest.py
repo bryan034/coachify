@@ -110,12 +110,15 @@ class ProfileTransport:
     calls = 0
     onboarding = True
     cv_review_scope = 'section'
+    account_type = 'premium'
     revoked = False
     async def __call__(self, request):
         owner = request.headers.get('authorization', '').removeprefix('Bearer ')
         if self.revoked or owner not in {'owner-a', 'owner-b'}: return httpx.Response(401, json={})
         if request.url.path.endswith('/auth/session'):
-            return httpx.Response(200, json={'id': owner, 'email_verified': True, 'cv_review_scope': self.cv_review_scope, 'cv_review_policy_version': 1})
+            session = {'id': owner, 'email_verified': True, 'cv_review_scope': self.cv_review_scope, 'cv_review_policy_version': 1}
+            if self.account_type is not None: session['account_type'] = self.account_type
+            return httpx.Response(200, json=session)
         if request.url.path.endswith('/capabilities'):
             self.calls += 1
             return httpx.Response(200, json={'version': self.declaration_version + (self.calls if self.race else 0),
