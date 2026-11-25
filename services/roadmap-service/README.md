@@ -2,6 +2,8 @@
 
 Prepares a personal study roadmap towards the user's career goal. A fixed planner form collects the schedule, with an optional chat helper to guide the user through it. The service calculates the runway, the LLM writes the plan, and the service validates it before the user reviews it. Owns settings, plan revisions, session progress and adviser chat in a separate MongoDB database.
 
+Free plan: task details are generated only for the first two weeks of the active outline. `POST /planner/weeks/generate` for a later week returns 402 with code `premium_required`, and a queued later week fails with the same code. Weekly objectives stay visible and manual task changes are allowed in every week.
+
 ## API by capability
 
 | Stories | Available endpoints under `/api/v1/roadmaps` |
