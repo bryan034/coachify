@@ -17,6 +17,7 @@ from app.core.mail import SmtpMailer, mail_settings
 from app.api.v1.capabilities import router as capability_router
 from app.repositories.capabilities import CapabilityRepository
 from app.api.v1.skills_profile import router as skills_profile_router
+from app.schemas.accounts import AccountTypeChange
 
 
 def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
@@ -62,6 +63,17 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
                 "skills_profile": "", "skills_profile_last_mutation": ""}})
             deleted = capabilities.receipts.delete_many({"user_id": account["id"]}).deleted_count
             return {"deleted": {"capability_mutations": deleted} if deleted else {}}
+
+        @app.put("/api/v1/profile/dev/account-type", include_in_schema=False)
+        def dev_account_type(request: Request, change: AccountTypeChange,
+                             owner: Annotated[str, Depends(current_owner)]):
+            capabilities = request.app.state.capabilities
+            if capabilities is None:
+                raise HTTPException(503, "Account storage unavailable. Please retry.")
+            changed = capabilities.accounts.update_one({"owner": owner}, {"$set": {"account_type": change.account_type}})
+            if not changed.matched_count:
+                raise HTTPException(401, "Your account is unavailable. Sign in again.")
+            return {"account_type": change.account_type}
 
     @app.middleware("http")
     async def private_responses(request, call_next):

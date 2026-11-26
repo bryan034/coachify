@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
-import { DevReset } from '@/features/dev/dev-reset';
+import { DevTools } from '@/features/dev/dev-tools';
 import { useProfile } from '@/features/profile/profile-provider';
 import { statuses, studyYearLabel } from '@/features/profile/types';
 const nav = [
@@ -63,7 +63,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     <div className="me"><div className="avatar"><Icon name="user"/></div><div><strong>{account?.name || 'Your workspace'}</strong><div className="small">{detail}</div></div></div>
    <button type="button" className="btn ghost sm" onClick={signOut}>Sign out</button></div>
   </aside>
-  <main id="main-content" tabIndex={-1}><DevReset/>{children}</main>
+  <main id="main-content" tabIndex={-1}><DevTools/>{children}</main>
   <nav className="workspace-tabbar" hidden={locked || chatRoute} aria-label="Main sections">{nav.map(n => <Link key={n.href} href={n.href} className={isActive(n.href) ? 'on' : ''} aria-current={isActive(n.href) ? 'page' : undefined}><Icon name={n.icon}/>{tabLabels[n.href]}</Link>)}</nav>
  </div>;
 }

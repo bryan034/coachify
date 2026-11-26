@@ -55,8 +55,8 @@ class MemoryCollection:
                 if matches(row, query):
                     before = deepcopy(row)
                     row.update(deepcopy(update["$set"]))
-                    return SimpleNamespace(modified_count=int(row != before))
-            return SimpleNamespace(modified_count=0)
+                    return SimpleNamespace(matched_count=1, modified_count=int(row != before))
+            return SimpleNamespace(matched_count=0, modified_count=0)
 
 
 @pytest.fixture(params=["memory", "mongo"])
