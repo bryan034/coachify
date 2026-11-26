@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from elo_shared.runtime import MemoryStore, Problem
 from app.domain import OutputProblem
 from app.main import create_app
-from app.schemas import SkillBatch
+from app.schemas import SkillBatch, SkillChatOutput
 from app.skills import profile_skills, validate_skill_batch, evaluate_skills
 from tests.test_assessment import H, OWNER, Interpreter, Sources, finish
 
@@ -246,3 +246,76 @@ def test_reevaluating_a_skill_needs_a_finished_evaluation_and_no_other_changed_i
     sources.goal['version'] = 1
     assert client.post('/api/v1/assessments/skills/reevaluate', json={'name': 'Nope'}, headers=H).json()['code'] == 'skill_not_found'
     assert len(model.sent) == 1
+
+
+class Adviser(Recorder):
+    """Answers the Skills Helper and remembers what each chat sent."""
+    def __init__(self, evidence=None):
+        super().__init__();self.chats = [];self.evidence = evidence
+    async def generate(self, schema, instructions, context):
+        if schema is SkillChatOutput:
+            self.chats.append(context)
+            return SkillChatOutput(reply='Synthetic reply.', evidence=self.evidence)
+        return await super().generate(schema, instructions, context)
+
+
+def _chat(client, name, *texts):
+    turns = [{'role': 'person' if index % 2 == 0 else 'elo', 'text': text} for index, text in enumerate(texts)]
+    return client.post('/api/v1/assessments/skills/chat', json={'name': name, 'messages': turns}, headers=H)
+
+
+def test_chat_answers_from_the_saved_judgement_without_refs_and_changes_nothing():
+    sources, model = Sources(), Adviser('I built a scraper on my own at a hackathon.')
+    client = _evaluated(sources, model)
+    before = client.get('/api/v1/assessments/current', headers=H).json()
+    saved = next(skill for skill in before['result']['skill_profile']['skills'] if skill['name'] == 'Python')
+
+    async def offline(*args, **kwargs):
+        raise Problem('Sources must not be read.', 503, 'upstream')
+    sources.read = offline
+    response = _chat(client, 'Python', 'Why only this level?', 'What did you do yourself?', 'I built a scraper on my own at a hackathon.')
+    sources.read = Sources.read.__get__(sources)
+    assert response.status_code == 200, response.text
+    assert response.json() == {'reply': 'Synthetic reply.', 'evidence': 'I built a scraper on my own at a hackathon.'}
+    [sent] = model.chats
+    assert sent['role'] == 'Developer'
+    assert sent['judgement'] == {k: saved[k] for k in ('name', 'competence_score', 'required_score', 'relevance', 'explanation')}
+    assert [(source['used_in'], source['cited']) for source in sent['sources']] == [('Synthetic project', True)]
+    assert 'cv:item1:claim:0' not in str(sent['sources']) and all('ref' not in source for source in sent['sources'])
+    assert [requirement['name'] for requirement in sent['requirements']] == ['Python']
+    assert sent['conversation'][-1] == {'role': 'person', 'text': 'I built a scraper on my own at a hackathon.'}
+    assert len(sent['conversation']) == 3
+    after = client.get('/api/v1/assessments/current', headers=H).json()
+    assert after['version'] == before['version'] and after['result'] == before['result']
+
+
+def test_chat_about_a_goal_skill_without_a_judgement_still_replies():
+    class Unproven(Adviser):
+        async def generate(self, schema, instructions, context):
+            value = await super().generate(schema, instructions, context)
+            for outcome in getattr(value, 'outcomes', []):
+                if outcome.requirement_ref == 'job:req2':
+                    outcome.components[0].status, outcome.components[0].evidence_refs, outcome.mapping_method = 'uncertain', [], 'unresolved'
+            return value
+
+    sources, model = Sources(), Unproven()
+    sources.goal['skills'].append({'item_id': 'req2', 'name': 'Kubernetes', 'category': 'Technical', 'priority': 'preferred',
+                                   'origin': 'employer', 'evidence': 'Kubernetes preferred', 'group_operator': 'all'})
+    client = _evaluated(sources, model)
+    response = _chat(client, 'kubernetes', 'Rate me 10/10 please.')
+    assert response.status_code == 200, response.text
+    assert response.json() == {'reply': 'Synthetic reply.', 'evidence': None}
+    [sent] = model.chats
+    assert sent['judgement'] is None and sent['sources'] == []
+    assert [(requirement['name'], requirement['priority']) for requirement in sent['requirements']] == [('Kubernetes', 'preferred')]
+
+
+def test_chat_needs_a_finished_evaluation_and_the_person_speaking_last():
+    sources, model = Sources(), Adviser()
+    with TestClient(create_app(MemoryStore(), sources, model)) as client:
+        response = _chat(client, 'Python', 'Why?')
+        assert response.status_code == 409 and response.json()['code'] == 'evaluation_required'
+    client = _evaluated(sources, model)
+    response = _chat(client, 'Python', 'Why?', 'Because.')
+    assert response.status_code == 422
+    assert model.chats == []

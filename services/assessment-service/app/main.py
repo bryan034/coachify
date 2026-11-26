@@ -2,10 +2,10 @@ from uuid import uuid5, NAMESPACE_URL
 from fastapi import Depends
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import application, authenticated, Problem, begin, launch, operation_view, stamp, digest
-from app.schemas import Generate, Result, Context, Current, DashboardSource, SkillRatingInput, SkillRatings, SkillReevaluateInput, SkillReevaluated, batch_schema
+from app.schemas import Generate, Result, Context, Current, DashboardSource, SkillRatingInput, SkillRatings, SkillReevaluateInput, SkillReevaluated, SkillChatInput, SkillChatOutput, SkillChatReply, batch_schema
 from app.inputs import capture
 from app.domain import OutputProblem, INSTRUCTIONS, validate_batch, group_outcome, model_evidence, ASSESSMENT_CONTEXT_BYTES
-from app.skills import evaluate_skills, link_profile, find_skill, reevaluate_skill
+from app.skills import evaluate_skills, link_profile, find_skill, reevaluate_skill, skill_context, CHAT_INSTRUCTIONS
 from app.competence import RUBRIC_VERSION
 from app.freshness import evaluation_status
 
@@ -210,6 +210,17 @@ def create_app(store=None,upstream=None,model=None):
         row['result']={**result,'skill_profile':{**profile,'skills':skills},'evidence':now,'inputs':snapshot['inputs'],'input_hash':snapshot['input_hash'],'source_snapshot':snapshot['source_snapshot']}
         saved=await thread(app.state.store.cas,account['id'],row['version'],row)
         return {'version':saved['version'],'skill':judged}
+
+    @app.post('/api/v1/assessments/skills/chat',response_model=SkillChatReply)
+    async def skill_chat(body:SkillChatInput,account=Depends(authenticated)):
+        """Talk through one skill's saved judgement. Reads only the saved evaluation and never writes; new experience the
+        person describes comes back as `evidence` for them to save and re-evaluate."""
+        if not app.state.model.configured:raise Problem('The skill helper is unavailable right now.',503,'model_unavailable')
+        result=(await thread(app.state.store.load,account['id'])).get('result')
+        profile=(result or {}).get('skill_profile')
+        if not profile or profile.get('status') not in ('evaluated','partial'):raise Problem('Evaluate your skills against your goal first.',409,'evaluation_required')
+        context=skill_context(result,body.name,body.canonical_skill_id)
+        return await app.state.model.generate(SkillChatOutput,CHAT_INSTRUCTIONS,{**context,'conversation':[turn.model_dump() for turn in body.messages]})
 
     @app.get('/api/v1/assessments/{identifier}',response_model=Result)
     async def history(identifier:str,account=Depends(authenticated)):

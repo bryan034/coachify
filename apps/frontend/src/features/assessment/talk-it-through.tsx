@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { FreeTimes, Workspace } from '@/features/roadmap/types';
-import { reevaluateSkill } from '@/lib/api/assessment';
+import { reevaluateSkill, skillChat, type SkillChatReply, type SkillChatTurn } from '@/lib/api/assessment';
 import { cvApi } from '@/lib/api/cv';
 import { roadmapApi } from '@/lib/api/roadmap';
 import { loadRoadmap } from '@/lib/api/workspace-summary';
@@ -67,7 +67,7 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
  const [messages, setMessages] = useState<Message[]>([]);
  const [replies, setReplies] = useState<Reply[]>([]);
  const [draft, setDraft] = useState(''), [busy, setBusy] = useState(false);
- const next = useRef(0);
+ const next = useRef(0), transcript = useRef<SkillChatTurn[]>([]);
  const lifetime = useRef(new AbortController()), list = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
  useEffect(() => { if (lifetime.current.signal.aborted) lifetime.current = new AbortController(); return () => lifetime.current.abort(); }, []);
  const push = (kind: Message['kind'], body: ReactNode) => setMessages(all => [...all.filter(item => item.kind !== 'wait'), { id: next.current++, kind, body }]);
@@ -78,14 +78,28 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
 
  async function share(what: string) {
   if (!token || busy) return;
-  push('me', what); setDraft(''); setBusy(true); push('wait', 'Saving your answer…');
+  push('me', what); setDraft(''); setBusy(true); push('wait', 'Thinking…');
   const signal = lifetime.current.signal;
-  const before = skill.level;
+  const before = skill.level, asked: SkillChatTurn[] = [...transcript.current, { role: 'person' as const, text: what }].slice(-20);
+  let answer: SkillChatReply;
+  try {
+   answer = await skillChat(token, { name: skill.name, canonical_skill_id: skill.canonicalId ?? null, messages: asked }, signal);
+   if (signal.aborted) return;
+  } catch (cause) {
+   if (!signal.aborted) { push('alert', errorText(cause, 'elo couldn’t reply just now. Try again.')); setDraft(what); setBusy(false); }
+   return;
+  }
+  transcript.current = [...asked, { role: 'elo' as const, text: answer.reply }].slice(-20);
+  push('elo', answer.reply);
+  const evidence = answer.evidence;
+  if (!evidence) { setBusy(false); return; }
+  push('result', `Saving to your Skills Profile: “${evidence}”`); push('wait', 'Saving your answer…');
   try {
    const current = await cvApi.declarations(token, signal);
    const match = current.declarations.find(item => item.name.trim().toLowerCase() === skill.name.trim().toLowerCase());
-   await cvApi.addDeclaration({ expected_version: current.version, mutation_id: crypto.randomUUID(), name: match?.name ?? skill.name, description: what.slice(0, 2000), mode: match ? 'attach' : 'new', ...(match ? { attach_to_id: match.id } : {}) }, token, signal);
+   await cvApi.addDeclaration({ expected_version: current.version, mutation_id: crypto.randomUUID(), name: match?.name ?? skill.name, description: evidence.slice(0, 2000), mode: match ? 'attach' : 'new', ...(match ? { attach_to_id: match.id } : {}) }, token, signal);
    if (signal.aborted) return;
+   transcript.current = [...transcript.current, { role: 'elo' as const, text: `Saved to your Skills Profile: ${evidence}`.slice(0, 2000) }].slice(-20);
   } catch (cause) {
    if (!signal.aborted) { push('alert', errorText(cause, 'Your answer could not be saved. Try again.')); setDraft(what); setBusy(false); }
    return;
@@ -95,7 +109,9 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
    const result = await reevaluateSkill(token, { name: skill.name, canonical_skill_id: skill.canonicalId ?? null }, signal);
    if (signal.aborted) return;
    const after = result.skill.competence_score;
-   push('result', before === after ? `${skill.name}: stays at ${after ?? 'Not rated'}` : `${skill.name}: ${before ?? 'Not rated'} → ${after ?? 'Not rated'}`);
+   const change = before === after ? `${skill.name}: stays at ${after ?? 'Not rated'}` : `${skill.name}: ${before ?? 'Not rated'} → ${after ?? 'Not rated'}`;
+   push('result', change); push('elo', result.skill.explanation);
+   transcript.current = [...transcript.current, { role: 'elo' as const, text: `I re-judged ${skill.name} with what you told me. ${change}. ${result.skill.explanation}`.slice(0, 2000) }].slice(-20);
   } catch (cause) {
    if (!signal.aborted) push('alert', cause && typeof cause === 'object' && 'status' in cause && cause.status === 409
     ? 'Your answer is saved. Your level updates the next time your skills are evaluated.'
@@ -157,7 +173,7 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
    <HelperOpening title={skill.level == null ? `Why isn’t ${skill.name} rated?` : `Why is ${skill.name} ${skill.estimated ? 'estimated at' : 'rated'} ${skill.level} out of 10?`}>
     <p>{ratingReason(skill)}{skill.target != null ? ` Target: ${skill.target}.` : ''}</p>
     <p>Without clear evidence, elo assumes you had guidance.</p>
-    <p><b>Want a re-rating?</b> Tell me about:</p>
+    <p><b>Ask me why</b>, or tell me about:</p>
     <ul>
      <li>Projects not on your CV</li>
      <li>What you did unguided</li>
@@ -174,7 +190,7 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
    : <button key={reply.label} type="button" className={`ws-reply${reply.solid ? ' solid' : ''}`} disabled={busy} onClick={reply.run}>{reply.label}</button>)}</div>}
   <form className="ws-composer" onSubmit={submit}>
    <HelperComposer hint="Everything you add stays yours to change." canSend={!!draft.trim() && !busy}>
-    <textarea ref={input} rows={3} maxLength={1800} value={draft} disabled={busy} aria-label="Your answer" placeholder="Tell me about your experience with this skill…" onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}/>
+    <textarea ref={input} rows={3} maxLength={1800} value={draft} disabled={busy} aria-label="Your message" placeholder="Ask why, or tell me about your experience…" onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}/>
    </HelperComposer>
   </form>
  </>;
