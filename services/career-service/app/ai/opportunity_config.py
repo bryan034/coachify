@@ -17,6 +17,7 @@ class OpportunitySettings(BaseModel):
     freshness_hours:int=Field(default=168,ge=1,le=720)
     incomplete_hours:int=Field(default=1,ge=1,le=24)
     run_seconds:int=Field(default=300,ge=60,le=600)
+    token_budget:int=Field(default=230000,ge=100000,le=5000000)
     @classmethod
     def from_env(cls):
         values={key:os.environ['OPPORTUNITY_'+key.upper()] for key in cls.model_fields if key!='model' and 'OPPORTUNITY_'+key.upper() in os.environ}

@@ -141,8 +141,8 @@ def test_adapter_and_bounded_repair_use_the_same_catalogue_and_preserve_safe_fee
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             engine=object.__new__(OpportunityEngine)
             engine.ai=AIAdapter(AISettings(enabled=True,api_key='synthetic'),client)
-            engine.settings=SimpleNamespace(schema_repairs=1)
-            engine.store=SimpleNamespace(update=lambda *a,**kw:None,rows=SimpleNamespace(update_one=lambda *a:None))
+            engine.settings=SimpleNamespace(schema_repairs=1,token_budget=OpportunitySettings().token_budget)
+            engine.store=SimpleNamespace(update=lambda *a,**kw:None,book_tokens=lambda *a:True,rows=SimpleNamespace(update_one=lambda *a:None))
             result=await engine.generate({'_id':'synthetic','owner':'synthetic','goal_id':'synthetic','worker_token':'synthetic'},
                 'opportunity_structure',context,lambda output:supported_claims(output,'internship_insights',sources))
         assert len(calls)==2

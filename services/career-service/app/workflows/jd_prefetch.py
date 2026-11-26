@@ -20,9 +20,13 @@ from app.ai.metrics import COUNTERS,usage_observer
 
 IDENTITY=('role','field','company','location','seniority_level','employment_type')
 
-def matches(identity,goal):
+def differing(identity,goal):
     def normalized(value):return ' '.join((value or '').casefold().split())
-    return all(normalized(getattr(identity,k))==normalized(getattr(goal,k)) for k in IDENTITY if k!='field')
+    return [k for k in IDENTITY if k!='field' and normalized(getattr(identity,k))!=normalized(getattr(goal,k))]
+
+
+def matches(identity,goal):
+    return not differing(identity,goal)
 
 async def prefetch(engine,identity,owner,revision):
     context=ResearchContext(**{k:(identity.field or identity.role) if k=='field' else getattr(identity,k) for k in IDENTITY if k!='employment_type'})

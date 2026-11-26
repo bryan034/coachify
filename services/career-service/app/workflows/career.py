@@ -23,7 +23,7 @@ from app.workflows.structured import structured_node
 from app.workflows import research_search
 from app.workflows.job_identity import identify_job
 from app.workflows.activity import activity,activity_observer
-from app.workflows.jd_prefetch import prefetch,matches
+from app.workflows.jd_prefetch import prefetch,matches,differing
 from app.ai.contracts import AIInput
 from app.domain.extraction import validate_extraction
 from app.schemas.analysis import context_for, Generation, InterviewResearch, InterviewProcess
@@ -172,10 +172,10 @@ class CareerWorkflow:
             entry=self.seeds.get(identity_key);seed=None
             try:
                 if entry:
-                    if matches(entry['identity'],goal):seed=await entry['task']
-                    else:
-                        entry['task'].cancel()
-                        await asyncio.gather(entry['task'],return_exceptions=True)
+                    seed=await entry['task']
+                    if not matches(entry['identity'],goal):
+                        logging.getLogger('uvicorn.error').info('prefetch_discarded fields=%s',','.join(differing(entry['identity'],goal)))
+                        seed={'metrics':seed['metrics']}
                 await self.valid(state)
                 await opportunity.start(state['owner'],goal,state['selection'],state['session'],state['run'],'auto:'+state['run'],{'refresh':False,'category':None},seed=seed)
             finally:self.seeds.pop(identity_key,None)

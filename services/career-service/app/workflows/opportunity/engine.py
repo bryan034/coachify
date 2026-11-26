@@ -19,9 +19,9 @@ from starlette.concurrency import run_in_threadpool as thread
 from app.ai.adapter import Operation
 from app.ai.errors import AIError
 from app.ai.contracts import AIInput
-from app.ai.recovery import recover_responses,validation_feedback
+from app.ai.recovery import recover_responses,validation_detail,validation_feedback
 from app.ai.waiting import quota_progress
-from app.ai.metrics import COUNTERS,usage_observer
+from app.ai.metrics import COUNTERS,spent_tokens,usage_observer
 from app.ai.opportunity_contracts import MAX_TRIAGE_PAGES,structure_input,triage_input
 from app.workflows.model_waits import resume_obsolete_model_waits
 from app.clients.search_sources import SourceRateLimit
@@ -33,7 +33,7 @@ from .sources import pool,retain_useful,category_sources,choose_reads
 from .queries import ACTIVITIES,planned_queries,topic_queries,topic_map
 from .topics import CANDIDATES_PER_SEARCH,GROUP_CANDIDATES,GROUPS,TOPIC_CATEGORIES,TOPIC_GROUP,TOPICS,category_topics,gap_rank,owner,policy,settled
 from app.domain.review import MAPPING_VERSION
-from .domain import whitespace,summary_input,dedupe_findings,supported_claims,validated_skill_levels,weighted_skills
+from .domain import whitespace,summary_input,dedupe_findings,finding_identity,supported_claims,validated_skill_levels,weighted_skills
 from pymongo.errors import PyMongoError
 from app.workflows.boundaries import UnexpectedFailure, contained
 
@@ -61,6 +61,12 @@ def select_evidence(sources,budget):
             else:high=length-1
         if best is not None:selected.append(best)
     return selected
+
+
+# Each running call books an estimate until its usage is known; searches stop RESERVED_TOKENS below the budget so reading and rating still fit.
+RESERVED_TOKENS=60000
+SEARCH_TOKENS=15000
+MODEL_TOKENS=6000
 
 
 def transient(error):
@@ -121,8 +127,10 @@ class OpportunityEngine:
         prior=job.get('model_recovery',{}).get(step,{})
         invalids=prior.get('invalid_responses',0)
         recovery=recover_responses.set(False);feedback=validation_feedback.set(prior.get('feedback'));waiting=quota_progress.set(None)
-        started=time.monotonic();usage=[];attempts=0;observer=usage_observer.set(usage.append)
+        started=time.monotonic();usage=[];attempts=0;observer=usage_observer.set(usage.append);booked=0
         try:
+            if not await thread(self.store.book_tokens,job['_id'],job['worker_token'],self.settings.token_budget,MODEL_TOKENS):raise AIError('token_budget')
+            booked=MODEL_TOKENS
             if invalids>self.settings.schema_repairs:raise AIError('invalid_output',reason=prior.get('feedback',{}).get('reason'))
             for attempt in range(self.settings.schema_repairs+1-invalids):
                 try:
@@ -142,7 +150,7 @@ class OpportunityEngine:
                     validation_feedback.set(correction)
         finally:
             usage_observer.reset(observer);quota_progress.reset(waiting);validation_feedback.reset(feedback);recover_responses.reset(recovery)
-            increments={f'metrics.{stage}.model_calls':attempts,f'metrics.{stage}.latency_ms':int((time.monotonic()-started)*1000)}
+            increments={f'metrics.{stage}.model_calls':attempts,f'metrics.{stage}.latency_ms':int((time.monotonic()-started)*1000),'tokens_used':-booked}
             await self.record(job,stage,usage,increments)
             logger.info('node=%s latency_ms=%s',stage,int((time.monotonic()-started)*1000))
 
@@ -150,6 +158,7 @@ class OpportunityEngine:
         for name in COUNTERS:
             count=sum(v.get(name,0) for v in usage)
             if count:increments[f'metrics.{stage}.{name}']=count
+        increments['tokens_used']=increments.get('tokens_used',0)+sum(spent_tokens(v) for v in usage)
         await asyncio.shield(thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$inc':increments}))
 
     async def plan(self,state):
@@ -157,17 +166,22 @@ class OpportunityEngine:
         await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':'checking_sources'}})
         if all(v['status'] in ('completed','not_applicable') for v in job['categories'].values()):return {}
         if job.get('queries_planned') and job.get('group_queries'):return {}
-        plan=await self.generate(job,'opportunity_plan',{'opportunity':job['public'],'recruitment_year':now().year,'previous_queries':job.get('group_history',{})})
+        try:plan=await self.generate(job,'opportunity_plan',{'opportunity':job['public'],'recruitment_year':now().year,'previous_queries':job.get('group_history',{})})
+        except AIError as error:
+            if error.code!='token_budget':raise
+            plan=None
         await thread(self.store.update,job['_id'],job['worker_token'],group_queries=planned_queries(plan,job['public']),
             queries=topic_queries(job['public'],self.settings.topic_searches),queries_planned=True)
         return {}
 
     async def collect(self,job,query,limit):
-        usage=[];observer=usage_observer.set(usage.append);sources=None
+        usage=[];observer=usage_observer.set(usage.append);sources=None;booked=0
         try:
             for attempt in range(self.settings.retries+1):
                 try:
                     async with self.slots:
+                        if not await thread(self.store.book_tokens,job['_id'],job['worker_token'],self.settings.token_budget-RESERVED_TOKENS,SEARCH_TOKENS):break
+                        booked+=SEARCH_TOKENS
                         async with asyncio.timeout(self.settings.timeout_seconds):
                             with budget_owner(job['owner']):
                                 sources=await self.source.collect_opportunity_query(ResearchContext.model_validate(job['context']),query,max_sources=limit)
@@ -177,7 +191,7 @@ class OpportunityEngine:
                     await asyncio.sleep(.5*2**attempt)
         finally:
             usage_observer.reset(observer)
-            await self.record(job,'research_search',usage,{'metrics.research_search.searches':1})
+            await self.record(job,'research_search',usage,{'metrics.research_search.searches':1 if booked else 0,'tokens_used':-booked})
         return pool([s.model_dump(mode='json') for s in sources or []])
 
     def next_query(self,job,topic):
@@ -293,7 +307,8 @@ class OpportunityEngine:
     def shared(job,category):
         """Findings other categories extracted for this category's topics, with their cited sources."""
         entries=job.get('shared',{}).get(category,[])
-        return [Finding.model_validate(e['finding']) for e in entries],pool([s for e in entries for s in e['sources']])
+        findings=[Finding.model_validate(e['finding']) for e in entries]
+        return [f.model_copy(update={'finding_id':finding_identity(category,f.field,f.value,f.source_ids,f.round_number)}) for f in findings],pool([s for e in entries for s in e['sources']])
 
     async def triage(self,job,topics,candidates):
         lock=self.triage_locks.setdefault(job['_id'],asyncio.Lock())
@@ -310,7 +325,7 @@ class OpportunityEngine:
                     if problems:raise AIError('invalid_output',True,reason='provenance',fields=('pages',),violations=problems)
                 try:output=await self.generate(job,'opportunity_triage',context,validate)
                 except AIError as error:
-                    if error.code not in ('invalid_output','incomplete_output'):raise
+                    if error.code not in ('invalid_output','incomplete_output','token_budget'):raise
                     return None
                 flags={s.source_id:set() for s in batch}
                 for page in output.pages:flags[batch[page.ref].source_id].update(page.topics)
@@ -422,15 +437,16 @@ class OpportunityEngine:
                     await thread(self.store.update,job['_id'],job['worker_token'],next_attempt_at=now()+timedelta(seconds=error.retry_after),provider=error.provider,limit_scope='provider',**{f'source_waits.{category}':waits+1})
             else:
                 error_code='source_timeout' if isinstance(error,TimeoutError) else 'source_unavailable'
-                logger.warning('category=%s error_code=%s exception_type=%s',category,error_code,type(error).__name__)
+                logger.warning('category=%s error_code=%s exception_type=%s detail=%s',category,error_code,type(error).__name__,validation_detail(error))
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'gap_complete.{category}':True})
         if round_error and not findings and not error_code and not pending:error_code=round_error
         evidence=self.category_evidence(await self.job(state),category)
         findings,retained=retain_useful(category,findings,evidence,relevant_ids)
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'retained_sources.{category}':[s.model_dump(mode='json') for s in retained]})
-        outcome=None if pending else 'validation_failed' if error_code in ('invalid_output','incomplete_output') else 'provider_failed' if error_code else 'findings_found' if findings else 'information_not_found' if relevant_ids else 'no_relevant_sources'
+        stopped=error_code=='token_budget'
+        outcome=None if pending else 'validation_failed' if error_code in ('invalid_output','incomplete_output') else 'provider_failed' if error_code and not stopped else 'findings_found' if findings else 'information_not_found' if relevant_ids else 'no_relevant_sources'
         missing=[field for field in FIELDS[category] if field not in {f.field for f in findings}]
-        status='pending' if pending else 'partial' if error_code and findings else 'failed' if error_code else 'completed'
+        status='pending' if pending else 'partial' if error_code and (findings or stopped) else 'failed' if error_code else 'completed'
         warnings=[]
         if rejected:warnings.append('Unsupported claims were excluded; only independently validated citations are shown.')
         if not findings and not error_code:warnings.append(NOT_FOUND_WARNING)
@@ -576,7 +592,7 @@ class OpportunityEngine:
         except asyncio.CancelledError:raise
         except (AIError,GoalError,TimeoutError,ValueError) as error:
             code=error.code if isinstance(error,AIError) else 'research_timeout' if isinstance(error,TimeoutError) else 'research_validation_failed' if isinstance(error,ValueError) else 'research_state_changed'
-            logger.warning('research_error code=%s exception_type=%s reason=%s',code,type(error).__name__,error.reason if isinstance(error,AIError) else None)
+            logger.warning('research_error code=%s exception_type=%s reason=%s detail=%s',code,type(error).__name__,error.reason if isinstance(error,AIError) else None,validation_detail(error))
             quota=isinstance(error,AIError) and error.code=='rate_limited'
             retry_transient=(isinstance(error,TimeoutError) or isinstance(error,AIError) and error.code in ('timeout','unavailable')) and job.get('automatic_retries',0)<1
             pending=quota or retry_transient

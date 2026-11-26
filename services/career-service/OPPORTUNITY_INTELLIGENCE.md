@@ -207,6 +207,7 @@ and recreate the service yourself; no credentials go into the frontend.
 | `OPPORTUNITY_FRESHNESS_HOURS` | 168 | Complete category freshness |
 | `OPPORTUNITY_INCOMPLETE_HOURS` | 1 | Missing/error coverage freshness |
 | `OPPORTUNITY_RUN_SECONDS` | 300 | Execution deadline per durable worker attempt |
+| `OPPORTUNITY_TOKEN_BUDGET` | 230000 | Model tokens per research run (100,000–5,000,000), including searches made while the JD is read. Each search books 15,000 tokens before it runs and settles to its reported usage. Searches stop 60,000 tokens below the budget; no model call starts once it is spent, and categories stopped early end `partial` with error code `token_budget` |
 
 Also requires enabled `AI_*`, the separate `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_API_KEY`
 with LLM Context access, and Career MongoDB configuration. Obsolete `GEMINI_*` settings

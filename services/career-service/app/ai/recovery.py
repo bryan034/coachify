@@ -2,6 +2,7 @@
 from contextvars import ContextVar
 from collections.abc import Callable
 from typing import Any
+from pydantic import ValidationError
 
 recover_responses = ContextVar('recover_responses', default=False)
 validation_feedback: ContextVar[dict | None] = ContextVar('validation_feedback', default=None)
@@ -32,3 +33,11 @@ def issues_for(error, model):
             elif type(part) is int: path.append(str(part))
         issues.append({'field': '.'.join(path) or '$', 'issue': issue['type']})
     return issues
+
+
+def validation_detail(error):
+    """Which model check failed and where, for logs; never the submitted values."""
+    if not isinstance(error, ValidationError): return None
+    return [{'model': error.title, 'loc': '.'.join(map(str, issue['loc'])), 'type': issue['type'],
+             **({'msg': issue['msg']} if issue['type'] == 'value_error' else {})}
+            for issue in error.errors(include_input=False, include_context=False, include_url=False)[:5]]
