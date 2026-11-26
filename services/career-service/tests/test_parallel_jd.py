@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 from app.ai.qa_contracts import QuestionRoute
+from app.ai.metrics import observe_usage
 
 from app.ai.jd_scope import JobIdentity,CareerScopeError
 from app.ai.context_contracts import ContextPlan
@@ -22,6 +23,7 @@ from tests.test_workspace import flow,headers,BASE,ingest,wait,OWNER
 
 
 FIRST_PASS=len(GROUPS)
+SEARCH_USAGE=1000
 SOURCE='Example is hiring a Data Analyst Intern in Singapore for an internship. SQL is required. Analyse data and build reports.'
 
 
@@ -45,7 +47,7 @@ def test_public_research_starts_before_full_extraction_and_is_not_repeated(oppor
         return await original(request,operation,**kwargs)
     primary.generate=generate
     async def collect(context,query,**kwargs):
-        search.calls.append(query)
+        search.calls.append(query);observe_usage({'total_tokens':SEARCH_USAGE})
         if len(search.calls)<=FIRST_PASS:assert not release.is_set(), 'The first retrieval should overlap extraction.'
         if len(search.calls)>FIRST_PASS and changed_location:assert context.location=='London'
         assert context.role=='Data Analyst Intern' and context.location in ('Singapore','London')
@@ -87,6 +89,7 @@ def test_public_research_starts_before_full_extraction_and_is_not_repeated(oppor
     if changed_location:assert {values[0] for values in job['group_history'].values()}<=set(search.calls[FIRST_PASS:])
     else:assert len(set(search.calls))==len(search.calls)
     assert 'research_complete' in job['activities']
+    assert job['tokens_used']==SEARCH_USAGE*len(search.calls)
     serialized=json.dumps(list(db.research_contexts.find({})),default=str)
     assert SOURCE not in serialized
 

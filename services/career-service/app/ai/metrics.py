@@ -17,3 +17,8 @@ def usage_counts(usage):
 def observe_usage(usage):
     observer=usage_observer.get()
     if observer and (counts:=usage_counts(usage)):observer(counts)
+
+
+def spent_tokens(counts):
+    """Tokens one call or stage used: its reported total, else prompt plus completion."""
+    return counts.get('total_tokens') or counts.get('prompt_tokens',0)+counts.get('completion_tokens',0)

@@ -1,13 +1,14 @@
 """Grouped first searches, run-wide triage, ranked gap searches and usage counters."""
 import asyncio
 import json
+import pytest
 from types import SimpleNamespace
 
 from app.ai.adapter import record_usage
 from app.ai.metrics import observe_usage,usage_counts,usage_observer
 from app.ai.opportunity_config import OpportunitySettings
 from app.schemas.opportunity import CATEGORIES
-from app.workflows.opportunity.engine import OpportunityEngine
+from app.workflows.opportunity.engine import MODEL_TOKENS,RESERVED_TOKENS,SEARCH_TOKENS,OpportunityEngine
 from app.workflows.opportunity.topics import GROUPS,gap_rank
 from tests.test_opportunity import opportunity_flow,query_group,research
 from tests.test_workspace import ingest
@@ -105,9 +106,27 @@ def test_shared_topic_survives_extraction_by_its_first_category(opportunity_flow
             else:result.data.findings=[]
         return result
     primary.generate=extract
-    ingest(flow);_,result,_=research(flow)
+    ingest(flow);workspace,result,_=research(flow)
+    assert result['status']=='completed' and workspace['phase']=='ready',(result['status'],workspace['phase'],workspace.get('error_code'))
+    ids=[]
     for category in ('internship_insights','company_intelligence'):
-        assert any(f['field']=='work_life_balance' for f in result['categories'][category]['findings'])
+        shared=[f for f in result['categories'][category]['findings'] if f['field']=='work_life_balance']
+        assert shared;ids+=[f['finding_id'] for f in shared]
+    assert len(set(ids))==len(ids)
+
+
+def test_failed_report_checks_are_logged_by_location_without_values():
+    from datetime import datetime,timezone
+    from pydantic import ValidationError
+    from app.ai.recovery import validation_detail
+    from app.schemas.opportunity import Finding
+    with pytest.raises(ValidationError) as caught:
+        Finding.model_validate({'finding_id':'f0123456789abcdef','field':'difficulty','value':'Synthetic private value','confidence':'medium',
+            'evidence_type':'candidate_reported','source_ids':['s'],'quotes':['Synthetic private quote'],'scope':'exact',
+            'last_verified_at':datetime.now(timezone.utc),'round_name':'Synthetic round'})
+    detail=validation_detail(caught.value)
+    assert detail==[{'model':'Finding','loc':'','type':'value_error','msg':'Value error, A round name needs its round number.'}]
+    assert 'Synthetic' not in str(detail) and validation_detail(ValueError('plain')) is None
 
 
 def test_cross_category_extraction_keeps_grounded_interview_rounds():
@@ -198,3 +217,40 @@ def test_concurrent_gap_triage_reuses_run_wide_page_labels(opportunity_flow):
     results=opportunity_flow[0].portal.call(triage)
     assert len(calls)==1
     assert results==[{'synthetic-page':{'compensation'}},{'synthetic-page':{'conversion_salary'}}]
+
+
+def budget_job(flow):
+    return flow[1].research_contexts.find_one({'kind':'opportunity_job'})
+
+
+def test_research_stops_searching_within_the_token_budget_and_finishes_in_one_run(opportunity_flow):
+    flow=opportunity_flow;search=flow[4];collect=search.collect_opportunity_query
+    budget=flow[0].app.state.opportunities.settings.token_budget
+    async def metered(context,query,**kwargs):
+        observe_usage({'total_tokens':13000})
+        return await collect(context,query,**kwargs)
+    search.collect_opportunity_query=metered
+    ingest(flow);workspace,result,_=research(flow)
+    job=budget_job(flow)
+    assert result['status'] in ('completed','partial') and workspace['phase']=='ready'
+    assert job['tokens_used']==13000*len(search.calls)<=budget-RESERVED_TOKENS+SEARCH_TOKENS*OpportunitySettings().concurrency
+    assert len(search.calls)<OpportunitySettings().run_searches
+
+
+def test_research_that_spends_its_budget_ends_partial_and_starts_no_more_model_calls(opportunity_flow):
+    flow=opportunity_flow;engine=flow[0].app.state.opportunities;budget=100000;size=50000
+    engine.settings=engine.settings.model_copy(update={'token_budget':budget})
+    search=flow[4];collect=search.collect_opportunity_query;primary=flow[2];generate=primary.generate;stages=[]
+    async def metered(context,query,**kwargs):
+        observe_usage({'total_tokens':size})
+        return await collect(context,query,**kwargs)
+    async def model(request,operation,**kwargs):
+        stages.append(request.stage)
+        return await generate(request,operation,**kwargs)
+    search.collect_opportunity_query=metered;primary.generate=model
+    ingest(flow);workspace,result,_=research(flow)
+    assert budget_job(flow)['tokens_used']<=budget-RESERVED_TOKENS+size*OpportunitySettings().concurrency
+    assert not {'opportunity_triage','opportunity_structure','opportunity_skill_levels'}&set(stages)
+    assert result['finished'] and result['status']=='partial' and workspace['research_id']==result['research_id']
+    categories=result['categories'].values()
+    assert not any(v['status']=='failed' for v in categories) and any(v['error_code']=='token_budget' for v in categories)

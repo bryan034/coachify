@@ -77,6 +77,11 @@ def numeric_support(value,evidence,index):
         raise citation_error(index,'value','unsupported_number')
 
 
+def finding_identity(category,field,value,source_ids,round_number=None):
+    """A finding's ID within one category; the same claim gets a different ID in each category that holds it."""
+    return 'f'+fingerprint({'category':category,'field':field,'value':plain_text(value),'sources':sorted(source_ids),**({'round':round_number} if round_number else {})})[:16]
+
+
 def validate_claims(output,category,sources,public=None):
     found=[];stamp=now()
     for index,item in enumerate(output.findings):
@@ -99,7 +104,7 @@ def validate_claims(output,category,sources,public=None):
         ids=[sources[i].source_id for i in item.refs]
         if values['evidence_type']=='official' and any(sources[i].reliability!='official' and sources[i].platform!='employer' for i in item.refs):values['evidence_type']='third_party'
         if values['confidence']=='high' and any(sources[i].reliability!='official' for i in item.refs):values['confidence']='medium'
-        try:record=Finding(**values,source_ids=ids,finding_id='f'+fingerprint({'category':category,'field':item.field,'value':plain_text(item.value),'sources':sorted(ids),**({'round':values['round_number']} if values.get('round_number') else {})})[:16],last_verified_at=stamp)
+        try:record=Finding(**values,source_ids=ids,finding_id=finding_identity(category,item.field,item.value,ids,values.get('round_number')),last_verified_at=stamp)
         except ValidationError as error:
             issues=issues_for(error,Finding)
             raise AIError('invalid_output',True,reason='schema_validation',

@@ -20,6 +20,7 @@ from app.ai.discovery_config import DiscoverySettings
 from app.ai.contracts import AIInput,Message,DiscoveryHistoryMessage
 from app.workflows.model_waits import resume_obsolete_model_waits
 from app.ai.waiting import quota_progress
+from app.ai.recovery import validation_detail
 from app.clients.search_sources import SourceRateLimit
 from app.domain.review import ALIASES
 from app.repositories.goals import GoalError,now,fingerprint,stable_id
@@ -752,7 +753,7 @@ class DiscoveryEngine:
             wait=isinstance(error,SourceRateLimit) or isinstance(error,AIError) and error.code=='rate_limited'
             code=error.code if isinstance(error,AIError) else 'source_rate_limited' if isinstance(error,SourceRateLimit) else 'research_timeout' if isinstance(error,TimeoutError) else 'research_validation_failed'
             delay=max(1,getattr(error,'retry_after',None) or 60)
-            log.warning('error_code=%s limit_scope=%s',code,getattr(error,'limit_scope',None))
+            log.warning('error_code=%s limit_scope=%s detail=%s',code,getattr(error,'limit_scope',None),validation_detail(error))
             with suppress(GoalError):await thread(self.update,row,status='waiting' if wait else 'failed',error_code=code,limit_scope=getattr(error,'limit_scope',None),provider=getattr(error,'provider',None),next_attempt_at=now()+timedelta(seconds=delay),lease_until=now())
         except GoalError:
             with suppress(GoalError):await thread(self.update,row,status='failed',error_code='stale_input',lease_until=now())

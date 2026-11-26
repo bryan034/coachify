@@ -1,6 +1,7 @@
 """Regression coverage for planner truncation, safe diagnostics and advert scope."""
 import asyncio
 import json
+from app.ai.opportunity_config import OpportunitySettings
 from types import SimpleNamespace
 import httpx
 import pytest
@@ -75,8 +76,8 @@ def test_research_repairs_log_safe_schema_fields_and_retain_truncation_reason(ca
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             engine=object.__new__(OpportunityEngine)
             engine.ai=AIAdapter(AISettings(enabled=True,api_key='synthetic'),client)
-            engine.settings=SimpleNamespace(schema_repairs=1)
-            engine.store=SimpleNamespace(update=lambda *a,**kw:updates.append(kw),rows=SimpleNamespace(update_one=lambda *a:None))
+            engine.settings=SimpleNamespace(schema_repairs=1,token_budget=OpportunitySettings().token_budget)
+            engine.store=SimpleNamespace(update=lambda *a,**kw:updates.append(kw),book_tokens=lambda *a:True,rows=SimpleNamespace(update_one=lambda *a:None))
             with pytest.raises(AIError) as caught:
                 await engine.generate({'_id':'synthetic','owner':'synthetic','goal_id':'synthetic','worker_token':'synthetic'},'opportunity_plan',{})
         assert caught.value.reason=='schema_validation'
