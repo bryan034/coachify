@@ -3,7 +3,7 @@
 Stores each user's background, education and planning preferences so future
 assessments and roadmaps can use their saved information. P01–P16 are available.
 
-Account type: new accounts store `account_type: "free"`; accounts without the field read as free. `GET /api/v1/profile/auth/session` returns `account_type` (`free` or `premium`), which Career, CV and Roadmap use for their free-plan limits. No endpoint changes it yet: an operator sets `account_type: "premium"` directly on the account record in `elo_profile`.
+Account type: new accounts store `account_type: "free"`; accounts without the field read as free. `GET /api/v1/profile/auth/session` returns `account_type` (`free` or `premium`), which Career, CV and Roadmap use for their free-plan limits. No production endpoint changes it yet: an operator sets `account_type: "premium"` directly on the account record in `elo_profile`. In development only, `PUT /api/v1/profile/dev/account-type` sets the caller's plan (see [Development tools](../../docs/setup.md#development-tools-plan-switch-and-start-afresh)); it is excluded from OpenAPI and absent outside development.
 
 ## Manual capabilities — C07
 
@@ -131,8 +131,9 @@ incorrect guesses and are replaced on resend. Local mail appears at localhost:80
 ## Environment
 
 `auth-config` exposes `development_tools_enabled` only when `APP_ENV=development`,
-regardless of sign-in mode. This enables a browser-only onboarding preview; it does
-not reset or write profile data. No extra environment variable is needed.
+regardless of sign-in mode. This enables the onboarding preview, which writes no profile
+data, and the Development strip that calls the development-only plan switch and reset
+routes. No extra environment variable is needed.
 
 `local_test` is development-only. `email` enables email/password production access;
 `google` adds Google access. Production requires encrypted authenticated SMTP and a

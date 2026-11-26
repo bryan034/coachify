@@ -25,6 +25,8 @@ function writeVisits(accountId:string,visits:Visit[]){
 }
 const adding=(visits:Visit[],visit:Visit)=>[...visits.filter(other=>other.id!==visit.id),visit].slice(-MAX_VISITS);
 
+export function forgetApplyVisits(accountId:string){writeVisits(accountId,[]);}
+
 export function noteApplyVisit(accountId:string,{id,title,company}:Posting){
  const visit={id,title,company};
  writeVisits(accountId,adding(readVisits(accountId),visit));

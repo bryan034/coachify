@@ -82,3 +82,8 @@ class ResetComplete(BaseModel):
 class ResetReceipt(BaseModel):
     challenge_id: str
     message: str
+
+
+class AccountTypeChange(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    account_type: AccountType

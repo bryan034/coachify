@@ -8,6 +8,7 @@ import { useProfile } from '@/features/profile/profile-provider';
 import { importCareer, type CareerPreview, type CareerWorkspace } from '@/lib/api/career';
 import { careerOperation } from '@/lib/api/career-operation';
 import { AgentProgress } from './agent-message';
+import { PENDING_EXTRACTION, forgetExtraction } from './pending-extraction';
 import { errorText } from '@/lib/errors';
 import { ProcessingCard, type ProcessingStep } from '@/components/ui/processing-card';
 import '@/styles/goal.css';
@@ -28,18 +29,17 @@ const blockedGuidance = (error:string) => {
 };
 const empty = (): Record<Method,Draft> => ({text:{text:''},url:{text:''},document:{text:''}});
 
-const PENDING='elo-career-extraction', PENDING_TTL=2*60*60*1000;
+const PENDING_TTL=2*60*60*1000;
 type PendingExtraction={owner:string;body:string;key:string;method:Method;draft:Draft;at:number};
 export function pendingExtraction(owner:string):PendingExtraction|null{
  try{
-  const value=JSON.parse(window.sessionStorage.getItem(PENDING)||'null') as PendingExtraction|null;
+  const value=JSON.parse(window.sessionStorage.getItem(PENDING_EXTRACTION)||'null') as PendingExtraction|null;
   if(value&&value.owner===owner&&Date.now()-value.at<PENDING_TTL&&typeof value.body==='string'&&typeof value.key==='string'&&methods.some(m=>m.id===value.method)&&typeof value.draft?.text==='string')return value;
-  if(value)window.sessionStorage.removeItem(PENDING);
+  if(value)forgetExtraction();
  }catch{}
  return null;
 }
-function rememberExtraction(value:PendingExtraction){try{window.sessionStorage.setItem(PENDING,JSON.stringify(value));}catch{}}
-function forgetExtraction(){try{window.sessionStorage.removeItem(PENDING);}catch{}}
+function rememberExtraction(value:PendingExtraction){try{window.sessionStorage.setItem(PENDING_EXTRACTION,JSON.stringify(value));}catch{}}
 
 export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
  const { token, account } = useProfile(); const owner=account?.id||'';
