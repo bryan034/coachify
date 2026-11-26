@@ -82,7 +82,9 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
 
   await sendChat(page, 'SYNTHETIC_CHAT_INVALID_SOURCE');
   expect(await cv()).toEqual(before);
-  expect((await readChat(account, cvId)).messages.flatMap(message => message.actions).some(action => action.status === 'failed')).toBe(true);
+  const rejected = await readChat(account, cvId);
+  expect(rejected.active_question?.title).toBe('Team dashboard');
+  expect(rejected.messages.at(-1)?.text).toContain('I could not connect that answer to the current question.');
 
   await sendChat(page, 'The Team dashboard project started in February 2023 and ended in 2024.');
   const correction = page.getByRole('article', {name: 'Review this correction', exact: true});
