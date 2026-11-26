@@ -258,6 +258,59 @@ def test_malformed_review_schema_has_one_automatic_retry(harness):
     assert len([c for c in provider.calls if c['task'] == 'cv_interview_interpret']) == 2
 
 
+@pytest.mark.parametrize(('corrupt', 'reason'), [
+    (lambda turn: turn['interpretations'][0]['claims'][0].update(skill_id='skill:python3'),
+     'Interpretation returned an invalid skill or field identity.'),
+    (lambda turn: turn['actions'][0].update(question_id='unknown-question'),
+     'The interview referred to another question.'),
+])
+def test_rejected_review_interpretation_is_retried_with_feedback_before_it_is_saved(harness, corrupt, reason):
+    client, _, *_ = harness
+    _, chat, provider = start(harness)
+    def repair(context):
+        turn = deepcopy(evaluate(context))
+        if not context['schema_retry']: corrupt(turn)
+        return turn
+    provider.evaluation = repair
+    chat = send(client, chat, 'I built the Python API with guidance.')
+    assert chat['active_question']['question'] == 'What was the scope of your task?', chat['messages'][-1]
+    calls = [c for c in provider.calls if c['task'] == 'cv_interview_interpret']
+    assert [c['validation_feedback'] for c in calls] == [[], [reason]]
+
+
+def test_schema_rejection_names_the_failed_rule_without_echoing_the_answer(harness):
+    client, _, *_ = harness
+    _, chat, provider = start(harness)
+    text = 'I used Python for every task and would rate it 8/10.'
+    def repair(context):
+        turn = deepcopy(evaluate(context))
+        if not context['schema_retry']:
+            turn['interpretations'][0]['review_evidence'].append(fact('self_rating', text, '8/10'))
+        return turn
+    provider.evaluation = repair
+    chat = send(client, chat, text)
+    assert chat['active_question']['question'] == 'What was the scope of your task?', chat['messages'][-1]
+    feedback = [c for c in provider.calls if c['task'] == 'cv_interview_interpret'][1]['validation_feedback']
+    assert feedback == ['Schema rejected: interpretations.0.review_evidence.4: Value error, '
+                        'A self-rating needs a named skill and a whole-number value from 1 to 10.']
+
+
+def test_review_interpretation_rejected_twice_keeps_the_question_open(harness):
+    client, app, *_ = harness
+    _, chat, provider = start(harness)
+    original = chat['active_question']
+    def invalid(context):
+        turn = deepcopy(evaluate(context))
+        turn['interpretations'][0]['claims'][0]['skill_id'] = 'skill:python3'
+        return turn
+    provider.evaluation = invalid
+    chat = send(client, chat, 'I built the Python API with guidance.')
+    assert chat['active_question'] == original
+    assert len([c for c in provider.calls if c['task'] == 'cv_interview_interpret']) == 2
+    route = next(a for a in app.state.conversations.get('owner-a', chat['id'])['messages'][-1]['actions'] if a['kind'] == 'route')
+    assert '_interview_evaluation' not in route
+
+
 def test_progress_counts_topics_not_followup_questions(harness):
     client, app, *_ = harness
     cv, chat, provider = start(harness)
@@ -788,7 +841,7 @@ def test_real_provider_adapter_uses_the_typed_interview_protocol(monkeypatch, ta
     original = deepcopy(context)
     output, metadata = ConversationRouter().route(context)
     assert output.reply == result['reply']
-    assert metadata['prompt_version'] == 'cv-interview-15'
+    assert metadata['prompt_version'] == 'cv-interview-16'
     assert len(requests) == 1 and requests[0]['max_tokens'] == 5000
     assert 'untrusted' in requests[0]['messages'][0]['content'].lower()
     assert 'synthetic-secret-for-test' not in json.dumps(requests[0]['messages'])

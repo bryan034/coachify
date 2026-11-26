@@ -36,6 +36,12 @@ SKIP_REQUEST = re.compile(r"(please\s+)?(let'?s\s+)?(skip|pass|(i\s+)?(don'?t|do
                           r"(\s+(this|that|it))?(\s+(one|question))?(\s+please)?", re.I)
 
 
+def schema_rejection(exc):
+    """Name each failed field and rule without echoing the rejected values."""
+    errors = exc.errors(include_input=False, include_url=False, include_context=False)[:5]
+    return ('Schema rejected: ' + '; '.join('.'.join(map(str, e['loc'])) + ': ' + e['msg'] for e in errors))[:500]
+
+
 def is_skip_request(text):
     return bool(SKIP_REQUEST.fullmatch(text.replace('’', "'").strip(' .!,\n\t')))
 
@@ -235,25 +241,24 @@ class InterviewHarness:
             evaluated = route.get('_interview_evaluation')
             if evaluated is None:
                 context = build_context(conversation, document, memory)
+                questions = self.turn_questions(owner, conversation, route)
+                feedback = []
                 for attempt in range(2):
                     try:
                         result, metadata = await self.call(app, account, identifier, route['id'], token,
                             {'task': 'cv_interview_interpret', 'message': route['_text'], 'message_id': route.get('_message_id'),
-                             'schema_retry': bool(attempt), **context})
+                             'schema_retry': bool(attempt), 'validation_feedback': feedback, **context})
                         result = InterviewTurn.model_validate(result)
-                        if result.topic_relevant:
-                            items_by_id = {i['id']: i for i in effective_items(document) if not i['removed']}
-                            for interpretation in result.interpretations:
-                                if interpretation.item_id not in items_by_id:
-                                    raise ValueError('Interpretation refers to an unavailable source.')
-                                validate_review_interpretation(
-                                    {**interpretation.model_dump(mode='json'), 'answer_revision': 1},
-                                    items_by_id[interpretation.item_id], {'answer_revision': 1})
-                        break
-                    except ValidationError:
-                        if attempt:
-                            active = conversation.get('active_question')
-                            return await self.no_progress(app, account, conversation, document, route, token, memory, active)
+                    except ValidationError as exc:
+                        rejection = schema_rejection(exc)
+                    else:
+                        rejection = self.rejected_turn(conversation, route, result, metadata, document, questions)
+                        if rejection is None: break
+                    logger.warning('CV interview interpretation rejected reason=%s attempt=%s', rejection, attempt + 1)
+                    feedback = [rejection]
+                    if attempt:
+                        active = conversation.get('active_question')
+                        return await self.no_progress(app, account, conversation, document, route, token, memory, active)
                 evaluated = {'result': result.model_dump(mode='json'), 'metadata': metadata}
                 def remember(current):
                     service.check_lease(action_in(current, route['id']), token)
@@ -288,31 +293,12 @@ class InterviewHarness:
                     'We can stop here. Your answers are saved; remaining details stay uncertain.')
             if result.intent == 'skip' or (result.actions and all(a.kind == 'skip' for a in result.actions)):
                 return await self.process(app, account, conversation, {**route, '_command': 'skip'}, token)
-            payload = service.routing_payload(owner, conversation, route)
-            items = {i['id']: i for i in effective_items(document) if not i['removed']}
-            questions = {q['id']: q for q in payload['questions']}
-            interpretations = {i.item_id: i.model_dump(mode='json') for i in result.interpretations}
             stored = service.get(owner, identifier)
             saved_route = action_in(stored, route['id'])
             if '_interview_action_ids' not in saved_route:
-                actions = []
-                for index, proposal in enumerate(result.actions):
-                    if proposal.excerpt not in route['_text']:
-                        proposal.excerpt = route['_text']
-                    if proposal.item_id and proposal.item_id not in items: raise ValueError('The interview referred to another source.')
-                    if any(i not in items for i in proposal.candidate_item_ids): raise ValueError('Invalid source choice.')
-                    if proposal.question_id and (proposal.question_id not in questions or
-                        proposal.item_id and questions[proposal.question_id]['item_id'] != proposal.item_id):
-                        raise ValueError('The interview referred to another question.')
-                    action = service.proposal(conversation, route, proposal, index, items, questions)
-                    if proposal.kind == 'clarify' and action['status'] != 'needs_source':
-                        interpretation = interpretations.get(action.get('item_id'))
-                        if interpretation is None: raise ValueError('A factual answer needs a matching source interpretation.')
-                        action['_prepared_interpretation'] = (interpretation, evaluated['metadata'])
-                    elif proposal.kind == 'correct' and not proposal.fields and action.get('item_id') in interpretations:
-                        action['_prepared_interpretation'] = (interpretations[action['item_id']], evaluated['metadata'])
-                    actions.append(action)
                 await service.check_snapshot(app, account, conversation, route['_snapshot'])
+                actions = self.turn_actions(conversation, route, result, evaluated['metadata'], document,
+                                            self.turn_questions(owner, conversation, route))
                 def stage(current):
                     saved = action_in(current, route['id'])
                     service.check_lease(saved, token)
@@ -346,6 +332,50 @@ class InterviewHarness:
                for q in document['clarifications']):
             raise ValueError('Your saved evidence still needs interpretation. Retry that action before continuing.')
         return await self.plan(app, account, conversation, document, route, token, memory)
+
+    def turn_questions(self, owner, conversation, route):
+        return {q['id']: q for q in self.service.routing_payload(owner, conversation, route)['questions']}
+
+    def rejected_turn(self, conversation, route, result, metadata, document, questions):
+        try:
+            self.turn_actions(conversation, route, result.model_copy(deep=True), metadata, document, questions)
+        except ValidationError as exc:
+            return schema_rejection(exc)
+        except ValueError as exc:
+            return str(exc)[:500]
+        return None
+
+    def turn_actions(self, conversation, route, result, metadata, document, questions):
+        """Check an interpreted turn against the current sources and build the actions it stages; ValueError rejects it."""
+        if not result.topic_relevant: return []
+        items = {i['id']: i for i in effective_items(document) if not i['removed']}
+        for interpretation in result.interpretations:
+            if interpretation.item_id not in items:
+                raise ValueError('Interpretation refers to an unavailable source.')
+            validate_review_interpretation({**interpretation.model_dump(mode='json'), 'answer_revision': 1},
+                                           items[interpretation.item_id], {'answer_revision': 1})
+        if (result.intent in {'side_question', 'stop', 'skip'}
+                or (result.actions and all(a.kind == 'skip' for a in result.actions))):
+            return []
+        interpretations = {i.item_id: i.model_dump(mode='json') for i in result.interpretations}
+        actions = []
+        for index, proposal in enumerate(result.actions):
+            if proposal.excerpt not in route['_text']:
+                proposal.excerpt = route['_text']
+            if proposal.item_id and proposal.item_id not in items: raise ValueError('The interview referred to another source.')
+            if any(i not in items for i in proposal.candidate_item_ids): raise ValueError('Invalid source choice.')
+            if proposal.question_id and (proposal.question_id not in questions or
+                proposal.item_id and questions[proposal.question_id]['item_id'] != proposal.item_id):
+                raise ValueError('The interview referred to another question.')
+            action = self.service.proposal(conversation, route, proposal, index, items, questions)
+            if proposal.kind == 'clarify' and action['status'] != 'needs_source':
+                interpretation = interpretations.get(action.get('item_id'))
+                if interpretation is None: raise ValueError('A factual answer needs a matching source interpretation.')
+                action['_prepared_interpretation'] = (interpretation, metadata)
+            elif proposal.kind == 'correct' and not proposal.fields and action.get('item_id') in interpretations:
+                action['_prepared_interpretation'] = (interpretations[action['item_id']], metadata)
+            actions.append(action)
+        return actions
 
     async def skip_active(self, account, conversation, document, route, token, memory):
         """Record the active question as skipped; the same receipt makes a retry idempotent."""
