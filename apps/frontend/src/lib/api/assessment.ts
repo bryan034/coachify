@@ -53,6 +53,12 @@ export const rateSkill = (token: string, body: { expected_version: number; name:
 export type ReevaluatedSkill = { version: number; skill: { name: string; canonical_skill_id: string | null; competence_score: number | null; required_score: number | null; relevance: string; explanation: string } };
 export const reevaluateSkill = (token: string, body: { name: string; canonical_skill_id: string | null }, signal?: AbortSignal) =>
  assessmentApi<ReevaluatedSkill>('/skills/reevaluate', token, body, signal);
+/** One turn of a Skills Helper conversation about a saved skill judgement. */
+export type SkillChatTurn = { role: 'person' | 'elo'; text: string };
+/** elo's reply; `evidence` is new first-person experience to save and re-evaluate, or null. */
+export type SkillChatReply = { reply: string; evidence: string | null };
+export const skillChat = (token: string, body: { name: string; canonical_skill_id: string | null; messages: SkillChatTurn[] }, signal?: AbortSignal) =>
+ assessmentApi<SkillChatReply>('/skills/chat', token, body, signal);
 export const ratingKey = (skill: { canonicalId?: string | null; name: string }) => skill.canonicalId || skill.name.trim().toLowerCase();
 
 /** Derived by Assessment from the saved result and live source revisions. */

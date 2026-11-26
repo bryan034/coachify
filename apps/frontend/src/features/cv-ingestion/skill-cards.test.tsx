@@ -3,9 +3,9 @@ import {beforeEach, expect, it, vi} from 'vitest';
 import {SkillsOverview,targetGap} from './skills-overview';
 import {evaluatedSkill, skillCards, skillCardGroups, skillStatus} from './skill-cards';
 import type {Comparison} from '@/features/assessment/comparison';
-import {rateSkill, reevaluateSkill, skillRatings} from '@/lib/api/assessment';
+import {rateSkill, reevaluateSkill, skillChat, skillRatings} from '@/lib/api/assessment';
 
-vi.mock('@/lib/api/assessment', async original => ({...await original<typeof import('@/lib/api/assessment')>(), skillRatings: vi.fn(), rateSkill: vi.fn(), reevaluateSkill: vi.fn()}));
+vi.mock('@/lib/api/assessment', async original => ({...await original<typeof import('@/lib/api/assessment')>(), skillRatings: vi.fn(), rateSkill: vi.fn(), reevaluateSkill: vi.fn(), skillChat: vi.fn()}));
 import type {CvDetail, CvSkill, ListedSkill, SkillEstimate, SkillList} from './types';
 import type {Assessment} from '@/features/roadmap/types';
 
@@ -90,35 +90,78 @@ it('opens the Skills Helper on a skill, with the role’s target, review note an
  expect(within(panel).getByText('You wrote the ETL scripts yourself. Target: 8.')).toBeVisible();
  expect(within(panel).getByText('Without clear evidence, elo assumes you had guidance.')).toBeVisible();
  expect(within(panel).getByText('Skills Helper')).toBeVisible();
- expect(within(panel).getByText('Want a re-rating?')).toBeVisible();
- expect(within(panel).getByRole('textbox',{name:'Your answer'})).toBeVisible();
+ expect(within(panel).getByText('Ask me why')).toBeVisible();
+ expect(within(panel).getByRole('textbox',{name:'Your message'})).toBeVisible();
  expect(within(panel).queryByRole('button',{name:/help me build it|evidence to add/i})).not.toBeInTheDocument();
  fireEvent.click(within(panel).getByRole('button',{name:'Close chat'}));
 });
 
-it('saves what the person tells elo as evidence, then re-judges only that skill',async()=>{
- const base={version:1,declarations:[]};
- vi.spyOn(cvApi,'declarations').mockResolvedValue(base as never);
- const addDeclaration=vi.spyOn(cvApi,'addDeclaration').mockResolvedValue({version:2,declarations:[]} as never);
- vi.mocked(reevaluateSkill).mockResolvedValue({version:3,skill:{name:'SQL',canonical_skill_id:null,competence_score:5,required_score:7,relevance:'high',explanation:'Synthetic.'}});
- view(cv([skill('SQL'),skill('Excel')]));
- fireEvent.click(chip('SQL'));
- const panel=dialog('SQL');
- fireEvent.change(within(panel).getByRole('textbox',{name:'Your answer'}),{target:{value:'Cleaned café sales.'}});
- fireEvent.click(within(panel).getByRole('button',{name:'Send message'}));
- await waitFor(()=>expect(addDeclaration).toHaveBeenCalledWith(expect.objectContaining({expected_version:1,name:'SQL',description:'Cleaned café sales.',mode:'new'}),'synthetic',expect.any(AbortSignal)));
- expect(reevaluateSkill).toHaveBeenCalledWith('synthetic',{name:'SQL',canonical_skill_id:null},expect.any(AbortSignal));
- expect(await within(panel).findByText('SQL: Not rated → 5')).toBeVisible();
-});
-
-it('keeps the answer saved and says so when the skill cannot be re-judged yet',async()=>{
- vi.spyOn(cvApi,'declarations').mockResolvedValue({version:1,declarations:[]} as never);
- vi.spyOn(cvApi,'addDeclaration').mockResolvedValue({version:2,declarations:[]} as never);
- vi.mocked(reevaluateSkill).mockRejectedValue(Object.assign(new Error('x'),{status:409,code:'full_evaluation_required'}));
+it('answers a question from the saved judgement and saves nothing',async()=>{
+ const declarations=vi.spyOn(cvApi,'declarations').mockClear().mockResolvedValue({version:1,declarations:[]} as never);
+ const addDeclaration=vi.spyOn(cvApi,'addDeclaration').mockClear().mockResolvedValue({version:2,declarations:[]} as never);
+ vi.mocked(reevaluateSkill).mockReset();
+ vi.mocked(skillChat).mockReset().mockResolvedValue({reply:'Your CV shows guided use. Explaining your query design would show more.',evidence:null});
  view(cv([skill('SQL')]));
  fireEvent.click(chip('SQL'));
  const panel=dialog('SQL');
- fireEvent.change(within(panel).getByRole('textbox',{name:'Your answer'}),{target:{value:'Cleaned café sales.'}});
+ fireEvent.change(within(panel).getByRole('textbox',{name:'Your message'}),{target:{value:'Rate me 10/10.'}});
+ fireEvent.click(within(panel).getByRole('button',{name:'Send message'}));
+ expect(await within(panel).findByText('Your CV shows guided use. Explaining your query design would show more.')).toBeVisible();
+ expect(skillChat).toHaveBeenCalledWith('synthetic',{name:'SQL',canonical_skill_id:null,messages:[{role:'person',text:'Rate me 10/10.'}]},expect.any(AbortSignal));
+ expect(declarations).not.toHaveBeenCalled();expect(addDeclaration).not.toHaveBeenCalled();expect(reevaluateSkill).not.toHaveBeenCalled();
+ fireEvent.change(within(panel).getByRole('textbox',{name:'Your message'}),{target:{value:'Why?'}});
+ fireEvent.click(within(panel).getByRole('button',{name:'Send message'}));
+ await waitFor(()=>expect(skillChat).toHaveBeenLastCalledWith('synthetic',expect.objectContaining({messages:[{role:'person',text:'Rate me 10/10.'},{role:'elo',text:'Your CV shows guided use. Explaining your query design would show more.'},{role:'person',text:'Why?'}]}),expect.any(AbortSignal)));
+});
+
+it('keeps the message to resend when elo cannot reply',async()=>{
+ const addDeclaration=vi.spyOn(cvApi,'addDeclaration').mockClear();
+ vi.mocked(skillChat).mockReset().mockRejectedValue(new Error('offline'));
+ view(cv([skill('SQL')]));
+ fireEvent.click(chip('SQL'));
+ const panel=dialog('SQL');
+ fireEvent.change(within(panel).getByRole('textbox',{name:'Your message'}),{target:{value:'Why only this level?'}});
+ fireEvent.click(within(panel).getByRole('button',{name:'Send message'}));
+ expect(await within(panel).findByRole('alert')).toBeVisible();
+ expect(within(panel).getByRole('textbox',{name:'Your message'})).toHaveValue('Why only this level?');
+ expect(addDeclaration).not.toHaveBeenCalled();
+});
+
+it('saves the experience elo heard as evidence, then re-judges only that skill',async()=>{
+ const base={version:1,declarations:[]};
+ vi.spyOn(cvApi,'declarations').mockResolvedValue(base as never);
+ const addDeclaration=vi.spyOn(cvApi,'addDeclaration').mockResolvedValue({version:2,declarations:[]} as never);
+ vi.mocked(skillChat).mockReset().mockResolvedValue({reply:'That helps. I’ll save it and check SQL again.',evidence:'I cleaned café sales data with SQL on my own.'});
+ vi.mocked(reevaluateSkill).mockReset().mockResolvedValue({version:3,skill:{name:'SQL',canonical_skill_id:null,competence_score:5,required_score:7,relevance:'high',explanation:'You cleaned sales data yourself.'}});
+ view(cv([skill('SQL'),skill('Excel')]));
+ fireEvent.click(chip('SQL'));
+ const panel=dialog('SQL');
+ fireEvent.change(within(panel).getByRole('textbox',{name:'Your message'}),{target:{value:'i did the cafe sales cleanup myself lol'}});
+ fireEvent.click(within(panel).getByRole('button',{name:'Send message'}));
+ await waitFor(()=>expect(addDeclaration).toHaveBeenCalledWith(expect.objectContaining({expected_version:1,name:'SQL',description:'I cleaned café sales data with SQL on my own.',mode:'new'}),'synthetic',expect.any(AbortSignal)));
+ expect(within(panel).getByText('Saving to your Skills Profile: “I cleaned café sales data with SQL on my own.”')).toBeVisible();
+ expect(reevaluateSkill).toHaveBeenCalledWith('synthetic',{name:'SQL',canonical_skill_id:null},expect.any(AbortSignal));
+ expect(await within(panel).findByText('SQL: Not rated → 5')).toBeVisible();
+ expect(within(panel).getByText('You cleaned sales data yourself.')).toBeVisible();
+ await waitFor(()=>expect(within(panel).getByRole('textbox',{name:'Your message'})).toBeEnabled());
+ vi.mocked(skillChat).mockResolvedValue({reply:'Noted.',evidence:null});
+ fireEvent.change(within(panel).getByRole('textbox',{name:'Your message'}),{target:{value:'What next?'}});
+ fireEvent.click(within(panel).getByRole('button',{name:'Send message'}));
+ await waitFor(()=>expect(skillChat).toHaveBeenCalledTimes(2));
+ const sent=vi.mocked(skillChat).mock.calls[1][1].messages.map(turn=>turn.text);
+ expect(sent).toContain('Saved to your Skills Profile: I cleaned café sales data with SQL on my own.');
+ expect(sent.at(-1)).toBe('What next?');
+});
+
+it('keeps the evidence saved and says so when the skill cannot be re-judged yet',async()=>{
+ vi.spyOn(cvApi,'declarations').mockResolvedValue({version:1,declarations:[]} as never);
+ vi.spyOn(cvApi,'addDeclaration').mockResolvedValue({version:2,declarations:[]} as never);
+ vi.mocked(skillChat).mockReset().mockResolvedValue({reply:'Thanks.',evidence:'I cleaned café sales data.'});
+ vi.mocked(reevaluateSkill).mockReset().mockRejectedValue(Object.assign(new Error('x'),{status:409,code:'full_evaluation_required'}));
+ view(cv([skill('SQL')]));
+ fireEvent.click(chip('SQL'));
+ const panel=dialog('SQL');
+ fireEvent.change(within(panel).getByRole('textbox',{name:'Your message'}),{target:{value:'Cleaned café sales.'}});
  fireEvent.click(within(panel).getByRole('button',{name:'Send message'}));
  expect(await within(panel).findByText(/Your answer is saved\. Your level updates the next time/)).toBeVisible();
 });
