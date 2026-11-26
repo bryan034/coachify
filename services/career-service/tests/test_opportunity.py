@@ -25,7 +25,7 @@ from app.workflows.opportunity.domain import validate_claims,public_opportunity
 from app.workflows.opportunity.topics import ALTERNATE,CANDIDATES_PER_SEARCH,GROUP_CANDIDATES,GROUP_TERMS,GROUPS,TERMS,TOPIC_GROUP,TOPICS,category_topics,owner,policy
 from app.ai.opportunity_config import OpportunitySettings
 
-RUN_SEARCHES=OpportunitySettings().run_searches
+RUN_SEARCHES=25
 from tests.test_workspace import AI,OWNER,OTHER,headers,BASE,ingest
 
 class Primary(AI):
@@ -89,9 +89,10 @@ class Search:
         finally:self.active-=1
 
 @pytest.fixture
-def opportunity_flow():
+def opportunity_flow(monkeypatch):
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Requires disposable MongoDB')
+    monkeypatch.setenv('OPPORTUNITY_RUN_SEARCHES',str(RUN_SEARCHES))
     mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_opportunity_test_'+uuid4().hex];primary=Primary();context_model=ContextModel();search=Search()
     def profile(req):return httpx.Response(200,json={'id':OTHER if req.headers.get('Authorization')=='Bearer other' else OWNER,'email_verified':True,'account_type':'premium'} if req.url.path.endswith('/session') else {'onboarding_complete':True})
     try:

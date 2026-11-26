@@ -17,7 +17,7 @@ class Settings:
     max_original_bytes_per_owner: int = 100 * 1024 * 1024
     model_calls_per_owner_per_day: int = 120
     model_concurrent_per_owner: int = 1
-    interview_max_target_attempts: int = 2
+    interview_max_target_attempts: int = 1
 
     @classmethod
     def environment(cls):
@@ -29,7 +29,7 @@ class Settings:
             ('max_saved_cvs_per_owner', 3, 20_000),
             ('max_original_bytes_per_owner', 100 * 1024 * 1024, 1024 ** 4),
             ('model_calls_per_owner_per_day', 120, 1_000_000),
-            ('interview_max_target_attempts', 2, 5), ('model_concurrent_per_owner', 1, 31)):
+            ('interview_max_target_attempts', 1, 5), ('model_concurrent_per_owner', 1, 31)):
             value = int(os.getenv('CV_' + name.upper(), str(default)))
             if not 1 <= value <= upper: raise RuntimeError('CV_' + name.upper() + f' must be between 1 and {upper}.')
             limits[name] = value

@@ -13,7 +13,7 @@ from app.schemas.conversation import InterviewProgress
 from app.schemas.interview_evidence import ReviewField, fact_groups, facts_closed, fact_group_value
 
 MAX_CONTEXT_BYTES = 96 * 1024
-MAX_TARGET_ATTEMPTS = 2
+MAX_TARGET_ATTEMPTS = 1
 MAX_TOPIC_QUESTIONS = 2
 RECENT_MESSAGES = 4
 

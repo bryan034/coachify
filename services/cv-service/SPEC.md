@@ -278,7 +278,7 @@ planning, reusing the initial interpretation instead of interpreting it again.
 Review answers are self-reported and take precedence over CV/earlier statements
 at the same field and skill scope. Validation is limited to typed schema, topic
 relevance and source/reference/capacity boundaries; no evidence-alignment or
-consistency verifier is called. Unrelated messages do not create factual updates. One automatic schema retry is allowed; repeated malformed output enters bounded no-progress recovery without republishing the active question. Authentication, ownership, leases and concurrent-edit fencing remain.
+consistency verifier is called. Unrelated messages do not create factual updates; an unrelated reply to the open question skips it rather than asking it again. One automatic schema retry is allowed; repeated malformed output enters bounded no-progress recovery without republishing the active question. Authentication, ownership, leases and concurrent-edit fencing remain.
 Extraction and legacy target-specific interpretation retain their existing checks.
 Answers are summarised into short skill claims (e.g. "Python", "Model output
 evaluation") rather than stored as statements on the item. A clarified statement
@@ -296,7 +296,7 @@ needing clarification, not question counts. Follow-ups do not add topics. Manual
 intake reports its four background areas. Completion is announced in chat, with a
 completion-only Review profile button opening the Skills Profile summary. Opening
 a paused review resumes automatically; completed reviews do not auto-restart. Review again explicitly begins another review using existing question receipts. The existing explicit summary review stamp
-remains separate. `CV_INTERVIEW_MAX_TARGET_ATTEMPTS` defaults to 2 (1–5), limiting
+remains separate. `CV_INTERVIEW_MAX_TARGET_ATTEMPTS` defaults to 1 (1–5), limiting
 unproductive probes of an unchanged target. Context is capped at 96 KiB with four
 recent non-placeholder messages, a deterministic per-source discussion summary,
 focused attempt details and an answer ID/target/status index. Exact source answers

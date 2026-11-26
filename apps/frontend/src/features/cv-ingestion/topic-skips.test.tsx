@@ -104,5 +104,33 @@ describe('the current question', () => {
   expect(within(bubble).getByText('Your answer can cover')).toBeVisible();
   expect(within(bubble).getAllByRole('listitem').map(item => item.textContent)).toEqual(['What you built or decided', 'Tools or methods you used']);
   expect(screen.queryByRole('button', {name: 'Why this question?'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('region', {name: 'Current question'})).not.toBeInTheDocument();
+ });
+
+ it('stays visible below a reply that does not ask it', async () => {
+  const replied = {...chat(), messages: [...chat().messages,
+   {id: 'm2', role: 'user' as const, sequence: 2, created_at: '2026-11-12T02:56:00Z', actions: [], text: 'what qn was this'},
+   {id: 'm3', role: 'assistant' as const, sequence: 3, created_at: '2026-11-12T02:56:05Z', actions: [], text: 'Your current question is shown below. You can answer it or skip.', question_id: null}]};
+  vi.mocked(cvApi.openConversation).mockResolvedValue(replied);
+  vi.mocked(cvApi.conversation).mockResolvedValue(replied);
+  render(panel());
+  const current = await screen.findByRole('region', {name: 'Current question'});
+  expect(within(current).getByText(question)).toBeVisible();
+  expect(within(current).getByText('Question 2 of 3')).toBeVisible();
+  expect(within(current).getByText('Your answer can cover')).toBeVisible();
+  const transcript = screen.getByRole('list', {name: 'Saved conversation messages'});
+  expect(within(transcript).queryByText('Question 2 of 3')).not.toBeInTheDocument();
+ });
+
+ it('is not shown again while a submitted answer is processed', async () => {
+  const answering = {...chat(), messages: [...chat().messages,
+   {id: 'm2', role: 'user' as const, sequence: 2, created_at: '2026-11-12T02:56:00Z', actions: [], text: 'I built everything myself.'},
+   {id: 'm3', role: 'assistant' as const, sequence: 3, created_at: '2026-11-12T02:56:05Z', text: 'Your message is saved. Working on it…', question_id: null,
+    actions: [{id: 'a1', kind: 'route' as const, status: 'pending' as const, title: 'Answer', summary: 'Reviewing your answer.', changes: [], choices: []}]}]};
+  vi.mocked(cvApi.openConversation).mockResolvedValue(answering);
+  vi.mocked(cvApi.conversation).mockResolvedValue(answering);
+  render(panel());
+  await screen.findByText('I built everything myself.');
+  expect(screen.queryByRole('region', {name: 'Current question'})).not.toBeInTheDocument();
  });
 });

@@ -292,7 +292,7 @@ def test_schema_rejection_names_the_failed_rule_without_echoing_the_answer(harne
     assert chat['active_question']['question'] == 'What was the scope of your task?', chat['messages'][-1]
     feedback = [c for c in provider.calls if c['task'] == 'cv_interview_interpret'][1]['validation_feedback']
     assert feedback == ['Schema rejected: interpretations.0.review_evidence.4: Value error, '
-                        'A self-rating needs a named skill and a whole-number value from 1 to 10.']
+                        'A self-rating needs the name of the skill it rates.']
 
 
 def test_review_interpretation_rejected_twice_keeps_the_question_open(harness):
@@ -841,7 +841,7 @@ def test_real_provider_adapter_uses_the_typed_interview_protocol(monkeypatch, ta
     original = deepcopy(context)
     output, metadata = ConversationRouter().route(context)
     assert output.reply == result['reply']
-    assert metadata['prompt_version'] == 'cv-interview-16'
+    assert metadata['prompt_version'] == 'cv-interview-17'
     assert len(requests) == 1 and requests[0]['max_tokens'] == 5000
     assert 'untrusted' in requests[0]['messages'][0]['content'].lower()
     assert 'synthetic-secret-for-test' not in json.dumps(requests[0]['messages'])
@@ -1661,21 +1661,30 @@ def test_question_number_rises_with_each_answer_and_an_item_stops_at_two(harness
         if not question or question['item_id'] != first: break
         numbers.append(question['number'])
     assert numbers == [1, 2]
-def test_off_topic_misclassification_never_repeats_and_eventually_defers(harness):
+@pytest.mark.parametrize('intent', ['answer', 'side_question'])
+def test_reply_without_relevant_information_moves_on_without_asking_again(harness, intent):
     client, app, *_ = harness
     cv, chat, provider = start(harness)
     original = deepcopy(chat['active_question'])
-    provider.evaluation = {'topic_relevant': False, 'intent': 'side_question',
-                           'reply': 'Back to your experience.', 'actions': []}
-    chat = send(client, chat, 'I handled the deployment.')
-    assert chat['active_question'] == original
-    assert original['question'] not in chat['messages'][-1]['text']
-    chat = send(client, chat, 'I managed deployment myself.')
-    assert original['question'] not in chat['messages'][-1]['text']
+    provider.evaluation = {'topic_relevant': False, 'intent': intent, 'reply': 'Back to your experience.', 'actions': []}
+    chat = send(client, chat, 'I like turtles.')
+    assert chat['active_question'] and chat['active_question']['id'] != original['id']
+    assert chat['active_question']['question'] != original['question']
     raw = app.state.conversations.cv.get('owner-a', cv['id'])
-    original_receipt = next(q for q in raw['clarifications'] if q['id'] == original['id'])
-    assert original_receipt['status'] == 'skipped'
-    assert len([q for q in raw['clarifications'] if q['id'] == original['id']]) == 1
+    assert [q['status'] for q in raw['clarifications'] if q['id'] == original['id']] == ['skipped']
+
+
+def test_asking_what_the_question_was_keeps_the_open_question_visible(harness):
+    client, _, *_ = harness
+    _, chat, provider = start(harness)
+    original = deepcopy(chat['active_question'])
+    provider.evaluation = {'topic_relevant': False, 'intent': 'side_question', 'reply': 'Back to your experience.', 'actions': []}
+    for text in ('Why are you asking?', 'what qn was this'):
+        chat = send(client, chat, text)
+        assert chat['active_question'] == original
+        asking = [m for m in chat['messages'] if m['question_id'] == original['id']]
+        assert asking and all(original['question'] in m['text'] for m in asking)
+    assert 'cannot answer' not in chat['messages'][-1]['text']
 
 
 def test_old_section_receipts_count_after_source_replacement_and_statements_do_not(harness):
@@ -1777,3 +1786,30 @@ def test_explicit_review_migrates_policy_using_old_question_receipts(harness):
     assert ids <= {q['id'] for q in after['clarifications']}
     assert chat['active_question'] and chat['active_question']['item_id'] != first
     assert len([q for q in after['clarifications'] if q['item_id'] == first]) == 2
+
+
+@pytest.mark.parametrize('value', ['5/10', '5 out of 10', ' 5 '])
+def test_self_rating_written_as_a_fraction_saves_the_answer(harness, value):
+    client, _, *_ = harness
+    cv, chat, provider = start(harness)
+    item_id = chat['active_question']['item_id']
+    def rated(context):
+        result = evaluate(context)
+        result['interpretations'][0]['review_evidence'].append(
+            fact('self_rating', context['message'], value, skill_name='Python'))
+        return result
+    provider.evaluation = rated
+    chat = send(client, chat, 'I built the Python API with guidance, 5/10.')
+    item = next(i for i in client.get('/api/v1/cv/' + cv['id']).json()['items'] if i['id'] == item_id)
+    assert [f['value'] for f in item['review_evidence'] if f['field'] == 'self_rating'] == ['5']
+    assert len([c for c in provider.calls if c['task'] == 'cv_interview_interpret']) == 1
+
+
+@pytest.mark.parametrize(('value', 'skill_name', 'message'), [
+    ('11', 'Python', 'whole number from 1 to 10'), ('5.5', 'Python', 'whole number from 1 to 10'),
+    ('5', None, 'name of the skill')])
+def test_invalid_self_rating_names_the_exact_problem(value, skill_name, message):
+    from pydantic import ValidationError
+    from app.schemas.interview_evidence import ReviewFact
+    with pytest.raises(ValidationError, match=message):
+        ReviewFact.model_validate(fact('self_rating', '5', value, skill_name=skill_name))

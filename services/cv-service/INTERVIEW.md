@@ -103,7 +103,8 @@ Review records use supported, partial, unknown, conflicting, skipped or
 not-applicable statuses to represent the user's account, not independent proof.
 The interpreter classifies topic relevance within the typed turn; short answers
 inherit the active topic, corrections are relevant even when the CV disagrees,
-and unrelated messages redirect without updating facts or advancing the review.
+and an unrelated reply to the open question skips that question without updating
+facts, so the review moves on instead of asking it again.
 Schema/reference/capacity, authentication, ownership and stale-write checks remain.
 Latest relevant review facts replace earlier facts at the same field/skill scope;
 no comparison or consistency approval against CV evidence is required. Extraction
@@ -112,7 +113,7 @@ and legacy target-specific clarification retain their existing separate validati
 The agent can fill several fields from one answer. Known fields are excluded from
 new questions. Partial/conflicting fields remain open for distinct material follow-ups.
 An explicit unknown or skip closes only that target, never the entire experience.
-`CV_INTERVIEW_MAX_TARGET_ATTEMPTS` (default 2, allowed 1–5) limits repeated probing
+`CV_INTERVIEW_MAX_TARGET_ATTEMPTS` (default 1, allowed 1–5) limits repeated probing
 without new information for a source/field/skill target. It is injected only into CV.
 All calls retain the existing CV account/global admission and provider time bounds.
 
@@ -216,10 +217,12 @@ Counts rebuild from durable CV clarifications and accepted reconciliation histor
 deduplicating transferred receipts rather than relying on the bounded chat window. Old history above the limit accepts its active answer
 and closes with uncertainty. Repeated submissions reuse the saved question receipt.
 A resolved or skipped intent and a near-identical question are not reissued.
-When interpretation cannot connect an answer, the user can edit, skip or continue;
+When interpretation output stays malformed, the user can edit, skip or continue;
 two consecutive failed attempts defer the group and progress with gaps.
 Side questions can receive the model's declarative explanation without changing
-saved CV evidence or issuing a new question. A conservative filter rejects question
+saved CV evidence or issuing a new question. Only a message that asks the open
+question carries its `question_id`; the chat shows the open question from
+`active_question` whenever the latest reply does not ask it. A conservative filter rejects question
 marks and common direct or indirect requests for more information; when it rejects
 a reply, a fixed explanation is used. The filter cannot prove the meaning of every
 possible natural-language sentence, so semantic quality still needs evaluation.
