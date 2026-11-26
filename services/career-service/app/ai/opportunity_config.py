@@ -8,7 +8,7 @@ class OpportunitySettings(BaseModel):
     enabled:bool=True
     model:str=Field(default=REASONING_MODEL,min_length=1,max_length=160)
     topic_searches:int=Field(default=2,ge=1,le=4)
-    run_searches:int=Field(default=25,ge=1,le=200)
+    run_searches:int=Field(default=8,ge=1,le=200)
     concurrency:int=Field(default=3,ge=1,le=3)
     timeout_seconds:float=Field(default=30,ge=1,le=40)
     retries:int=Field(default=1,ge=0,le=2)

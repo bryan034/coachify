@@ -198,7 +198,7 @@ and recreate the service yourself; no credentials go into the frontend.
 |---|---:|---|
 | `OPPORTUNITY_ENABLED` | true | Enable when primary, the model and LLM Context are available |
 | `OPPORTUNITY_TOPIC_SEARCHES` | 2 | Maximum gap searches per topic after the grouped search (1–4); each runs only while the topic is not yet backed |
-| `OPPORTUNITY_RUN_SEARCHES` | 25 | Maximum searches per research run (1–200), including grouped and early JD searches |
+| `OPPORTUNITY_RUN_SEARCHES` | 8 | Maximum searches per research run (1–200), including grouped and early JD searches; 8 is the 7 group searches plus 1 gap search |
 | `OPPORTUNITY_CONCURRENCY` | 3 | Concurrent Brave requests across branches |
 | `OPPORTUNITY_TIMEOUT_SECONDS` | 30 | Total deadline for each Brave attempt |
 | `OPPORTUNITY_RETRIES` | 1 | Bounded transient retries with exponential backoff / 429 delay |
@@ -498,7 +498,7 @@ keep rules from [Per-topic research](#per-topic-research--20-november-2026) are 
    proportion to its topics, using integer shares whose sum fits the remaining allowance. Later
    rounds protect other categories' unused first-round shares until those categories finish or release
    them. Failed grouped searches count against the allowance too. A run never
-   exceeds `OPPORTUNITY_RUN_SEARCHES` (default 25).
+   exceeds `OPPORTUNITY_RUN_SEARCHES` (default 8).
 7. **Usage.** Job metrics record prompt, completion, total, cached and reasoning tokens per model
    stage. Search calls are recorded under `research_search`, with a search count and, for OpenRouter
    web search, the search model's token usage. Adopted JD prefetch carries its planner and search
@@ -537,7 +537,7 @@ topic with its own search, read, stop and keep rules. A topic shared by two cate
    cited passages and merged in the quality step under the same per-topic limits.
 6. **Stop.** A backed topic, counting findings handed over from other categories, leaves the search
    list. Otherwise a topic searches again while it has searches (`OPPORTUNITY_TOPIC_SEARCHES`,
-   default 2) and reads left. A run never exceeds `OPPORTUNITY_RUN_SEARCHES` (default 40); each
+   default 2) and reads left. A run never exceeds `OPPORTUNITY_RUN_SEARCHES` (default 8); each
    search also counts toward the per-account daily allowance.
 7. **Keep.** Each topic keeps its best sources up to its limit, preferring different sites, exact
    scope, higher confidence and the preferred evidence type. A finding keeps only its citations from

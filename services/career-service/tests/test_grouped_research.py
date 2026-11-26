@@ -223,9 +223,18 @@ def budget_job(flow):
     return flow[1].research_contexts.find_one({'kind':'opportunity_job'})
 
 
+def test_a_default_run_makes_every_group_search_and_one_follow_up_search(opportunity_flow):
+    flow=opportunity_flow;engine=flow[0].app.state.opportunities;search=flow[4]
+    engine.settings=engine.settings.model_copy(update={'run_searches':OpportunitySettings().run_searches})
+    ingest(flow);workspace,result,_=research(flow)
+    groups=[query_group(q) for q in search.calls]
+    assert sorted(g for g in groups if g)==sorted(GROUPS) and groups.count(None)==1
+    assert result['status']=='completed' and workspace['phase']=='ready'
+
+
 def test_research_stops_searching_within_the_token_budget_and_finishes_in_one_run(opportunity_flow):
     flow=opportunity_flow;search=flow[4];collect=search.collect_opportunity_query
-    budget=flow[0].app.state.opportunities.settings.token_budget
+    engine=flow[0].app.state.opportunities;budget=engine.settings.token_budget
     async def metered(context,query,**kwargs):
         observe_usage({'total_tokens':13000})
         return await collect(context,query,**kwargs)
@@ -234,7 +243,7 @@ def test_research_stops_searching_within_the_token_budget_and_finishes_in_one_ru
     job=budget_job(flow)
     assert result['status'] in ('completed','partial') and workspace['phase']=='ready'
     assert job['tokens_used']==13000*len(search.calls)<=budget-RESERVED_TOKENS+SEARCH_TOKENS*OpportunitySettings().concurrency
-    assert len(search.calls)<OpportunitySettings().run_searches
+    assert len(search.calls)<engine.settings.run_searches
 
 
 def test_research_that_spends_its_budget_ends_partial_and_starts_no_more_model_calls(opportunity_flow):
