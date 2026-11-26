@@ -153,7 +153,7 @@ factory provides controlled empty public retrieval and serves finite labelled SD
 responses over HTTP (`CAREER_LLM_ALLOW_HTTP` is set only in that override). Never apply
 this override to a normal deployment. See [Career test instructions](../../services/career-service/tests/README.md#reproduce-the-complete-career-extraction-journey).
 
-CV interview probing uses `CV_INTERVIEW_MAX_TARGET_ATTEMPTS` (default 2, range 1–5),
+CV interview probing uses `CV_INTERVIEW_MAX_TARGET_ATTEMPTS` (default 1, range 1–5),
 injected only into CV. It limits unproductive questions for an unchanged
 experience/field/skill target; it does not force completion or cap the entire review.
 The public `.env.example` documents it. Apply private values yourself in the central

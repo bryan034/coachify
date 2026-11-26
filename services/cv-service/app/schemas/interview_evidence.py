@@ -1,4 +1,5 @@
 """One evidence vocabulary for CV extraction, clarification and interview memory."""
+import re
 from app.domain.names import normalized_name
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -26,8 +27,12 @@ class ReviewFact(BaseModel):
     @model_validator(mode='after')
     def status_value(self):
         if self.field=='self_rating' and self.status in {'supported','partial','conflicting'}:
-            if self.value not in {str(i) for i in range(1,11)} or not self.skill_name:
-                raise ValueError('A self-rating needs a named skill and a whole-number value from 1 to 10.')
+            rating = re.fullmatch(r'(10|[1-9])(?:\s*(?:/|out\s+of)\s*10)?', (self.value or '').strip(), re.I)
+            if not rating:
+                raise ValueError('A self-rating value must be a whole number from 1 to 10, written as a string such as "5".')
+            if not self.skill_name:
+                raise ValueError('A self-rating needs the name of the skill it rates.')
+            self.value = rating.group(1)
         if self.status in {'supported', 'partial', 'conflicting'} and self.value is None:
             raise ValueError('Known or conflicting evidence needs its supported description.')
         if self.status in {'unknown', 'skipped', 'not_applicable'} and self.value is not None:

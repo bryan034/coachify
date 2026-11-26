@@ -144,7 +144,7 @@ class InterviewHarness:
                     if document['effective_version'] != retained['memory']['evidence_version']:
                         reply = 'Your saved evidence changed; you can still answer or skip this saved question. ' + reply
                     return await self.publish(account, identifier, route['id'], token, recovered,
-                                              reply, active, retained['targets'])
+                                              reply, active, retained['targets'], asks=True)
                 if existing:
                     recovered = deepcopy(retained['memory'])
                     recovered['review_policy'] = policy
@@ -173,7 +173,7 @@ class InterviewHarness:
             if latest['version'] != retained['expected_version'] + 1:
                 raise Conflict('Your evidence changed after the question was prepared. Continue with the latest evidence.')
             return await self.publish(account, identifier, route['id'], token, retained['memory'],
-                retained['reply'], retained['active'], retained['targets'])
+                retained['reply'], retained['active'], retained['targets'], asks=True)
         command = route.get('_command')
         if command in TOPIC_COMMANDS:
             return await self.topic_command(app, account, conversation, document, route, token, memory, command)
@@ -265,7 +265,9 @@ class InterviewHarness:
                     action_in(current, route['id'])['_interview_evaluation'] = evaluated
                 await run_in_threadpool(service.update, owner, identifier, remember)
             result = InterviewTurn.model_validate(evaluated['result'])
-            if result.intent == 'side_question' and (result.topic_relevant or is_side_question(route['_text'])):
+            active = conversation.get('active_question')
+            if ((result.intent == 'side_question' and result.topic_relevant)
+                    or (not result.topic_relevant or result.intent == 'side_question') and is_side_question(route['_text'])):
                 text = route['_text'].casefold()
                 reply = safe_side_answer(result.reply) if result.topic_relevant else None
                 if not reply:
@@ -273,14 +275,16 @@ class InterviewHarness:
                         reply = 'These questions help clarify what you personally did and what remains uncertain.'
                     elif re.search(r'\b(skip|pass|answer|unsure)\b', text):
                         reply = 'You can skip a question or say you are unsure; unknown details stay uncertain.'
-                    else:
+                    elif not active:
                         reply = 'I can explain the review process here, but cannot answer that question from the saved CV.'
-                if conversation.get('active_question'):
-                    reply += ' Your current question is still open; you can answer it or skip.'
+                if active:
+                    reply = (reply + ' ' if reply else '') + 'Your current question is shown below. You can answer it or skip.'
                 return await self.publish(account, identifier, route['id'], token, memory,
-                    reply, conversation.get('active_question'), conversation.get('interview_targets', []))
+                    reply, active, conversation.get('interview_targets', []))
             if not result.topic_relevant:
-                active = conversation.get('active_question')
+                if active:
+                    self.lead = 'That didn’t answer the question, so I’ll leave it uncertain and move on. '
+                    return await self.process(app, account, conversation, {**route, '_command': 'skip'}, token)
                 return await self.no_progress(app, account, conversation, document, route, token, memory, active)
             for note in result.memory_notes:
                 if note.source_id != 'answer' or note.quote not in route['_text']:
@@ -441,7 +445,7 @@ class InterviewHarness:
         if active:
             memory['focus_item_id'] = active['item_id']
             return await self.publish(account, conversation['_id'], route['id'], token, memory,
-                f"Back to {active['title']}: {active['question']}", active, conversation.get('interview_targets', []))
+                f"Back to {active['title']}: {active['question']}", active, conversation.get('interview_targets', []), asks=True)
         return await self.plan(app, account, conversation, document, route, token, memory)
 
     def close_finished_topics(self, memory, items):
@@ -665,7 +669,7 @@ class InterviewHarness:
         await run_in_threadpool(self.service.cv.mutate, account['id'], document['_id'],
             Mutation(expected_version=document['version'], mutation_id=key(route['id'] + ':interview-question')),
             'interview-question', add)
-        return await self.publish(account, conversation['_id'], route['id'], token, memory, reply_text, active, targets)
+        return await self.publish(account, conversation['_id'], route['id'], token, memory, reply_text, active, targets, asks=True)
 
     async def rate_skill_levels(self, account, conversation):
         """Rate the skills of every closed or skipped topic, and of every source once the review ends.
@@ -737,7 +741,8 @@ class InterviewHarness:
         memory['status'] = 'paused'
         return await self.publish(account, identifier, route_id, token, memory, reply, None, [])
 
-    async def publish(self, account, identifier, route_id, token, memory, reply, active, targets, status_only=False):
+    async def publish(self, account, identifier, route_id, token, memory, reply, active, targets, status_only=False, asks=False):
+        """Save the reply and the question left open; only a reply that `asks` that question is linked to it."""
         reply = review_reply(self.lead + reply)
         if not reply:
             raise ValueError('The review reply contained no readable text. Your answer is saved; retry to continue.')
@@ -749,7 +754,7 @@ class InterviewHarness:
             action.pop('_resume_requested', None)
             action.update(status='saved', summary='Interview updated.', error=None, _token=None, _lease_until=0)
             message = action_message(current, route_id)
-            message.update(text=reply, _status_only=status_only, _question_id=active['id'] if active else None)
+            message.update(text=reply, _status_only=status_only, _question_id=active['id'] if active and asks else None)
             document = self.service.cv.get(account['id'], current['cv_id'])
             if document['effective_version'] != memory['evidence_version']:
                 raise Conflict('Your evidence changed before the interview reply was saved. Continue with the latest evidence.')
