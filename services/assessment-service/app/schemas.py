@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model, model_validator
 from elo_shared.skill_groups import GROUP_NAMES
 
 Text=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=2000)]
@@ -183,6 +183,25 @@ class SkillReevaluateInput(Contract):
 class SkillReevaluated(Contract):
     version:int
     skill:EvaluatedSkill
+
+class SkillChatTurn(Contract):
+    role:Literal['person','elo']
+    text:Text
+class SkillChatInput(Contract):
+    """A Skills Helper conversation about one skill's saved judgement. The person speaks last."""
+    name:SkillName
+    canonical_skill_id:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=160)]|None=None
+    messages:list[SkillChatTurn]=Field(min_length=1,max_length=20)
+    @model_validator(mode='after')
+    def person_speaks_last(self):
+        if self.messages[-1].role!='person':raise ValueError('The last message must be the person\'s.')
+        return self
+class SkillChatOutput(Contract):
+    reply:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=1200)]
+    evidence:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=1500)]|None
+class SkillChatReply(Contract):
+    reply:str
+    evidence:str|None
 
 class DashboardSource(Contract):
     evaluation:EvaluationStatus

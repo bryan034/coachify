@@ -119,6 +119,20 @@ model call. Provider and quota failures end the operation, and a retry resumes
 from the checkpointed requirement and skill batches. Results saved before this
 step have no `skill_profile`. These are planning estimates, not tested mastery.
 
+### Skills Helper chat
+
+`POST /skills/chat` (`name`, optional `canonical_skill_id`, `messages`: 1–20 turns of
+`person` or `elo`, the last from the person) answers one message about one skill. The
+model reads only the saved evaluation: the role, that skill's judgement (null when it
+was never judged, such as a goal skill with no evidence), its sources without refs and
+marked `cited` when the judgement relied on them, and the goal requirements the
+judgement links to (by name when there is no judgement). It explains the level against
+the understanding scale and never sets a score. `evidence` is a faithful first-person
+restatement of new experience the person described, or null. The route never writes
+and never reads upstream services; the client saves `evidence` as a declaration and
+calls `POST /skills/reevaluate`. It needs a configured model (`503 model_unavailable`)
+and a finished evaluation (`409 evaluation_required`).
+
 ## Explicit evaluation and goal-skill competence
 
 A comparison starts only from the versioned `POST` command. Career Goal and Skills
