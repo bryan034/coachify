@@ -8,7 +8,7 @@ from heapq import nsmallest
 from time import time
 from uuid import UUID, uuid4
 from bson import BSON
-from app.domain.errors import Conflict, CvError
+from app.domain.errors import Conflict, CvError, PremiumRequired
 
 
 MAX_LEDGER_ENTRIES = 20_000
@@ -93,8 +93,12 @@ class UploadCapacity:
         if document is None: raise CapacityUnavailable()
         return document['entries'].get(identifier)
 
-    def reserve(self, owner, identifier, byte_count, key, fingerprint, existing=False):
-        """Caller holds the file lock through publication and commit/recovery."""
+    def reserve(self, owner, identifier, byte_count, key, fingerprint, existing=False, *, plan=None):
+        """Caller holds the file lock through publication and commit/recovery.
+
+        A free owner's one slot stays used by any saved record, deletion tombstones included. A tombstone
+        completes before its entry leaves the ledger, so reading records after the ledger keeps the check atomic.
+        """
         def change(document):
             if document.get('blocked'): raise CapacityError(document['blocked'])
             entries = document['entries']
@@ -107,6 +111,8 @@ class UploadCapacity:
                     return current['generation']
             owner_entries = [entry for entry in entries.values() if entry['owner'] == owner]
             new_record = current is None
+            if new_record and plan == 'free' and (owner_entries or self.repository.ever_saved(owner)):
+                raise PremiumRequired()
             if new_record and len(entries) >= MAX_LEDGER_ENTRIES:
                 raise CapacityUnavailable()
             if new_record and len(owner_entries) >= self.settings.max_saved_cvs_per_owner:

@@ -9,9 +9,10 @@ from app.ai.adapter import Operation
 from app.ai.errors import AIError
 from app.workflows.exploration import exploration_turn
 from app.ai.contracts import AIInput, Message
-from app.api.v1.dependencies import identifier, owner, request_key
+from app.api.v1.dependencies import identifier, owner, plan, request_key
 from app.repositories.goals import GoalError, fingerprint, now
 from app.schemas.goals import Answer, AssessmentStatus, CvContext, GoalDraft, QUESTIONS, SendAnswer, StartExploration, Turn
+from app.schemas.preview import PREMIUM_RESPONSE
 from app.domain.competence import calibrated_goal
 
 router=APIRouter(prefix='/api/v1/career', tags=['J08 exploration / J09 goal confirmation'])
@@ -72,8 +73,10 @@ async def assessment_status(request: Request, account=Depends(owner)):
         return AssessmentStatus(status='unavailable',cv_uploaded=uploaded,skills_evaluated=None)
 
 
-@router.post('/explorations')
-async def start(body: StartExploration, request: Request, account=Depends(owner), key=Depends(request_key)):
+@router.post('/explorations', responses=PREMIUM_RESPONSE)
+async def start(body: StartExploration, request: Request, account=Depends(owner), key=Depends(request_key), account_type=Depends(plan)):
+    repository=store(request)
+    await run_in_threadpool(repository.check_replacement,account,account_type)
     workspace=getattr(request.app.state,'workspace_store',None)
     if workspace:
         active=(await run_in_threadpool(workspace.row,account)).get('workspace',{})
@@ -89,9 +92,9 @@ async def start(body: StartExploration, request: Request, account=Depends(owner)
         cv_context=CvContext(mode='saved',cv_id=cv.id,filename=cv.file_name,version=cv.version,extraction_version=cv.extraction_version,profile_version=cv.profile_version)
     elif body.temporary_filename:
         cv_context=CvContext(mode='temporary',filename=body.temporary_filename)
-    draft=await run_in_threadpool(store(request).start,account,key,body.model_dump(mode='json'),cv_context)
+    draft=await run_in_threadpool(repository.start,account,key,body.model_dump(mode='json'),cv_context)
     if workspace:
-        await run_in_threadpool(workspace.begin_exploration,account,draft)
+        await run_in_threadpool(workspace.begin_exploration,account,draft,account_type)
     return draft_view(draft)
 
 

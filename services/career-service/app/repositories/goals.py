@@ -4,6 +4,7 @@ Confirmed revisions are inserted before selection CAS.
 """
 import hashlib
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 from bson.codec_options import CodecOptions
@@ -12,12 +13,30 @@ from pymongo.errors import DuplicateKeyError
 from app.schemas.analysis import CareerGoal, mongo_document, goal_skill_groups
 from app.schemas.goals import GoalDraft
 from elo_shared.skills import MAPPING_VERSION
+from elo_shared.plans import PREMIUM_REQUIRED
 
 
 class GoalError(Exception):
     def __init__(self, message, status=409):
         self.message, self.status = message, status
         super().__init__(message)
+
+
+class PremiumRequired(GoalError):
+    code = PREMIUM_REQUIRED
+
+    def __init__(self):
+        super().__init__('Changing your career goal is part of elo Premium.', 402)
+
+
+def require_new_goal(plan, state):
+    if plan == 'free' and state.get('goal_id'):
+        raise PremiumRequired()
+
+
+def discovery_cleanup(goal, discovery_id=None):
+    """Marks every discovery saved so far, except the one behind the goal, as replaced by this goal activation."""
+    return {'at': now(), 'keep': discovery_id or (goal.discovery.research_id.split(':')[0] if goal.discovery else None)}
 
 
 def now():
@@ -110,6 +129,10 @@ class GoalStore:
                 'dependent_results_need_review': state.get('dependent_results_need_review', False),
                 'review_selection':state.get('selected_review') or ({'id':str(goal['source_review_id']),'version':goal['source_review_version']} if goal and goal.get('source_review_id') else None)}
 
+    def check_replacement(self, owner, plan):
+        if plan == 'free':
+            require_new_goal(plan, self.state.find_one({'_id': owner}, {'goal_id': 1}) or {})
+
     def persist_target(self, goal):
         """Shared final persistence for JD, discovery and reviewed goal revisions."""
         payload=mongo_document(CareerGoal.model_validate(goal))
@@ -130,7 +153,7 @@ class GoalStore:
             payload=mongo_document(previous)
         return payload
 
-    def confirm(self, owner, key, data, goal, *, discovery_id=None):
+    def confirm(self, owner, key, data, goal, *, discovery_id=None, plan=None):
         digest = fingerprint(data.model_dump(mode='json'))
         self.state.update_one({'_id': owner}, {'$setOnInsert': {'version': 0, 'goal_id': None, 'receipts': []}}, upsert=True)
         state = self.state.find_one({'_id': owner})
@@ -138,7 +161,9 @@ class GoalStore:
         if receipt:
             if receipt['hash'] != digest:
                 raise GoalError('This request key was already used with different goal details.')
+            self.clear_discoveries(owner)
             return self.current(owner)
+        require_new_goal(plan, state)
         if discovery_id and state.get('active_discovery')!=discovery_id:
             raise GoalError('A newer conversation replaced this discovery.')
         selection_query={'_id':owner,'version':state['version']}
@@ -162,13 +187,31 @@ class GoalStore:
                 'run_id':str(ObjectId()),'phase':'ready','research_id':None,'coverage':[],'error':None,'error_code':None,'retry_after':None,'expires_at':now()+timedelta(hours=24)}}
         changed = self.state.update_one(selection_query,
             {'$set': {**discovery_workspace,'goal_id': payload['_id'], 'dependent_results_need_review': bool(previous),
+                       'discovery_cleanup': discovery_cleanup(goal, discovery_id),
                        'selected_review':{'id':goal.source_review_id,'version':goal.source_review_version} if goal.source_review_id else None},
              '$inc': {'version': 1}, '$push': {'receipts': {'$each': [receipt], '$slice': -100}}}).modified_count
         if not changed:
             replay = self.state.find_one({'_id': owner, 'receipts': {'$elemMatch': receipt}})
             if not replay:
                 raise GoalError('Another goal was selected. Reload before retrying.')
+        self.clear_discoveries(owner)
         return self.current(owner)
+
+    def clear_discoveries(self, owner):
+        """Delete the discovery chats the latest goal activation replaced, with their saved graph state.
+
+        Their research workers stop once the row is gone. Rerunning converges on the same result.
+        """
+        cleanup = (self.state.find_one({'_id': owner}, {'discovery_cleanup': 1}) or {}).get('discovery_cleanup')
+        if not cleanup:
+            return
+        rows = self.db.research_contexts
+        query = {'owner': owner, 'kind': 'career_discovery', 'created_at': {'$lte': cleanup['at']}, '_id': {'$ne': cleanup['keep']}}
+        for row in rows.find(query, {'_id': 1}):
+            threads = {'thread_id': {'$regex': '^discovery(-conversation)?:' + re.escape(row['_id']) + ':'}}
+            for collection in ('career_checkpoints', 'career_checkpoint_writes'):
+                self.db[collection].delete_many(threads)
+            rows.delete_one({'_id': row['_id'], 'owner': owner, 'kind': 'career_discovery'})
 
     def goal_version(self, owner, identifier):
         row = self.goals.find_one({'_id': ObjectId(identifier), 'user_id': owner}, {'version': 1})

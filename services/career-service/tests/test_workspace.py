@@ -68,16 +68,69 @@ class Sources:
         if self.empty:return []
         return [ResearchSource(source_id=platform+'-1',platform='other',url='https://example.test/'+platform,evidence=TEXT,reliability='unverified')]
 @pytest.fixture
-def flow():
+def flow(request):
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Requires disposable MongoDB')
     mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_workspace_test_'+uuid4().hex];ai=AI();sources=Sources()
-    def profile(req):return httpx.Response(200,json={'id':OTHER if req.headers.get('Authorization')=='Bearer other' else OWNER,'email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})
+    plan=getattr(request,'param','premium')
+    def profile(req):
+        if not req.url.path.endswith('/session'):return httpx.Response(200,json={'onboarding_complete':True})
+        session={'id':OTHER if req.headers.get('Authorization')=='Bearer other' else OWNER,'email_verified':True}
+        if plan is not None:session['account_type']=plan
+        return httpx.Response(200,json=session)
     try:
         with TestClient(create_app(database=db,ai=ai,research_client=sources,profile_client=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile)))) as client:
             yield client,db,ai,sources
     finally:mongo.drop_database(db.name);mongo.close()
 def ingest(flow,text='SQL is required.',key=None):return flow[0].post(BASE+'/jd',headers=headers(key),json={'text':text})
+
+
+@pytest.mark.parametrize('flow',[None,'free','premium'],indirect=True)
+def test_account_plan_allows_a_first_goal_and_replay(flow,request):
+    client,_,_,_=flow
+    calls=[]
+    upstream=client.app.state.profile_client
+    original=upstream.get
+    async def record(path,**kwargs):
+        calls.append(path)
+        return await original(path,**kwargs)
+    upstream.get=record
+    key=str(uuid4())
+    first=ingest(flow,key=key)
+    assert first.status_code==202,first.text
+    assert calls.count('/api/v1/profile/auth/session')==1
+    first_id=first.json()['current']['goal']['_id']
+    replay=ingest(flow,key=key)
+    assert replay.status_code==202 and replay.json()['current']['goal']['_id']==first_id
+    replacement=client.post(BASE+'/jd',headers={**headers(),'Prefer':'respond-async'},json={'text':'Second job: SQL is required.'})
+    if request.node.callspec.params['flow']=='premium':
+        assert replacement.status_code==202,replacement.text
+        operation=BASE+'/operations/'+replacement.json()['operation_id']
+        for _ in range(100):
+            result=client.get(operation,headers=headers()).json()
+            if result['status']=='succeeded':break
+            time.sleep(.02)
+        assert result['result']['current']['goal']['_id']!=first_id
+        return
+    assert replacement.status_code==402 and replacement.json()['code']=='premium_required'
+    assert client.get(BASE,headers=headers()).json()['current']['goal']['_id']==first_id
+
+
+@pytest.mark.parametrize('path,kwargs',[
+    ('/workspace/direction',{'json':{'expected_version':1,'index':0}}),
+    ('/imports/url',{'json':{'url':'https://example.test/job'}}),
+    ('/imports/document',{'files':{'file':('job.txt',b'SQL is required.','text/plain')}}),
+    ('/explorations/cv/document',{'files':{'file':('cv.txt',b'Synthetic CV.','text/plain')}}),
+    ('/explorations',{'json':{'consent':True}}),
+    ('/discoveries',{'json':{'consent':True}}),
+])
+@pytest.mark.parametrize('flow',['free'],indirect=True)
+def test_free_plan_blocks_replacement_entry_points(flow,path,kwargs):
+    assert ingest(flow).status_code==202
+    response=flow[0].post('/api/v1/career'+path,headers=headers(),**kwargs)
+    assert response.status_code==402 and response.json()['code']=='premium_required',response.text
+
+
 def wait(flow,phase='ready'):
     for _ in range(180):
         value=flow[0].get(BASE,headers=headers()).json()
@@ -384,3 +437,22 @@ def test_interview_synthesis_repairs_repeatedly_without_repeating_search(flow):
     assert saved_research(flow,done) and done['error'] is None
     assert len([r for r in ai.calls if r.stage=='interview_synthesis'])==3
     assert len(sources.calls)==2
+
+
+@pytest.mark.parametrize('flow',['free','premium'],indirect=True)
+def test_a_job_description_goal_removes_discovery_chats_and_their_checkpoints(flow):
+    client,db,_,_=flow;discoveries='/api/v1/career/discoveries'
+    chats=[client.post(discoveries,headers=headers(),json={'consent':True}).json()['session']['id'] for _ in range(2)]
+    for identifier in chats:
+        db.career_checkpoints.insert_one({'thread_id':'discovery:'+identifier+':run','checkpoint_ns':''})
+        db.career_checkpoint_writes.insert_one({'thread_id':'discovery-conversation:'+identifier+':key','checkpoint_ns':''})
+    db.career_checkpoints.insert_one({'thread_id':'discovery:unrelated:run','checkpoint_ns':''})
+    key=str(uuid4())
+    assert ingest(flow,key=key).status_code==202
+    assert db.research_contexts.count_documents({'owner':OWNER,'kind':'career_discovery'})==0
+    assert db.career_checkpoints.count_documents({'thread_id':{'$regex':'^discovery'}})==1
+    assert db.career_checkpoint_writes.count_documents({'thread_id':{'$regex':'^discovery'}})==0
+    assert all(client.get(discoveries+'/'+identifier,headers=headers()).status_code==404 for identifier in chats)
+    view=client.get(discoveries+'/current',headers=headers()).json()
+    assert view.get('session') is None and view['introduction']
+    assert ingest(flow,key=key).status_code==202

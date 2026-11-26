@@ -1,6 +1,7 @@
 import { browserRequest } from './browser-request';
 import { ApiError } from './profile';
 import {careerPreview,record,validCareerResponse} from './career-response';
+import {isPremiumRequired,openPremium} from './premium';
 export type CareerPreview = { kind: 'url' | 'document'; text: string; source_name: string; source_url?: string | null; notices: string[] };
 export async function importCareer(path: 'url' | 'document', body: string | FormData, token: string, signal: AbortSignal): Promise<CareerPreview> {
  const response = await fetch(`/api/v1/career/imports/${path}`, browserRequest({
@@ -10,7 +11,9 @@ export async function importCareer(path: 'url' | 'document', body: string | Form
  const result = await response.json().catch(() => ({}));
  if (!response.ok) {
   if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired', { detail: token }));
-  throw new ApiError(record(result)&&typeof result.detail === 'string' ? result.detail : response.status === 413 ? 'Choose a file up to 10 MiB.' : 'The preview service is unavailable. Retry or paste the description.', response.status);
+  const error = new CareerApiError(record(result)&&typeof result.detail === 'string' ? result.detail : response.status === 413 ? 'Choose a file up to 10 MiB.' : 'The preview service is unavailable. Retry or paste the description.', response.status, record(result)&&typeof result.code === 'string' ? result.code : undefined);
+  if (isPremiumRequired(error)) openPremium('career');
+  throw error;
  }
  if (!careerPreview(result))
   throw new Error('The source returned an invalid preview. Retry or paste the description.');
@@ -48,7 +51,9 @@ export async function careerApi<T>(path:string,token:string, options:RequestInit
  if(!response.ok){
   if(response.status===401)window.dispatchEvent(new CustomEvent('elo:expired',{detail:token}));
   const error=record(body)?body:{};
-  throw new CareerApiError(typeof error.detail==='string'?error.detail:'Career Goal is unavailable. Please retry.',response.status,typeof error.code==='string'?error.code:undefined,typeof error.retry_after==='number'?error.retry_after:undefined,typeof error.operation_id==='string'?error.operation_id:undefined);
+  const failure=new CareerApiError(typeof error.detail==='string'?error.detail:'Career Goal is unavailable. Please retry.',response.status,typeof error.code==='string'?error.code:undefined,typeof error.retry_after==='number'?error.retry_after:undefined,typeof error.operation_id==='string'?error.operation_id:undefined);
+  if(isPremiumRequired(failure))openPremium('career');
+  throw failure;
  }
  assertCareerResponse(path,body);
  return body as T;

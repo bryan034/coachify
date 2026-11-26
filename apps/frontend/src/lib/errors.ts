@@ -1,3 +1,5 @@
+import { isPremiumRequired, PREMIUM_REQUIRED } from '@/lib/api/premium';
+
 export function isAbortError(cause: unknown): boolean {
  if (typeof DOMException !== 'undefined' && cause instanceof DOMException && cause.name === 'AbortError') return true;
  if (cause instanceof Error) return cause.name === 'AbortError' || /signal is aborted|operation was aborted|aborted without reason|the user aborted a request/i.test(cause.message);
@@ -17,6 +19,7 @@ const FRIENDLY_CODES: Record<string, string> = {
  result_capacity: 'elo couldn’t finish this step. Try again.',
  storage: 'Your work is saved, but elo couldn’t load it just now. Try again.',
  upstream: 'Part of elo isn’t responding right now. Try again in a moment.',
+ [PREMIUM_REQUIRED]: 'This is part of elo Premium. Upgrades are coming soon.',
 };
 
 const TECHNICAL = [/source-scoped/i, /schema/i, /validation failed/i, /traceback/i, /unexpected token/i, /json/i, /interpretation is unavailable/i, /^\s*\d{3}\b/];
@@ -26,7 +29,7 @@ export function friendlyCode(code: string | null | undefined): string | null {
 }
 
 export function friendlyError(cause: unknown, fallback: string, code?: string | null): string | null {
- if (isAbortError(cause)) return null;
+ if (isAbortError(cause) || isPremiumRequired(cause)) return null;
  const raw = cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : '';
  const status = cause && typeof cause === 'object' && 'code' in cause && typeof (cause as { code: unknown }).code === 'string' ? (cause as { code: string }).code : null;
  const mapped = friendlyCode(code ?? status);

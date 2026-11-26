@@ -1195,6 +1195,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "Analysing another CV requires elo Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           }
         },
         "security": [

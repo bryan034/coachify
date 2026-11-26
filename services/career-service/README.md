@@ -2,6 +2,10 @@
 
 Career owns transient job inputs, the account's canonical goal and guided chat, conversational discovery and cited public research. JD intake and discovery share the same structured goal persistence path. Configured model/search access is required for live interpretation and research; previews make no model calls. Synthetic tests do not establish live quality or provider cost.
 
+Free plan: once a goal exists, a free account can refine it and use its chat, but not replace it. `POST /workspace/jd`, `/workspace/direction`, `/imports/url`, `/imports/document`, `/explorations`, `/explorations/cv/document`, `/discoveries` and `/discoveries/{id}/publish` return 402 with code `premium_required`; replaying the request that saved the goal returns its result.
+
+Saving a new goal by any path (JD intake, direction, discovery publication) deletes every other discovery chat saved before it, with its LangGraph checkpoints, for every plan. The discovery that produced the goal stays. Its activation writes `discovery_cleanup` with the goal; the deletion runs right after and again on replay, and the discovery sweeper cancels research whose chat is gone. A deleted chat returns 404, and the discovery page falls back to the new-chat entry.
+
 Research also rates each goal skill’s required competence on the shared 1–10 scale (understanding of the subject: 1–3 basic, 4–6 moderate, 7–8 good, 9–10 expert). Ratings retain finding references; stated employer expectations are a floor. Failed rating calls preserve research and description-based targets.
 
 ## Model and search providers

@@ -189,6 +189,10 @@ class MemoryCvRepository:
             doc = self.documents.get(identifier)
             return {key: deepcopy(doc[key]) for key in CAPACITY_FIELDS if key in doc} if doc else None
 
+    def ever_saved(self, owner):
+        with self.lock:
+            return any(doc['user_id'] == owner for doc in self.documents.values())
+
     def visible_ids(self, identifiers):
         with self.lock:
             return {key for key in identifiers if key in self.documents and not self.documents[key].get('deletion')}

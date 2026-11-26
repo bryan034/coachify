@@ -1,13 +1,17 @@
 """Request dependencies shared by Career routes."""
 from uuid import UUID
 from fastapi import Depends, Header, HTTPException, Request
-from app.core.auth import bearer, current_account
+from app.core.auth import VerifiedAccount, current_account
 from app.repositories.goals import GoalError
 from app.schemas.analysis import object_id
 
 
-async def owner(request: Request, credentials=Depends(bearer)):
-    return await current_account(request, credentials)
+async def owner(account: VerifiedAccount = Depends(current_account)):
+    return account['id']
+
+
+async def plan(account: VerifiedAccount = Depends(current_account)):
+    return account['account_type']
 
 
 def request_key(idempotency_key: str = Header(alias='Idempotency-Key')):

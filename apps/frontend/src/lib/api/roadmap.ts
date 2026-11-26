@@ -1,4 +1,5 @@
 import { browserRequest } from './browser-request';
+import { isPremiumRequired, openPremium } from './premium';
 const base = '/api/v1';
 export class RoadmapError extends Error { constructor(message: string, public status: number, public code: string) { super(message); } }
 export async function roadmapApi<T>(path: string, token: string, body?: unknown, signal?: AbortSignal, init?: RequestInit): Promise<T> {
@@ -15,7 +16,9 @@ export async function roadmapApi<T>(path: string, token: string, body?: unknown,
  const value = await response.json().catch(() => ({}));
  if (!response.ok) {
   if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired', { detail: token }));
-  throw new RoadmapError(typeof value.detail === 'string' ? value.detail : 'Your plan could not be loaded or saved. Retry to recover your saved work.', response.status, value.code || 'request_failed');
+  const error = new RoadmapError(typeof value.detail === 'string' ? value.detail : 'Your plan could not be loaded or saved. Retry to recover your saved work.', response.status, value.code || 'request_failed');
+  if (isPremiumRequired(error)) openPremium(path === '/planner/outlines/generate' ? 'roadmap_outline' : 'roadmap');
+  throw error;
  }
  if (path !== '/planner/runway' && path !== '/learning' && path !== '/planner/evidence-proposals' && (!Number.isInteger(value.version) || (!['/messages','/progress','/planner/generate','/planner/outlines/generate','/planner/weeks/generate','/planner/months/generate','/planner/roll-forward','/dashboard-source','/planner/sessions/free-times','/planner/sessions/backlog-plan'].includes(path) && (!Array.isArray(value.messages) || typeof value.context?.ready !== 'boolean')))) throw new RoadmapError('The saved workspace could not be confirmed. Reload to recover it.', 502, 'invalid_response');
  return value as T;

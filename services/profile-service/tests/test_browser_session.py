@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from fastapi.testclient import TestClient
 from app.main import create_app
+from app.schemas.accounts import AccountView
 
 BASE = '/api/v1/profile/auth'
 BODY = {'flow_id': 'f' * 32, 'attempt_id': 'a' * 32, 'session_token': 'm' * 64}
@@ -37,6 +38,10 @@ class Accounts:
     def logout(self, token):
         self.revoked.append(token)
 
+    def session(self, token, settings):
+        assert token == 'synthetic-session'
+        return self.view()
+
     def view(self):
         expiry = datetime.now(timezone.utc) + timedelta(hours=24)
         if self.pending:
@@ -44,6 +49,21 @@ class Accounts:
                     'expires_at': expiry, 'resend_at': expiry}
         return {'id': 'synthetic', 'name': 'Synthetic', 'email': 'person@example.test', 'email_verified': True,
                 'provider': 'email', 'expires_at': expiry}
+
+
+def test_account_schema_matches_the_session_view():
+    schema = Path(__file__).resolve().parents[3] / 'contracts/api/models/account.schema.json'
+    assert json.loads(schema.read_text()) == AccountView.model_json_schema()
+
+
+def test_session_exposes_legacy_and_premium_account_types():
+    accounts = Accounts()
+    headers = {'Authorization': 'Bearer synthetic-session'}
+    with TestClient(create_app(repository=object(), accounts=accounts, capabilities=object())) as client:
+        assert client.get(BASE + '/session', headers=headers).json()['account_type'] == 'free'
+        view = accounts.view()
+        accounts.view = lambda: {**view, 'account_type': 'premium'}
+        assert client.get(BASE + '/session', headers=headers).json()['account_type'] == 'premium'
 
 
 def test_browser_credential_is_server_derived_stable_and_only_returned_in_httponly_cookie():

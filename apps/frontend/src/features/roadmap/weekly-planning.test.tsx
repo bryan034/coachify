@@ -4,7 +4,8 @@ import { RoadmapPlanner } from './roadmap-planner';
 import type { Outline, WeekPreview, Workspace } from './types';
 import { planner, review, roadmap, workspace } from '../../../tests/fixtures/roadmap-workspace';
 const api = vi.hoisted(() => vi.fn());
-vi.mock('@/features/profile/profile-provider', () => ({useProfile: () => ({account:{id:'owner'}, token:'synthetic'})}));
+const profile = vi.hoisted(() => ({account:{id:'owner'} as {id:string;account_type?:'free'|'premium'}, token:'synthetic'}));
+vi.mock('@/features/profile/profile-provider', () => ({useProfile: () => profile}));
 vi.mock('@/lib/api/roadmap', () => ({roadmapApi:api, RoadmapError:class extends Error {status=409;}}));
 vi.mock('@/lib/api/assessment', async original => ({...await original<typeof import('@/lib/api/assessment')>(),assessmentApi:vi.fn(async path => path === '/context' ? {ready:true,model_available:true} : {version:0,stale:false,ready:true,result:null,operation:null,evaluation:{freshness:'current',processing:'idle',reasons:[]}})}));
 vi.mock('@/lib/api/workspace-summary', async original => ({...await original<typeof import('@/lib/api/workspace-summary')>(),loadSkills:vi.fn(async () => ({total:0,experiences:0,groups:[]}))}));
@@ -19,7 +20,7 @@ function serve(initial: Workspace) {let state=initial;api.mockImplementation(asy
  if(path==='/planner/runway') return state.planner.runway;
  return state;
 });}
-beforeEach(()=>{api.mockReset();window.history.replaceState({},'','/roadmap');});
+beforeEach(()=>{api.mockReset();profile.account={id:'owner'};window.history.replaceState({},'','/roadmap');});
 it('creates and displays the active tasks without an outline timeline or acceptance step',async()=>{
  serve(workspace());render(<RoadmapPlanner/>);fireEvent.click(await screen.findByRole('button',{name:'Create roadmap'}));
  await screen.findByRole('navigation',{name:'Roadmap views'});
@@ -85,4 +86,44 @@ it('labels a partial roadmap and lists omissions before acceptance', async()=>{
  fireEvent.click(screen.getByText('What was omitted (1)'));expect(screen.getByText('Preferred infrastructure')).toBeVisible();
  expect(screen.getByText(/1 assessment priority is not covered/)).toBeVisible();
  expect(screen.getByRole('button',{name:'Accept roadmap and first week'})).toBeEnabled();
+});
+function thirdWeek(): Workspace {const p=roadmap();const o=outline();return workspace({planner:planner({active:p,active_review:review(p),outline_active:{...o,weeks:[...o.weeks!,{week_start:'2030-01-21',start_date:'2030-01-21',end_date:'2030-01-27',objective:'Ship the service',expected_outcome:'It runs',estimated_minutes:180,milestone_key:'m1',gap_ids:['python']}]},week_planning:{action:'plan_next',week_start:'2030-01-21',available:true,plan_day:'2030-01-20',week_done:false,unfinished_count:0}})});}
+it('keeps a later week goal visible and opens the premium dialog locally for its task breakdown',async()=>{
+ serve(thirdWeek());const heard=vi.fn();window.addEventListener('elo:premium-required',heard);render(<RoadmapPlanner/>);
+ const locked=await screen.findByRole('group',{name:/Task breakdown for the week of/});
+ expect(locked).toHaveTextContent('Week goal: Ship the service');
+ expect(screen.queryByRole('button',{name:'Plan next week'})).toBeNull();
+ const calls=api.mock.calls.length;fireEvent.click(screen.getByRole('button',{name:'Unlock task breakdown'}));
+ expect(heard.mock.calls[0][0].detail).toEqual({feature:'roadmap'});
+ expect(api.mock.calls).toHaveLength(calls);
+ window.removeEventListener('elo:premium-required',heard);
+});
+it('shows the locked task breakdown beside a later week in the week view only',async()=>{
+ serve(thirdWeek());render(<RoadmapPlanner/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Week'}));
+ expect(screen.getAllByRole('group',{name:/Task breakdown for the week of/})).toHaveLength(1);
+ fireEvent.click(screen.getByRole('button',{name:'Next week'}));
+ expect(screen.getAllByRole('group',{name:/Task breakdown for the week of/})).toHaveLength(1);
+ fireEvent.click(screen.getByRole('button',{name:'Next week'}));
+ expect(screen.getAllByRole('group',{name:/Task breakdown for the week of/})).toHaveLength(2);
+});
+it('lets premium accounts plan any later week',async()=>{
+ profile.account={id:'owner',account_type:'premium'};serve(thirdWeek());render(<RoadmapPlanner/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Plan next week'}));
+ await waitFor(()=>expect(api.mock.calls.find(c=>c[0]==='/planner/weeks/generate')?.[2]).toMatchObject({week_start:'2030-01-21'}));
+ expect(screen.queryByRole('button',{name:'Unlock task breakdown'})).toBeNull();
+});
+it('opens the premium dialog without a request when a free account already generated its roadmap',async()=>{
+ profile.account={id:'owner',account_type:'free'};serve(workspace({planner:planner({outline_generated:true})}));
+ const heard=vi.fn();window.addEventListener('elo:premium-required',heard);render(<RoadmapPlanner/>);
+ const create=await screen.findByRole('button',{name:'Create roadmap'});const calls=api.mock.calls.length;
+ fireEvent.click(create);
+ expect(heard.mock.calls[0][0].detail).toEqual({feature:'roadmap_outline'});
+ expect(api.mock.calls).toHaveLength(calls);
+ window.removeEventListener('elo:premium-required',heard);
+});
+it('lets a premium account generate another roadmap',async()=>{
+ profile.account={id:'owner',account_type:'premium'};serve(workspace({planner:planner({outline_generated:true})}));render(<RoadmapPlanner/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Create roadmap'}));
+ await waitFor(()=>expect(api.mock.calls.some(c=>c[0]==='/planner/outlines/generate')).toBe(true));
 });

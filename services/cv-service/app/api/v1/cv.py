@@ -95,7 +95,9 @@ async def skills(request: Request, cv_id: str | None = Query(default=None, max_l
     return skill_list(cv, profile, manual, unavailable)
 
 
-@router.post('/uploads', status_code=202, response_model=CvDetail, openapi_extra={'requestBody': {'required': True, 'content': {'multipart/form-data': {'schema': {'type': 'object', 'required': ['file', 'mutation_id'], 'properties': {'file': {'type': 'string', 'format': 'binary'}, 'mutation_id': {'type': 'string', 'format': 'uuid'}, 'cv_id': {'type': 'string', 'format': 'uuid'}, 'expected_version': {'type': 'integer', 'minimum': 0}}, 'additionalProperties': False}}}}})
+@router.post('/uploads', status_code=202, response_model=CvDetail,
+    responses={402: {'model': ApiError, 'description': 'Analysing another CV requires elo Premium.'}},
+    openapi_extra={'requestBody': {'required': True, 'content': {'multipart/form-data': {'schema': {'type': 'object', 'required': ['file', 'mutation_id'], 'properties': {'file': {'type': 'string', 'format': 'binary'}, 'mutation_id': {'type': 'string', 'format': 'uuid'}, 'cv_id': {'type': 'string', 'format': 'uuid'}, 'expected_version': {'type': 'integer', 'minimum': 0}}, 'additionalProperties': False}}}}})
 async def upload(request: Request, account=Depends(authenticated)):
     maximum = request.app.state.settings.max_file_bytes
     if not request.headers.get('content-type', '').lower().startswith('multipart/form-data;'):
@@ -127,7 +129,7 @@ async def upload(request: Request, account=Depends(authenticated)):
         if extension == '.docx' and not data.startswith(b'PK\x03\x04'):
             raise HTTPException(422, 'The file content does not match DOCX format.')
         result = await run_in_threadpool(service(request).upload, account['id'], account['profile_version'], name,
-                                        extension[1:], data, mutation_id, cv_id, expected)
+                                        extension[1:], data, mutation_id, cv_id, expected, plan=account['account_type'])
     return detail(result)
 
 

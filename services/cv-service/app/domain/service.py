@@ -5,7 +5,7 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 from bson import BSON
 from app.domain.capabilities import digest, effective_items, effective_fingerprint, skills_for, skill_id, normalized_name
 from app.domain.extraction_retry import retrying_message, waiting_message
-from app.domain.errors import Conflict, CvError, Missing
+from app.domain.errors import Conflict, CvError, Missing, PremiumRequired
 from app.schemas.cv import validate_item_dates
 from app.domain.attachments import source_fingerprint
 from app.domain.storage import UploadCapacity
@@ -160,7 +160,7 @@ class CvService:
         if not document: raise Missing()
         return document
 
-    def upload(self, owner, profile_version, name, file_type, data, mutation_id, cv_id=None, expected_version=None):
+    def upload(self, owner, profile_version, name, file_type, data, mutation_id, cv_id=None, expected_version=None, *, plan=None):
         source_hash = hashlib.sha256(data).hexdigest()
         fingerprint = digest({'name': name, 'file_type': file_type, 'hash': source_hash,
                               'cv_id': cv_id, 'expected_version': expected_version})
@@ -172,20 +172,21 @@ class CvService:
             self.capacity.recover_one(identifier)
             try:
                 return self._upload(owner, profile_version, name, file_type, data, mutation_id,
-                                    cv_id, expected_version, source_hash, fingerprint, identifier)
+                                    cv_id, expected_version, source_hash, fingerprint, identifier, plan)
             except Exception:
                 try: self.capacity.recover_one(identifier)
                 except Exception: pass
                 raise
 
     def _upload(self, owner, profile_version, name, file_type, data, mutation_id,
-                cv_id, expected_version, source_hash, fingerprint, identifier):
+                cv_id, expected_version, source_hash, fingerprint, identifier, plan):
         if cv_id:
             previous = self.get(owner, cv_id)
             replay = previous['receipts'].get(mutation_id)
             if replay:
                 if replay != fingerprint: raise Conflict('This mutation key was used for another request.')
                 return previous
+            if plan == 'free': raise PremiumRequired()
             if previous.get('cleanup_token'): raise Conflict('Original-file cleanup is running; retry reupload shortly.')
             if previous.get('candidate'): raise Conflict('Resolve the saved source comparison before reprocessing.')
             if previous['version'] != expected_version: raise Conflict()
@@ -210,7 +211,7 @@ class CvService:
                 raise Conflict('This upload was deleted. Start a new upload with a new request identity.')
             if previous['upload_fingerprint'] != fingerprint: raise Conflict('This upload key was already used for a different file.')
             return previous
-        generation = self.capacity.reserve(owner, identifier, len(data), mutation_id, fingerprint)
+        generation = self.capacity.reserve(owner, identifier, len(data), mutation_id, fingerprint, plan=plan)
         timestamp = now()
         document = {'_id': identifier, 'user_id': owner, 'file_name': name, 'file_type': file_type,
             'source_hash': source_hash, 'upload_key': mutation_id, 'upload_fingerprint': fingerprint,

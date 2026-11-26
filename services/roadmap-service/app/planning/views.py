@@ -3,7 +3,7 @@ import copy
 from datetime import timedelta
 from app.planning.capacity import Capacity
 from app.planning.sessions import session_views
-from app.planning.state import completed_sessions, plan_inputs, plan_review, planner_state, retry_body, revision_signals, saved_config
+from app.planning.state import completed_sessions, outline_generated, plan_inputs, plan_review, planner_state, retry_body, revision_signals, saved_config
 from app.planning.tasks import ensure_tasks, project_assignments, schedule_warnings
 from app.planning.weeks import day_of, planning, publish_outline, week_is_planned
 
@@ -53,5 +53,5 @@ def planner_view(row,source,now,default_zone=None):
         'weeks':week_overview(state,config,now),'week_planning':planning(state,now,config),'preview_sessions':preview_sessions(state,now),
         'task_warnings':schedule_warnings(active,now) if active else [],
         'active_sessions':session_views(active,now) if active else [],'confirmations':state['confirmations'],
-        'signals':revision_signals(state,source),
+        'signals':revision_signals(state,source),'outline_generated':outline_generated(state),
         'retry_outline':retry_body(row,'outline_generate'),'retry_week':retry_body(row,'week_generate')}

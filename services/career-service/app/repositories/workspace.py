@@ -2,7 +2,7 @@
 from datetime import timedelta
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
-from app.repositories.goals import GoalError,now,stable_id
+from app.repositories.goals import GoalError,discovery_cleanup,now,stable_id,require_new_goal
 from app.schemas.goals import SaveGoal
 from app.schemas.analysis import CareerGoal
 
@@ -34,19 +34,29 @@ class WorkspaceStore:
         try:upsert()
         except DuplicateKeyError:upsert()
 
-    def claim_input(self,owner,key,digest):
-        self.ensure(owner);row=self.row(owner)
+    def check_input(self,owner,key,digest,plan):
+        row=self.row(owner)
         for receipt in row.get('workspace_inputs',[]):
             if receipt['key']==key:
                 if receipt['hash']!=digest:raise GoalError('This input key was used for another description.')
-                return False
+                return row,False
+        require_new_goal(plan,row)
+        return row,True
+
+    def claim_input(self,owner,key,digest,plan=None):
+        self.ensure(owner);row,claim=self.check_input(owner,key,digest,plan)
+        if not claim:
+            self.goals.clear_discoveries(owner)
+            return False
         incoming=row.get('incoming',{})
         if incoming.get('key')==key and incoming.get('until',now())>now():raise GoalError('This description is already being extracted. Retry shortly.')
         self.rows.update_one({'_id':owner},{'$set':{'incoming':{'key':key,'hash':digest,'until':now()+timedelta(seconds=75)},'active_discovery':None}})
         return True
 
-    def activate(self,owner,session,review,*,input_key=None,digest=None,keep_run=False,chat_receipt=None):
+    def activate(self,owner,session,review,*,input_key=None,digest=None,keep_run=False,chat_receipt=None,
+                 replacement_plan=None,direction_receipt=None):
         row=self.row(owner);workspace=row.get('workspace',{})
+        require_new_goal(replacement_plan,row)
         query={'_id':owner,'version':row.get('version',0)}
         if input_key:query['incoming.key']=input_key
         else:query['workspace.session_id']=session
@@ -54,7 +64,9 @@ class WorkspaceStore:
         if not input_key and workspace.get('session_id')!=session:raise GoalError('This conversation was replaced by a new job description.')
         if not review.content.role or not review.content.field:raise GoalError('The description needs an identifiable role and field. Add more detail and retry.',422)
         selected=row.get('selected_review',{}) or {}
-        if not input_key and selected=={'id':review.id,'version':review.version}:return row
+        if not input_key and selected=={'id':review.id,'version':review.version}:
+            self.goals.clear_discoveries(owner)
+            return row
         command=SaveGoal(target_type=review.target_type,role=review.content.role,field=review.content.field,company=review.content.company,
             location=review.content.location,seniority_level=review.content.seniority_level,job_url=review.content.job_url,employment_type=review.content.employment_type,
             review_id=review.id,expected_review_version=review.version,expected_selection_version=row.get('version',0))
@@ -69,14 +81,17 @@ class WorkspaceStore:
             'review_id':goal.id,'revision':goal.version,'research_id':None,'coverage':[],'phase':'research_pending','error':None,'retry_after':None,
             'expires_at':stamp+timedelta(hours=24),'updated_at':stamp,'run_id':workspace.get('run_id') if keep_run else str(ObjectId())}
         workspace.pop('edit_draft',None)
+        if direction_receipt:workspace['direction_receipt']=direction_receipt
         if not keep_run:workspace.pop('worker_until',None)
         update={'$set':{'goal_id':ObjectId(goal.id),'workspace':workspace,'selected_review':{'id':goal.id,'version':goal.version},'dependent_results_need_review':True},'$inc':{'version':1}}
+        if row.get('goal_id')!=ObjectId(goal.id):update['$set']['discovery_cleanup']=discovery_cleanup(goal)
         if input_key:
             update['$unset']={'incoming':''}
             update['$push']={'workspace_inputs':{'$each':[{'key':input_key,'hash':digest}],'$slice':-100}}
         if chat_receipt:
             update.setdefault('$push',{})['chat_receipts']={'$each':[chat_receipt],'$slice':-100}
         if not self.rows.update_one(query,update).matched_count:raise GoalError('Newer career-goal changes arrived. Reload the current conversation.')
+        self.goals.clear_discoveries(owner)
         return self.row(owner)
 
     def check(self,owner,session,review_version=None):
@@ -119,10 +134,14 @@ class WorkspaceStore:
                 return True
         return False
 
-    def begin_exploration(self,owner,draft):
-        self.rows.update_one({'_id':owner},{'$setOnInsert':{'version':0,'goal_id':None,'receipts':[]},
-            '$set':{'workspace':{'session_id':draft.id,'kind':'exploration','exploration_id':draft.id,'revision':draft.version,'phase':'exploring',
-                'run_id':draft.id,'expires_at':now()+EXPLORATION_LIFETIME}}},upsert=True)
+    def begin_exploration(self,owner,draft,plan):
+        self.ensure(owner)
+        query={'_id':owner}
+        if plan=='free':query['goal_id']=None
+        changed=self.rows.update_one(query,{'$set':{'workspace':{'session_id':draft.id,'kind':'exploration',
+            'exploration_id':draft.id,'revision':draft.version,'phase':'exploring','run_id':draft.id,
+            'expires_at':now()+EXPLORATION_LIFETIME}}})
+        if not changed.matched_count:self.goals.check_replacement(owner,plan)
 
     def adopt_goal(self,owner,goal_id,review):
         self.rows.update_one({'_id':owner,'workspace':{'$exists':False}},{'$set':{'workspace':{

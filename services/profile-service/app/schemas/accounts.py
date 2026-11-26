@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from elo_shared.plans import AccountType
 from app.core.mail import normalize_email
 
 Secret = Annotated[str, Field(min_length=32, max_length=128, pattern=r'^[A-Za-z0-9_-]+$')]
@@ -41,6 +42,7 @@ class AccountView(BaseModel):
     email_verified: bool
     provider: Literal['google', 'local_test', 'email']
     expires_at: datetime
+    account_type: AccountType = 'free'
     cv_review_scope: Literal['item'] = 'item'
     cv_review_policy_version: Literal[1] = 1
 

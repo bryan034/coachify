@@ -3,6 +3,8 @@
 Stores each user's background, education and planning preferences so future
 assessments and roadmaps can use their saved information. P01–P16 are available.
 
+Account type: new accounts store `account_type: "free"`; accounts without the field read as free. `GET /api/v1/profile/auth/session` returns `account_type` (`free` or `premium`), which Career, CV and Roadmap use for their free-plan limits. No endpoint changes it yet: an operator sets `account_type: "premium"` directly on the account record in `elo_profile`.
+
 ## Manual capabilities — C07
 
 | Endpoint | What it does |

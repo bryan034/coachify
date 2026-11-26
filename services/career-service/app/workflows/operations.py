@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from uuid import uuid4
 from app.ai.waiting import quota_progress,quota_reason
 from app.ai.recovery import recover_responses,validation_progress
-from app.repositories.goals import GoalError
+from app.repositories.goals import GoalError, PremiumRequired
 from app.workflows.activity import activity_observer,LABELS
 from app.ai.errors import AIError
 from app.ai.jd_scope import CareerScopeError
@@ -49,6 +49,7 @@ class Failure:
                 ('code','retryable','reason','fields','violations','provider','provider_error',
                  'limit_scope','retry_after','input_count')}, retry_at)
         if isinstance(error, CareerScopeError): return cls('scope', {})
+        if isinstance(error, PremiumRequired): return cls('premium', {})
         if isinstance(error, GoalError):
             if not isinstance(error.message,str) or len(error.message)>MAX_FAILURE_MESSAGE:
                 return cls('goal', {'message':GENERIC_FAILURE,'status':503})
@@ -64,6 +65,7 @@ class Failure:
             return AIError(**{**self.values, 'retry_after': max(0, math.ceil(self.retry_at - time.monotonic()))})
         if self.kind == 'ai': return AIError(**self.values)
         if self.kind == 'scope': return CareerScopeError()
+        if self.kind == 'premium': return PremiumRequired()
         if self.kind == 'operation': return OperationConflict(**self.values)
         return GoalError(**self.values)
 

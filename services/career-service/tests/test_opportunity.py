@@ -93,7 +93,7 @@ def opportunity_flow():
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Requires disposable MongoDB')
     mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_opportunity_test_'+uuid4().hex];primary=Primary();context_model=ContextModel();search=Search()
-    def profile(req):return httpx.Response(200,json={'id':OTHER if req.headers.get('Authorization')=='Bearer other' else OWNER,'email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})
+    def profile(req):return httpx.Response(200,json={'id':OTHER if req.headers.get('Authorization')=='Bearer other' else OWNER,'email_verified':True,'account_type':'premium'} if req.url.path.endswith('/session') else {'onboarding_complete':True})
     try:
         with TestClient(create_app(database=db,ai=ModelRouter(primary,context_model),research_client=search,profile_client=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile)))) as client:
             yield client,db,primary,context_model,search

@@ -95,12 +95,13 @@ class Sources:
             evidence=f'Employer {i} Software Engineer Singapore. SQL is required. Python preferred. Build APIs.',reliability='official',retrieved_at=now()) for i in range(start,start+5)]
 
 @pytest.fixture
-def flow():
+def flow(request):
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Requires disposable MongoDB')
     mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_discovery_test_'+uuid4().hex]
     ai=AI();sources=Sources()
-    def profile(request):return httpx.Response(200,json={'id':'22222222-2222-4222-8222-222222222222' if request.headers.get('authorization')=='Bearer other' else OWNER,'email_verified':True} if request.url.path.endswith('/session') else {'onboarding_complete':True})
+    plan=getattr(request,'param','premium')
+    def profile(request):return httpx.Response(200,json={'id':'22222222-2222-4222-8222-222222222222' if request.headers.get('authorization')=='Bearer other' else OWNER,'email_verified':True,'account_type':plan} if request.url.path.endswith('/session') else {'onboarding_complete':True})
     upstream=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile))
     try:
         with TestClient(create_app(database=db,ai=ai,context_ai=ai,research_client=sources,profile_client=upstream)) as client:yield client,db,ai,sources
@@ -117,6 +118,24 @@ def research(flow,row,**kwargs):
     response=flow[0].post(f"{BASE}/{row['id']}/research",headers=headers(),json={'expected_version':row['version'],'scope':row['decision']['scope'],'confirmed':True,**kwargs})
     assert response.status_code==202,response.text
     return response.json()['session']
+
+
+@pytest.mark.parametrize('flow',['free'],indirect=True)
+def test_free_discovery_can_save_its_first_goal_and_reopen_its_start_request(flow):
+    client=flow[0]
+    key=str(uuid4())
+    response=client.post(BASE,headers=headers(key=key),json={'consent':True})
+    row=response.json()['session']
+    message=client.post(f"{BASE}/{row['id']}/messages",headers=headers(),
+        json={'expected_version':row['version'],'message':'I want to stay broad in software engineering\n'+PROFILE})
+    assert message.status_code==200,message.text
+    saved=wait(flow,row)
+    assert saved['stage']=='career_goal_updated'
+    replay=client.post(BASE,headers=headers(key=key),json={'consent':True})
+    assert replay.status_code==200 and replay.json()['session']['id']==row['id']
+    replacement=client.post(f"{BASE}/{row['id']}/publish",headers=headers(),
+        json={'expected_version':saved['version'],'expected_selection_version':1})
+    assert replacement.status_code==402 and replacement.json()['code']=='premium_required'
 
 def wait(flow,row,status='review'):
     for _ in range(200):
@@ -606,7 +625,7 @@ def test_distinct_start_keys_create_isolated_chats_with_no_inherited_memory(flow
     request,context=[v for v in flow[2].contexts if v[0].stage=='discovery_turn'][-1]
     assert context['previous']=={} and context['memory']=={} and context['facts']==[]
     assert all('problem solving' not in message.content for message in request.conversation)
-    assert flow[0].get(f"{BASE}/{previous['id']}",headers=headers()).json()['session']['messages']==previous['messages']
+    assert flow[0].get(f"{BASE}/{previous['id']}",headers=headers()).status_code==404
 
 
 def test_introduction_is_display_only_and_never_sent_to_ai(flow):

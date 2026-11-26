@@ -373,3 +373,6 @@ textarea.rv-input{min-height:48px;resize:vertical}
 }
 
 .plan-updates{list-style:none;margin:0 0 18px;padding:14px 18px;border-radius:12px;background:var(--growing-bg);color:var(--growing-ink);font-size:14px;display:flex;flex-direction:column;gap:6px}
+.locked-week{margin:12px 0;padding:16px 18px;border:1px dashed var(--line);border-radius:12px;background:var(--soft)}
+.locked-week p{margin:0 0 8px;font-size:14px;line-height:1.5}
+.locked-week .small{color:var(--mute);font-size:13px}

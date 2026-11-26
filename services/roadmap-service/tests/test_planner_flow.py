@@ -15,8 +15,12 @@ from app.schemas.weeks import WeekDraft
 H={'Authorization':'Bearer synthetic'}
 PREFIX='/api/v1/roadmaps/planner'
 class Sources:
-    def __init__(self):self.owner=OWNER;self.hash='hash1';self.ready=True;self.result=assessment();self.writes=[];self.reads=[];self.periods=[]
-    async def account(self,token):return {'id':self.owner,'token':token,'profile':{'version':1,'weekly_hours':6,'application_date':None,'availability_periods':self.periods}}
+    def __init__(self,account_type='premium'):
+        self.owner=OWNER;self.hash='hash1';self.ready=True;self.result=assessment();self.writes=[];self.reads=[];self.periods=[];self.account_type=account_type
+    async def account(self,token):
+        account={'id':self.owner,'token':token,'profile':{'version':1,'weekly_hours':6,'application_date':None,'availability_periods':self.periods}}
+        if self.account_type is not None:account['account_type']=self.account_type
+        return account
     async def read(self,service,path,token,params=None):
         self.reads.append(path)
         if path.endswith('/context'):
@@ -374,6 +378,45 @@ def test_revising_an_accepted_week_replaces_only_untouched_future_tasks():
         assert all(s['duration_minutes']<=60 for t in after.values() for s in t['schedule'])
         assert sum(s['duration_minutes'] for key in ('r1','r2','r3') for s in after[key]['schedule'])==180
         assert [b.get('revision',1) for b in state['planner']['week_blocks']]==[1,2]
+
+def later_weeks():
+    second=lambda context:week_draft([task('b1','Add a second endpoint'),task('b2','Validate request bodies'),task('b3','Return clear errors'),task('b4','Tidy the README',30)],carryover=carry_all()(context))
+    third=lambda context:week_draft([task('r1','Write a health check',120),task('r2','Add request logging',120),task('r3','Document the endpoints')],carryover=carry_all('defer')(context))
+    return [week_draft([assignment()]),second,third]
+
+@pytest.mark.parametrize('plan',['free',None,'premium'])
+def test_free_accounts_get_task_detail_for_the_first_two_outline_weeks_only(plan):
+    clock=Clock()
+    with client_for(Scripted([long_draft()],weeks=later_weeks()),sources=Sources(plan),clock=clock) as client:
+        state=accepted(client);clock.now=SUNDAY
+        second=plan_week(client,read(client),'2030-01-14')
+        assert second['operation']['status']=='succeeded',second['operation']
+        state=accept_week(client,second);clock.now=SUNDAY+timedelta(days=7)
+        assert [w['week_start'] for w in state['planner']['outline_active']['weeks']]==['2030-01-07','2030-01-14','2030-01-21']
+        assert all(w['objective'] for w in state['planner']['outline_active']['weeks'])
+        third=request(client,'/weeks/generate',read(client),week_start='2030-01-21')
+        if plan=='premium':
+            assert third.status_code==202,third.text
+            third=finish(client)
+            assert third['operation']['status']=='succeeded',third['operation']
+            return
+        assert third.status_code==402 and third.json()['code']=='premium_required'
+        assert read(client)['planner']['week_candidate'] is None
+
+def test_a_week_queued_before_a_plan_change_is_not_detailed_for_a_free_account():
+    clock=Clock();sources=Sources()
+    with client_for(Scripted([long_draft()],weeks=later_weeks()),sources=sources,clock=clock) as client:
+        accepted(client);clock.now=SUNDAY
+        accept_week(client,plan_week(client,read(client),'2030-01-14'));clock.now=SUNDAY+timedelta(days=7)
+        original=sources.account
+        async def downgraded(token):
+            account=await original(token);sources.account_type='free'
+            return account
+        state=read(client);sources.account=downgraded
+        assert request(client,'/weeks/generate',state,week_start='2030-01-21').status_code==202
+        failed=finish(client)
+        assert failed['operation']['status']=='failed' and failed['operation']['error']['code']=='premium_required'
+        assert failed['planner']['week_candidate'] is None
 
 def test_a_missed_planning_window_plans_the_current_week_from_today():
     clock=Clock()

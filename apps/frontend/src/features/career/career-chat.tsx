@@ -12,6 +12,7 @@ const warning='For more reliable current-skill extraction, use the dedicated CV 
 import {AgentMarkdown,AgentActivity,AgentReply,AgentRecovery,errorCode} from './agent-message';
 import {JobReviewChat} from './job-review-chat';
 import { errorText } from '@/lib/errors';
+import { isPremiumRequired } from '@/lib/api/premium';
 import { ChatSkeleton } from '@/components/ui/workspace-ui';
 export function CareerChat(){
  const params=useSearchParams(),session=useCareerSession(),{token}=useProfile();
@@ -96,7 +97,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
  async function chooseDirection(index:number){
   if(!draft||busy||!token)return;setActivity('Preparing your chosen career direction…');setBusy(true);setError('');setCode('');
   try{await post<CareerWorkspace>('/workspace/direction',{expected_version:draft.version,index},new AbortController().signal);router.replace('/career-goal/chat?source=jd');}
-  catch(c){setCode(errorCode(c));setError(c instanceof Error?c.message:'Could not update your direction.');}finally{setBusy(false);}
+  catch(c){if(isPremiumRequired(c))return;setCode(errorCode(c));setError(c instanceof Error?c.message:'Could not update your direction.');}finally{setBusy(false);}
  }
  function navigate(path:string){if(busy)return;if(!dirty.current||window.confirm('Leave this conversation? Unsent messages and temporary attachments may be discarded.'))router.push(path);}
  const needsAttachment=draft?.cv.mode==='temporary'&&!cvText;

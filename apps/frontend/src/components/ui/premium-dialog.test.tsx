@@ -1,0 +1,26 @@
+import {act,fireEvent,render,screen} from '@testing-library/react';
+import {expect,it,vi} from 'vitest';
+import {PremiumDialog} from './premium-dialog';
+import {openPremium} from '@/lib/api/premium';
+vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({account:null})}));
+it('names the blocked feature, makes no request and returns focus when closed',()=>{
+ const fetch=vi.fn();vi.stubGlobal('fetch',fetch);
+ render(<><button>Upload CV</button><PremiumDialog/></>);
+ expect(screen.queryByRole('dialog')).toBeNull();
+ const trigger=screen.getByRole('button',{name:'Upload CV'});trigger.focus();
+ act(()=>openPremium('cv'));
+ const dialog=screen.getByRole('dialog',{name:'Analysing another CV'});
+ expect(dialog).toHaveAttribute('aria-modal','true');
+ expect(dialog).toHaveTextContent('Analysing another CV is part of elo Premium. Upgrades are coming soon.');
+ expect(screen.getAllByRole('button').filter(button=>dialog.contains(button)).map(button=>button.textContent)).toEqual(['Close']);
+ expect(screen.getByRole('button',{name:'Close'})).toHaveFocus();
+ fireEvent.click(screen.getByRole('button',{name:'Close'}));
+ expect(screen.queryByRole('dialog')).toBeNull();expect(trigger).toHaveFocus();
+ act(()=>openPremium('roadmap'));
+ expect(screen.getByRole('dialog',{name:'Task breakdowns after your first two weeks'})).toBeVisible();
+ fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});
+ expect(screen.queryByRole('dialog')).toBeNull();
+ act(()=>window.dispatchEvent(new CustomEvent('elo:premium-required',{detail:{feature:'billing'}})));
+ expect(screen.queryByRole('dialog')).toBeNull();
+ expect(fetch).not.toHaveBeenCalled();vi.unstubAllGlobals();
+});

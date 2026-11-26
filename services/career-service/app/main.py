@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from elo_shared.dev_reset import dev_reset_enabled, reset_owner_data
-from app.core.auth import bearer, current_account
+from app.api.v1.dependencies import owner, plan
 from elo_shared.model_budget import reserve_provider_call
 from app.ai.adapter import AIAdapter
 from app.ai.config import AISettings
@@ -18,7 +18,7 @@ from app.ai.routing import ModelRouter,opportunity_models
 from app.ai.errors import AIError
 from app.ai.jd_scope import CareerScopeError
 from app.clients.cvs import CvClient
-from app.repositories.goals import GoalStore, GoalError
+from app.repositories.goals import GoalStore, GoalError, PremiumRequired
 from app.api.v1.assessment_input import router as assessment_input_router
 from app.api.v1.goals import router as goals_router
 from app.api.v1.cv_confirmation import router as cv_confirmation_router
@@ -40,7 +40,7 @@ from app.api.v1.discovery import router as discovery_router
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from app.domain.preview import run_preview
-from app.schemas.preview import MAX_BODY, MAX_FILE, MAX_JD_TEXT, Preview, JDPreview, UrlInput, ImportErrorView
+from app.schemas.preview import MAX_BODY, MAX_FILE, MAX_JD_TEXT, Preview, JDPreview, UrlInput, ImportErrorView, PREMIUM_RESPONSE
 
 
 class BodyLimit:
@@ -146,7 +146,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
 
     @app.exception_handler(GoalError)
     async def goal_error(request, error):
-        return JSONResponse({'detail':error.message,**({'code':error.code} if isinstance(error,(OperationConflict,CareerScopeError)) else {})},error.status)
+        return JSONResponse({'detail':error.message,**({'code':error.code} if isinstance(error,(OperationConflict,CareerScopeError,PremiumRequired)) else {})},error.status)
 
     @app.exception_handler(PyMongoError)
     async def storage_error(request, error):
@@ -216,34 +216,39 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     async def invalid(request, exc):
         return JSONResponse({'detail':'Enter one valid URL of at most 2,048 characters.' if request.url.path.endswith('/url') else 'Check the required fields, lengths and version values.'},422)
 
-    async def authenticated(request: Request, credentials=Depends(bearer)):
-        return await current_account(request, credentials)
+    async def new_goal_preview(request: Request, account=Depends(owner), account_type=Depends(plan)):
+        store = request.app.state.goal_store
+        if store is not None:
+            await run_in_threadpool(store.check_replacement, account, account_type)
 
     @app.get('/health', include_in_schema=False)
     async def health(): return {'status':'ok'}
 
     if dev_reset_enabled():
         @app.post('/api/v1/career/dev/reset', include_in_schema=False)
-        async def dev_reset(request: Request, owner: str = Depends(authenticated)):
+        async def dev_reset(request: Request, account: str = Depends(owner)):
             store = request.app.state.goal_store
             if store is None: raise HTTPException(503, 'Career storage is not configured.')
-            return {'deleted': await run_in_threadpool(reset_owner_data, store.db, owner)}
+            return {'deleted': await run_in_threadpool(reset_owner_data, store.db, account)}
 
-    errors = {status: {'model': ImportErrorView} for status in (400,401,403,413,415,422,429,503)}
+    errors = {**{status: {'model': ImportErrorView} for status in (400,401,403,413,415,422,429,503)}, **PREMIUM_RESPONSE}
 
-    @app.post('/api/v1/career/imports/url', response_model=JDPreview, responses=errors, tags=['J06 URL preview'])
-    async def url(data: UrlInput, account=Depends(authenticated)):
+    @app.post('/api/v1/career/imports/url', response_model=JDPreview, responses=errors,
+        dependencies=[Depends(new_goal_preview)], tags=['J06 URL preview'])
+    async def url(data: UrlInput):
         result = await run_in_threadpool(processor, 'url', data.url.encode('utf-8'), '')
         if len(result['text']) > MAX_JD_TEXT:
             raise HTTPException(422, 'The job description exceeds 8,000 characters. Paste a shorter description; nothing was truncated.')
         return result
 
-    @app.post('/api/v1/career/explorations/cv/document', response_model=Preview, tags=['J08 temporary CV context'])
+    @app.post('/api/v1/career/explorations/cv/document', response_model=Preview, responses=PREMIUM_RESPONSE,
+        dependencies=[Depends(new_goal_preview)], tags=['J08 temporary CV context'])
     @app.post('/api/v1/career/imports/document', response_model=JDPreview, responses=errors, tags=['J07 document preview'],
+        dependencies=[Depends(new_goal_preview)],
         openapi_extra={'requestBody': {'required': True, 'content': {'multipart/form-data': {'schema': {
             'type': 'object', 'required': ['file'], 'properties': {'file': {'type': 'string', 'format': 'binary'}},
             'additionalProperties': False}}}}})
-    async def document(request: Request, account=Depends(authenticated)):
+    async def document(request: Request):
         if not request.headers.get('content-type','').lower().startswith('multipart/form-data;'):
             raise HTTPException(415, 'Upload one PDF, DOCX or TXT file as multipart form data.')
         async with request.form(max_files=1, max_fields=0) as form:

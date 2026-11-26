@@ -2,6 +2,7 @@
 import httpx
 from fastapi import HTTPException, Request
 from fastapi.security import HTTPBearer
+from elo_shared.plans import account_type
 from app.domain.review_policy import effective_policy, validate_policy
 
 bearer = HTTPBearer(auto_error=False)
@@ -28,5 +29,5 @@ async def current_account(request: Request, credentials):
         raise HTTPException(503, 'Account verification is unavailable. Keep your inputs and retry.') from exc
     if profile.get('onboarding_complete') is not True:
         raise HTTPException(403, 'Finish your initial setup before using CV review.')
-    return {'id': account['id'], 'profile_version': profile.get('version', 0),
+    return {'id': account['id'], 'profile_version': profile.get('version', 0), 'account_type': account_type(account),
             'authorization': headers['Authorization'], 'cv_review_policy': effective_policy({'scope': scope, 'version': version})}

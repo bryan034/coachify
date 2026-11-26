@@ -6,14 +6,15 @@ from pydantic import Field
 from fastapi import APIRouter,Depends,Request,Response,Header
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
-from app.api.v1.dependencies import owner, request_key
+from app.api.v1.dependencies import owner, plan, request_key
 from app.ai.contracts import Message
 from app.workflows.activity import activity
 from app.domain.questions import REFUSAL
-from app.repositories.goals import GoalError,fingerprint,stable_id,now
+from app.repositories.goals import GoalError,fingerprint,stable_id,now,require_new_goal
 from app.schemas.analysis import Contract, CareerGoal
 from app.schemas.jd import JDSource, SaveReview, ChatText, JDExtraction
 from app.schemas.workspace import WorkspaceView,OperationView,OperationError,WorkspaceChatReply,WorkspaceProgress
+from app.schemas.preview import PREMIUM_RESPONSE
 from app.workflows.goal_summary import summarize
 from app.workflows.chat import focused_chat, edit_goal
 from app.domain.goal_edits import apply_changes
@@ -76,21 +77,25 @@ async def read(request:Request,account=Depends(owner)):
     if value['phase'] in ('research_pending','researching','waiting_quota'):request.app.state.workflow.launch(account)
     return value
 
-@router.post('/jd',status_code=202,response_model=WorkspaceView|OperationView)
-async def ingest(body:JDSource,request:Request,account=Depends(owner),key=Depends(request_key),prefer:str|None=Header(default=None,alias='Prefer')):
+@router.post('/jd',status_code=202,response_model=WorkspaceView|OperationView,responses=PREMIUM_RESPONSE)
+async def ingest(body:JDSource,request:Request,account=Depends(owner),key=Depends(request_key),
+                 account_type=Depends(plan),prefer:str|None=Header(default=None,alias='Prefer')):
+    digest=fingerprint(body.model_dump(mode='json'))
     if prefer == 'respond-async':
-        return request.app.state.operations.submit(account,key,fingerprint(body.model_dump(mode='json')),'jd',
-            lambda: ingest_jd(body,request,account,key))
-    return await ingest_jd(body,request,account,key)
+        if account_type=='free':await thread(store(request).check_input,account,key,digest,account_type)
+        return request.app.state.operations.submit(account,key,digest,'jd',
+            lambda: ingest_jd(body,request,account,key,digest,account_type))
+    return await ingest_jd(body,request,account,key,digest,account_type)
 
-async def ingest_jd(body,request,account,key):
-    repo=store(request);digest=fingerprint(body.model_dump(mode='json'))
-    if not await thread(repo.claim_input,account,key,digest):return await state(request,account)
+async def ingest_jd(body,request,account,key,digest,account_type):
+    repo=store(request)
+    if not await thread(repo.claim_input,account,key,digest,account_type):return await state(request,account)
     try:
         result=await request.app.state.workflow.extract(body,account,key)
         review=await thread(repo.reviews.create,account,key,digest,result.data,result.generation,'url' if body.source_url else body.source_kind)
         activity('saving_goal')
-        activated=await thread(repo.activate,account,stable_id(account,key,'workspace'),review,input_key=key,digest=digest)
+        activated=await thread(repo.activate,account,stable_id(account,key,'workspace'),review,input_key=key,digest=digest,
+            replacement_plan=account_type)
         request.app.state.workflow.adopt_prefetch(account,key,activated)
     except BaseException:
         await request.app.state.workflow.cancel_prefetch(account,key)
@@ -148,7 +153,8 @@ async def message(body:Chat,request:Request,response:Response,account=Depends(ow
             lambda: answer_message(body,request,account,key))
     return await answer_message(body,request,account,request_key(idempotency_key) if idempotency_key else str(uuid4()))
 
-@router.get('/operations/{operation_id}',response_model=OperationView,responses={503:{'model':OperationError,'description':'Failed AI operation with its ID and safe validation diagnostics.'}})
+@router.get('/operations/{operation_id}',response_model=OperationView,responses={
+    **PREMIUM_RESPONSE,503:{'model':OperationError,'description':'Failed AI operation with its ID and safe validation diagnostics.'}})
 async def operation(operation_id:str,request:Request,account=Depends(owner)):
     return request.app.state.operations.read(account,operation_id)
 
@@ -204,9 +210,16 @@ class Direction(Contract):
     expected_version:int=Field(strict=True,ge=1)
     index:int=Field(strict=True,ge=0,le=4)
 
-@router.post('/direction',status_code=202,response_model=WorkspaceView)
-async def direction(body:Direction,request:Request,account=Depends(owner),key=Depends(request_key)):
+@router.post('/direction',status_code=202,response_model=WorkspaceView,responses=PREMIUM_RESPONSE)
+async def direction(body:Direction,request:Request,account=Depends(owner),key=Depends(request_key),account_type=Depends(plan)):
     repo=store(request);row=await thread(repo.row,account);w=row.get('workspace',{})
+    digest=fingerprint(body.model_dump())
+    receipt=w.get('direction_receipt') or {}
+    if receipt.get('key')==key:
+        if receipt['hash']!=digest:raise GoalError('This direction key was used for a different choice.')
+        await thread(repo.goals.clear_discoveries,account)
+        return await state(request,account)
+    require_new_goal(account_type,row)
     if w.get('kind')!='exploration' or not w.get('exploration_id'):raise GoalError('Start career exploration first.')
     draft=await thread(repo.goals.draft,w['exploration_id'],account)
     if draft.version!=body.expected_version or draft.next_question() or body.index>=len(draft.suggestions):raise GoalError('The available directions changed. Reload the conversation.')
@@ -220,8 +233,9 @@ async def direction(body:Direction,request:Request,account=Depends(owner),key=De
         source_cv_id=draft.cv.cv_id,source_cv_version=draft.cv.version,source_extraction_version=draft.cv.extraction_version,source_profile_version=draft.cv.profile_version)
     await thread(repo.goals.persist_target,goal)
     content=JDExtraction(role=goal.role,field=goal.field,company=None,skills=[])
-    review=await thread(repo.reviews.create_guidance,account,key,fingerprint(body.model_dump()),goal,content,draft.generation)
-    await thread(repo.activate,account,w['session_id'],review)
+    review=await thread(repo.reviews.create_guidance,account,key,digest,goal,content,draft.generation)
+    await thread(repo.activate,account,w['session_id'],review,replacement_plan=account_type,
+        direction_receipt={'key':key,'hash':digest})
     await thread(repo.touch,account,w['session_id'])
     request.app.state.workflow.launch(account,replace=True)
     return await state(request,account)

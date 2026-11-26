@@ -1,6 +1,7 @@
 import { browserRequest } from './browser-request';
 import type { SkillsProfile, ProfileEntry, ProfileSkill, IntakeField, ReviewFact, InterviewProgress, InterviewTopic, SkillEstimate, SkillLevelInfo, SkillList, ListedSkill, SkillListSource } from '@/features/cv-ingestion/types';
 import { ApiError } from './profile';
+import { isPremiumRequired, openPremium } from './premium';
 import type { CvDetail, CvList, CvPolicy, CvSummary, CvItem, CvSkill, Declaration, Declarations, DeclarationInput, Evidence, ItemInput, Clarification, ConfirmedTargetContext, PrepareQuestionsInput, Questions, Selection, SkillSource, Interpretation, InterpretationClaim, TargetCondition, Reconciliation, ReconciliationInput, DeclarationLinks, DeclarationLink, CvMatch, CvConversation, ConversationAction, ConversationMessage, ConversationInput, ConversationDecision, ConversationList } from '@/features/cv-ingestion/types';
 import { partialDateBounds } from '@/features/cv-ingestion/dates';
 import type { CvDeletionResult } from '@/features/cv-ingestion/types';
@@ -69,7 +70,9 @@ async function request<T>(path: string, token: string, signal: AbortSignal, guar
   if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired',{detail:token}));
   const raw = record(value) ? value.detail : null;
   const message = text(raw) ? raw : record(raw) && text(raw.message) ? raw.message : response.status === 413 ? 'This file exceeds the upload limit. Choose a smaller file.' : response.status === 409 ? 'This saved information changed. Refresh it and review your draft before trying again.' : response.status === 422 ? 'Check the entered values and try again. Your draft is still here.' : 'elo could not complete this request. Check the saved status and retry.';
-  throw new CvApiError(message,response.status,record(value) && text(value.code) ? value.code : record(raw) && text(raw.code) ? raw.code : undefined);
+  const error = new CvApiError(message,response.status,record(value) && text(value.code) ? value.code : record(raw) && text(raw.code) ? raw.code : undefined);
+  if (isPremiumRequired(error)) openPremium('cv');
+  throw error;
  }
  if (!guard(value)) throw new Error('elo returned an incomplete response. Refresh the saved status before trying again.');
  return value;

@@ -5,14 +5,15 @@ from datetime import date, timedelta
 from uuid import NAMESPACE_URL, uuid5
 from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
-from elo_shared.runtime import Problem, authenticated, begin, digest, launch, operation_view, stamp
+from elo_shared.plans import PREMIUM_REQUIRED, account_type
+from elo_shared.runtime import ErrorView, Problem, authenticated, begin, digest, launch, operation_view, stamp
 from app.planning.capacity import Capacity
 from app.planning.generator import PLAN_MAX_TOKENS, planning_assessment, set_stage
 from app.planning.milestone_membership import mark_plan_membership_changes
 from app.planning.partial_outline import recover_outline
 from app.planning.placement import reservations
-from app.planning.state import (ASSESSMENT_FIELDS, completed_sessions, config_digest, evaluation_current, planner_state, saved_config, shape_digest,
-    schedule_digest, with_periods, planning_source_changed)
+from app.planning.state import (ASSESSMENT_FIELDS, completed_sessions, config_digest, evaluation_current, outline_generated, planner_state, saved_config,
+    shape_digest, schedule_digest, with_periods, planning_source_changed)
 from app.planning.tasks import ensure_tasks
 from app.planning.validator import check_gaps, check_milestones, issue
 from app.planning.weeks import accept_week, publish_outline, routine_occurrences
@@ -24,6 +25,13 @@ from app.schemas.planner import Workspace
 OUTLINE_SECONDS=420
 OUTLINE_MODEL_ATTEMPTS=2
 OUTLINE_INSTRUCTIONS='''Create a milestone outline for the user's career goal from the supplied assessment and capacity. Return milestones, prerequisite order, demonstrable outcomes, dates, effort and any beyond-deadline work. No milestone, checkpoint or routine may start before planning_start, even when its first week_start is earlier. Do not create tasks. Also return weeks: one objective for every entry in weekly_capacity through the target date, including rest or contingency weeks, using its week_start. Each objective names the main thing to achieve that week, an expected_outcome the user could observe, estimated_minutes within that week's usable_minutes, the milestone_key it advances (weeks with positive effort must fall inside that milestone's dates; use zero effort for unavailable or post-scope weeks and explain that no additional work is planned) and the gap_ids it works on. A week's objectives for one milestone must not total more than the milestone's estimated_minutes. Later weeks are projections that are refined as the user progresses. Every requirement_ref, on a gap or an exclusion, must be one of permitted_requirement_refs; a gap without one is inferred and has no requirement_ref. Material unknowns must have a diagnostic intent or a confirmation question; do not invent a skill gap. Include routine rules only where the user requested recurring practice; show weekdays, duration, topic progression and difficulty. Keep each combined activity, difficulty and topic title under 12 whitespace-separated words (at most 11), summarising the action. Routine effort is included in its milestone estimate, not additional effort. Keep work within the runway and capacity. Preserve completed work and milestone keys. Exclusions require an exact quote from the user's instruction. Correct all validation errors when supplied.'''
+
+def outline_generation_locked(account,state,operation_id):
+    """A free account generates one outline; only the operation that generated it may run again."""
+    return account_type(account)!='premium' and outline_generated(state) and state.get('first_outline_operation')!=operation_id
+
+def premium_outline():
+    return Problem('Generating another roadmap is part of elo Premium.',402,PREMIUM_REQUIRED)
 
 def clamp_to_start(draft,capacity,completed=()):
     """Move unfinished milestones, checkpoints and routines that begin before the planning start up to it.
@@ -193,6 +201,7 @@ async def prepare_outline(app,row,account,assess,read_context,*,config=None,inst
     """
     def destination():return planner_state(row) if into is None else into
     state=destination();owner=account['id'];operation_id=row['pending']['id']
+    if outline_generation_locked(account,state,operation_id):raise premium_outline()
     periods=account['profile'].get('availability_periods',[])
     config=with_periods(config or saved_config(state),periods)
     await set_stage(app,row,owner,'assessing')
@@ -229,7 +238,10 @@ async def prepare_outline(app,row,account,assess,read_context,*,config=None,inst
     latest=await app.state.upstream.account(account['token']);fresh=await read_context(latest)
     if latest['id']!=owner:raise Problem('Your account changed while preparing this outline.',401,'session')
     if planning_source_changed(source,fresh):raise Problem('Your evidence, goal, evaluation or availability changed. Retry with the latest inputs.',409,'inputs_changed')
-    state=destination();state['config']=config.model_dump(mode='json')
+    state=destination()
+    if outline_generation_locked(latest,state,operation_id):raise premium_outline()
+    state['first_outline_operation']=state.get('first_outline_operation') or operation_id
+    state['config']=config.model_dump(mode='json')
     retained={m.key for m in draft.milestones}
     state['outline_candidate']=build_outline(draft,result,config,report['first_planning_week'],operation_id,attempt,accepted,confirmations,active,
         [key for key in clamped if key in retained])
@@ -291,11 +303,13 @@ def accept_outline(state,source,identifier,now,*,require_first_week=False):
 
 def register_outline_routes(app,context,mutate,worker):
     prefix='/api/v1/roadmaps/planner/outlines'
-    @app.post(prefix+'/generate',status_code=202,response_model=OperationAccepted)
+    @app.post(prefix+'/generate',status_code=202,response_model=OperationAccepted,
+        responses={402:{'model':ErrorView,'description':'Generating another roadmap requires elo Premium.'}})
     async def generate(body:GeneratePlan,request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id']);state=planner_state(row)
         repeated=any(r['id']==str(body.mutation_id) for r in row['receipts']) or (row.get('pending') or {}).get('id')==str(body.mutation_id)
         if not repeated:
+            if outline_generation_locked(account,state,str(body.mutation_id)):raise premium_outline()
             source=await context(account)
             if not source['ready']:raise Problem('Complete your selected CV and extracted Career goal first.',409,'inputs_missing')
             config=saved_config(state,periods=source['planning_defaults']['availability_periods'])

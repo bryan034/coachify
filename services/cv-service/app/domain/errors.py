@@ -1,3 +1,6 @@
+from elo_shared.plans import PREMIUM_REQUIRED
+
+
 class CvError(Exception):
     def __init__(self, detail, status=422):
         super().__init__(detail)
@@ -11,3 +14,10 @@ class Conflict(CvError):
 
 class Missing(CvError):
     def __init__(self): super().__init__('This CV or operation was not found.', 404)
+
+
+class PremiumRequired(CvError):
+    code = PREMIUM_REQUIRED
+
+    def __init__(self):
+        super().__init__('Analysing another CV is part of elo Premium.', 402)

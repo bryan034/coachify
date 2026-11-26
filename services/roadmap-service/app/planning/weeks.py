@@ -12,7 +12,8 @@ from zoneinfo import ZoneInfo
 from uuid import NAMESPACE_URL, uuid5
 from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
-from elo_shared.runtime import Problem, authenticated, begin, digest, launch, operation_view, stamp
+from elo_shared.plans import FREE_ROADMAP_DETAIL_WEEKS, PREMIUM_REQUIRED, account_type
+from elo_shared.runtime import ErrorView, Problem, authenticated, begin, digest, launch, operation_view, stamp
 from app.planning.capacity import Capacity, Placer, shortest_session, to_minute
 from app.planning.milestone_membership import mark_plan_membership_changes
 from app.planning.placement import reservations, week_target
@@ -45,6 +46,14 @@ def bounded_size(value,limit,message):
 
 def day_of(value):
     return date.fromisoformat(str(value))
+
+def week_detail_locked(account,outline,week):
+    if account_type(account)=='premium':return False
+    included=sorted(item['week_start'] for item in outline.get('weeks',[]))[:FREE_ROADMAP_DETAIL_WEEKS]
+    return week.isoformat() not in included
+
+def premium_week():
+    return Problem('Generating task details after the first two weeks is part of elo Premium.',402,PREMIUM_REQUIRED)
 
 def week_interval(week_start,config,now):
     """The inclusive first and exclusive last local date of a week, clipped to today and the roadmap."""
@@ -338,6 +347,9 @@ async def prepare_week(app,row,account,read_context,*,initial=False,into=None):
         week=first_open_week(state,outline,config,now);revise=False;feedback=None
         if not week:return False
     else:week=day_of(body['week_start']);revise=body.get('revision',False);feedback=body.get('feedback')
+    if week_detail_locked(account,outline,week):
+        if initial:return False
+        raise premium_week()
     block=week_block(state,week)
     if block and not revise:raise Problem('This week is already accepted. Request a revision to review changes.',409,'week_already_accepted')
     if revise and not block:raise Problem('There is no accepted week to revise.',409,'week_not_found')
@@ -548,7 +560,8 @@ def accept_week(state,source,identifier,now):
 
 def register_week_routes(app,context,mutate,worker):
     prefix='/api/v1/roadmaps/planner/weeks'
-    @app.post(prefix+'/generate',status_code=202,response_model=OperationAccepted)
+    @app.post(prefix+'/generate',status_code=202,response_model=OperationAccepted,
+        responses={402:{'model':ErrorView,'description':'Generating later roadmap week details requires elo Premium.'}})
     async def generate(body:GenerateWeek,request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id']);state=planner_state(row);now=app.state.clock()
         repeated=any(r['id']==str(body.mutation_id) for r in row['receipts']) or (row.get('pending') or {}).get('id')==str(body.mutation_id)
@@ -557,6 +570,7 @@ def register_week_routes(app,context,mutate,worker):
             check_basis(state,source,outline)
             config=saved_config(state,periods=(source.get('planning_defaults') or {}).get('availability_periods'));block=week_block(state,body.week_start)
             week_interval(body.week_start,config,now)
+            if week_detail_locked(account,outline,body.week_start):raise premium_week()
             if body.revision:
                 if not block:raise Problem('There is no accepted week to revise.',409,'week_not_found')
             else:

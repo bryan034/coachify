@@ -4,6 +4,10 @@ services:
     profiles: [mailpit]
     ports: ["127.0.0.1:8026:8025"]
     networks: [backend]
+  profile-service:
+    environment:
+      ELO_SYNTHETIC_TEST_FIXTURES: '1'
+    volumes: [../testing/grant-premium.py:/fixture/grant-premium.py:ro]
   career-service:
     environment:
       ELO_SYNTHETIC_TEST_FIXTURES: '1'

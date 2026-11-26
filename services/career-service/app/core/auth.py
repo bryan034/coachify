@@ -1,13 +1,20 @@
 """Validate the bearer through Profile; never read its database or trust owner inputs."""
 import httpx
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from http import HTTPStatus
+from typing import TypedDict
+from elo_shared.plans import AccountType, account_type
 
 bearer = HTTPBearer(auto_error=False)
 
 
-async def current_account(request: Request, credentials: HTTPAuthorizationCredentials | None = None):
+class VerifiedAccount(TypedDict):
+    id: str
+    account_type: AccountType
+
+
+async def current_account(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> VerifiedAccount:
     if credentials is None:
         raise HTTPException(401, 'Sign in to import a job description.')
     try:
@@ -39,4 +46,4 @@ async def current_account(request: Request, credentials: HTTPAuthorizationCreden
         raise HTTPException(503, 'Profile verification is unavailable. Please retry.') from exc
     if profile.get('onboarding_complete') is not True:
         raise HTTPException(403, 'Finish your initial setup before using Career Goal.')
-    return account['id']
+    return {'id': account['id'], 'account_type': account_type(account)}

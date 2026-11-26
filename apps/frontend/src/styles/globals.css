@@ -403,3 +403,10 @@ h2, h3{font-family:var(--font-heading);letter-spacing:-.02em}
 @media(max-width:700px){.cv-review-screen .cv-chat-header>.btn{margin-left:0}.cv-review-screen .cv-chat-header{flex-wrap:nowrap}.cv-review-screen .cv-chat-header h2{font-size:16px}}
 
 .cv-chat-composer-footer>button[type="submit"]{margin-left:auto}
+.premium-dialog-veil{position:fixed;inset:0;z-index:120;background:var(--soft2);display:grid;place-items:center;padding:16px}
+.premium-dialog{width:100%;max-width:440px;box-sizing:border-box;background:var(--side);color:var(--text);border:1px solid var(--line);border-radius:16px;padding:24px}
+.premium-dialog-tag{display:inline-block;margin:0 0 10px;padding:4px 10px;border-radius:999px;background:var(--mint-mist);color:var(--forest-ink);font-size:12px;font-weight:700}
+.premium-dialog h2{margin:0;font-size:18px;font-weight:600}
+.premium-dialog p:not(.premium-dialog-tag){margin:10px 0 0;font-size:14px;line-height:1.5}
+.premium-dialog .small{color:var(--mute);font-size:13px}
+.premium-dialog-actions{display:flex;justify-content:flex-end;margin-top:20px}
