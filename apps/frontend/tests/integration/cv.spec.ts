@@ -3,6 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { createLocalAccount } from './account-helpers';
+import { grantPremium } from './plan-fixtures';
 
 async function uploadCv(page: Page, files: Parameters<ReturnType<Page['getByLabel']>['setInputFiles']>[0]) {
  await expect(page.locator('.cv-workspace')).toHaveAttribute('aria-busy', 'false');
@@ -20,6 +21,7 @@ test('saved CVs retain corrections, keep the active CV and compose manual inputs
  const before = await (await account.get('/api/v1/profile')).json();
  const complete = await account.finish({ expected_version: before.version, occupational_status: 'employed', no_previous_education: true });
  expect(complete.ok()).toBeTruthy();
+ await grantPremium(account);
  await page.goto('/cv');await openCvReviewTools(page);
  await page.getByLabel('Capability name', { exact: true }).fill('Public speaking');
  await page.getByLabel('Capability description', { exact: true }).fill('I presented a synthetic class project.');
