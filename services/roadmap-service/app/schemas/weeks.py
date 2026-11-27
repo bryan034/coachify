@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from pydantic import Field, StringConstraints
 from .base import Contract, Mutation, Text
 from .roadmap import Key, WeekFeedback
-from .tasks import TaskTitle
+from .tasks import Material, TaskTitle, Title
 
 class GenerateWeek(Mutation):
     week_start:date
@@ -23,7 +23,9 @@ class WeekTask(Contract):
     key:Key
     milestone_key:Key
     title:TaskTitle
-    description:Text=Field(description='Explain the task with numbered steps, practical guidance for completing each step, and a final check of the result.')
+    label:Title=Field(description='What the task is for, such as the project, problem set or topic. Every step of one project uses the same label.')
+    description:Text=Field(description='Explain the task with numbered, concrete steps, how to carry out each one, and a final check of the result.')
+    materials:list[Material]=Field(default_factory=list,max_length=8,description='Specific named resources for this task: exact problem numbers and titles, book chapters, documentation sections or datasets.')
     instructions:Text
     completion_outcome:Text
     duration_minutes:int=Field(strict=True,ge=5,le=1200)

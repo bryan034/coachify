@@ -44,10 +44,10 @@ def objectives(item,context):
     return weeks
 def week_draft(tasks=(),**changes):
     """A week written by the model: tasks without times. Fixture assignments are accepted and their dates ignored."""
-    return {'summary':'This week builds on what you finished.','tasks':[{'key':t['key'],'milestone_key':t['milestone_key'],'title':t['title'],
+    return {'summary':'This week builds on what you finished.','tasks':[{'key':t['key'],'milestone_key':t['milestone_key'],'title':t['title'],'label':t.get('label') or 'Synthetic project',
         'description':t.get('description') or '1. Implement the endpoint using the project conventions.\n2. Run its tests and fix failures.\n3. Save the passing result.',
         'instructions':t.get('task') or t['instructions'],'completion_outcome':t.get('completion_criterion') or t['completion_outcome'],
-        'duration_minutes':t['duration_minutes'],'kind':t.get('kind','study'),'gap_id':t.get('gap_id')} for t in tasks],'carryover':[],'objective_changes':[],**changes}
+        'duration_minutes':t['duration_minutes'],'kind':t.get('kind','study'),'gap_id':t.get('gap_id'),'materials':t.get('materials',[])} for t in tasks],'carryover':[],'objective_changes':[],**changes}
 class Scripted:
     """Returns each supplied outline once. A fixture draft's assignments become the tasks of its first week unless `weeks` scripts them."""
     configured=True
@@ -180,7 +180,7 @@ def test_a_week_under_or_over_the_agreed_hours_is_sent_back_with_the_reason():
         assert state['operation']['status']=='succeeded',state['operation']
         first,second,third=model.sent('WeekDraft')
         assert (first['target_minutes'],first['new_task_minutes'],first['session_minutes'])==(80,80,60) and first['validation_errors']==[]
-        assert 'under the agreed hours' in second['validation_errors'][0]
+        assert "under the user's weekly hours" in second['validation_errors'][0]
         assert 'New tasks total 90 minutes but this week has room for 80' in third['validation_errors'][0]
         assert state['planner']['week_candidate']['generation']['attempts']==3
 
@@ -261,9 +261,9 @@ def test_each_unfinished_task_gets_a_reviewed_decision_that_the_user_can_change(
     two=draft(assignments=[task('a1','First',45),task('a2','Second',45)])
     drop_first=lambda context:week_draft([task('b1','Add a second endpoint'),task('b2','Validate request bodies')],
         carryover=[{'task_id':context['progress']['unfinished'][0]['task_id'],'action':'drop','reason':'Superseded by this week.'}])
-    model=Scripted([two],weeks=[week_draft(two['assignments']),drop_first,week_draft()])
+    model=Scripted([two],weeks=[week_draft(two['assignments']),drop_first,week_draft([task('c1','Write integration tests',30)])])
     with client_for(model,clock=clock) as client:
-        state=accepted(client,break_minutes_per_hour=0)
+        state=accepted(client,break_minutes_per_hour=0,weekly_minutes=180,max_carry_minutes=150)
         first,second=state['planner']['active']['editable_tasks']
         clock.now=SUNDAY
         state=plan_week(client,read(client),'2030-01-14')
@@ -291,7 +291,7 @@ def test_each_unfinished_task_gets_a_reviewed_decision_that_the_user_can_change(
 def test_splitting_and_dropping_unfinished_work_keep_their_history():
     clock=Clock()
     two=draft(assignments=[task('a1','First',45),task('a2','Second',45)])
-    decide=lambda context:week_draft([task('b1','Add a second endpoint'),task('b2','Validate request bodies')],carryover=[
+    decide=lambda context:week_draft([task('b1','Add a second endpoint'),task('b2','Validate request bodies'),task('b3','Return clear errors'),task('b4','Tidy the README',90)],carryover=[
         {'task_id':context['progress']['unfinished'][0]['task_id'],'action':'split','minutes':25,'reason':'Finish the first half.'},
         {'task_id':context['progress']['unfinished'][1]['task_id'],'action':'drop','reason':'No longer needed.'}])
     with client_for(Scripted([two],weeks=[week_draft(two['assignments']),decide]),clock=clock) as client:

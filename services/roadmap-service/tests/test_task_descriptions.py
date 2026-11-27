@@ -10,8 +10,11 @@ from test_editable_tasks import request, save, tasks
 
 DESCRIPTION='1. Create an endpoint using the project conventions.\n2. Add tests for success and invalid input, run them and fix failures.\n3. Save your code once all tests pass.'
 
+LABEL='Portfolio project: expense tracker API'
+MATERIALS=['FastAPI tutorial: Path parameters','pytest documentation: Fixtures']
+
 def generated(**changes):
-    return {**week_draft([assignment()])['tasks'][0],'description':DESCRIPTION,**changes}
+    return {**week_draft([assignment()])['tasks'][0],'description':DESCRIPTION,'label':LABEL,'materials':MATERIALS,**changes}
 
 def test_generated_title_word_limit():
     title=' '.join(['Build']*11)
@@ -29,11 +32,13 @@ def test_description_survives_preview_acceptance_reads_and_edits():
     model=Scripted([draft()],weeks=[week_draft(tasks=[generated()])])
     with client_for(model) as client:
         state=generate(client,configure(client))
-        assert state['planner']['week_candidate']['tasks'][0]['description']==DESCRIPTION
+        preview=state['planner']['week_candidate']['tasks'][0]
+        assert (preview['description'],preview['label'],preview['materials'])==(DESCRIPTION,LABEL,MATERIALS)
         state=accept_outline(client,state)
         task=state['planner']['active']['editable_tasks'][0]
-        assert task['description']==DESCRIPTION
-        assert state['planner']['active_sessions'][0]['description']==DESCRIPTION
+        assert (task['description'],task['label'],task['materials'])==(DESCRIPTION,LABEL,MATERIALS)
+        session=state['planner']['active_sessions'][0]
+        assert (session['description'],session['label'],session['materials'])==(DESCRIPTION,LABEL,MATERIALS)
         assert tasks(client)['tasks'][0]['description']==DESCRIPTION
         revised=DESCRIPTION+'\n4. Explain your solution aloud.'
         state=save(client,'edit',state,task_id=task['id'],changes={'description':revised})

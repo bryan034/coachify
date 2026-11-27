@@ -698,6 +698,27 @@
           "default": null,
           "description": "Set when a week review left this unfinished task in the backlog; it is offered again next week.",
           "title": "Deferred Week"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the task is for: the project, problem set or topic it belongs to. Steps of one project share a label.",
+          "title": "Label"
+        },
+        "materials": {
+          "description": "Named resources to use, such as a LeetCode problem number and title or a documentation section.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Materials",
+          "type": "array"
         }
       },
       "required": [

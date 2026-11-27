@@ -3,13 +3,14 @@ import pytest
 from fastapi.testclient import TestClient
 from elo_shared.runtime import MemoryStore, Problem
 from app.main import create_app
-from planner_fixtures import draft, milestone, NOW
+from planner_fixtures import assignment, draft, milestone, NOW
 from test_planner_flow import Scripted, Sources, configure, finish, read, H, PREFIX, week_draft, task
 from test_automatic_creation import create
 
 
 def test_r2_update_with_all_weeks_scheduled_preserves_tasks_and_activates_outline():
-    short=draft(milestones=[milestone(estimated_minutes=60,projected_end='2030-01-13')])
+    short=draft(milestones=[milestone(estimated_minutes=155,projected_end='2030-01-13')],
+        assignments=[assignment(),assignment('a2',title='Document the endpoint',task='Document the endpoint.',duration_minutes=95)])
     updated={**short,'summary':'Updated outline with the existing scheduled work.'}
     model=Scripted([short,updated])
     with TestClient(create_app(MemoryStore(),Sources(),model,clock=lambda:NOW)) as client:

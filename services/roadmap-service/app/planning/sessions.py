@@ -43,7 +43,7 @@ def session_views(plan,now):
         for index,day,start,minutes in places:
             ident=slot_id(task,index)
             rows.append({'id':ident,'task_id':task['id'],'title':task['title'],'instructions':task['instructions'],'description':task.get('description'),
-                'completion_criterion':task['completion_outcome'],'date':day,'start_time':start,'duration_minutes':minutes,
+                'label':task.get('label'),'materials':task.get('materials') or [],'completion_criterion':task['completion_outcome'],'date':day,'start_time':start,'duration_minutes':minutes,
                 'status':'completed' if done else 'scheduled','completed_at':task.get('completed_at'),'missed':not done and day<today,
                 'origin':task.get('origin','generated'),'kind':source.get('kind') or 'study','milestone_key':task.get('milestone_key'),
                 'skills':effective_skills(plan,task,projected.get(ident)),'edited':edited,
