@@ -262,6 +262,14 @@ class assessment_workspaces["elo_assessment.workspaces"] {
     +Object result [current captured snapshot]
     +Object[] receipts
 }
+class assessment_skill_chats["elo_assessment.skill_chats"] {
+    <<operational>>
+    +String _id [owner UUID:skill key]
+    +String owner
+    +String name
+    +Object[] turns [newest 40 Skills Helper turns]
+    +String updated_at
+}
 class roadmaps {
     +String _id [immutable plan revision UUID]
     +String user_id
@@ -295,6 +303,7 @@ class roadmap_workspaces["elo_roadmap.workspaces"] {
     +Object[] receipts
 }
 users --> assessment_workspaces : owner API
+users --> assessment_skill_chats : owner API
 assessment_workspaces --> skill_gap_analyses : current immutable result
 users --> roadmap_workspaces : owner API
 roadmap_workspaces --> roadmaps : automatic or reviewed activation and history

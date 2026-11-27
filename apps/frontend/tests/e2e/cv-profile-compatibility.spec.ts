@@ -82,7 +82,7 @@ async function expectDrafts(page: Page) {
   await expect(page.getByLabel('Capability name', { exact: true })).toHaveValue('Public speaking');
   await expect(page.getByLabel('Capability description', { exact: true })).toHaveValue('Unsaved capability: I presented our results.');
   expect(await page.getByLabel('CV document', { exact: true }).evaluate((input: HTMLInputElement) => input.files?.[0]?.name)).toBe('draft-cv.pdf');
-  await expect(page.getByRole('button', { name: 'Upload CV', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Analyse CV', exact: true })).toBeEnabled();
 }
 
 test('C-series drafts survive tab changes and connection recovery with no idle timeout', async ({ page }) => {

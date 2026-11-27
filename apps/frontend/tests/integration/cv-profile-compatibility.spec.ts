@@ -33,7 +33,7 @@ for (const scenario of cases) {
     await delay(10_100);
     await page.getByLabel('CV document', { exact: true }).setInputFiles(path.join(process.cwd(), 'tests/fixtures/synthetic-cv.docx'));
     const upload = page.waitForResponse(response => response.url().endsWith('/api/v1/cv/uploads') && response.request().method() === 'POST');
-    await page.getByRole('button', { name: 'Upload CV', exact: true }).click();
+    await page.getByRole('button', { name: 'Analyse CV', exact: true }).click();
     expect((await upload).status()).toBe(202);
     let cvId = '';
     await expect.poll(async () => {

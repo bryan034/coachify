@@ -180,7 +180,7 @@ class DraftBeyond(Contract):
 class DeadlineOutcome(Contract):
     summary:Text
     achievable_by_target:list[Text]=Field(default_factory=list,max_length=20)
-    fits_in_runway:bool
+    fits_in_runway:bool=Field(default=True,description='Set by elo: false exactly when beyond_deadline lists work. A value sent in a draft is replaced.')
 class DraftExclusion(Contract):
     requirement_ref:Key
     reason:Text
@@ -221,6 +221,10 @@ class OutlineDraft(Contract):
     deadline_outcome:DeadlineOutcome
     beyond_deadline:list[DraftBeyond]=Field(default_factory=list,max_length=20)
     exclusions:list[DraftExclusion]=Field(default_factory=list,max_length=20)
+    @model_validator(mode='after')
+    def derived_deadline_fit(self):
+        self.deadline_outcome.fits_in_runway=not self.beyond_deadline
+        return self
     @model_validator(mode='after')
     def bounded_payload(self):
         if len(json.dumps(self.model_dump(mode='json'),ensure_ascii=True,separators=(',',':')).encode())>48*1024:

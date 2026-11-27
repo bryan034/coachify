@@ -1,6 +1,7 @@
 "use client";
 import { ThemePreference } from '@/features/settings/theme-preference';
 import { BrandLogo } from '@/components/ui/brand-logo';
+import { featureFlags } from '@/lib/feature-flags';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
@@ -59,7 +60,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
    <nav className="nav" aria-label="Main navigation">{nav.map(n => <Link key={n.href} href={n.href} className={isActive(n.href) ? 'on' : ''} aria-current={isActive(n.href) ? 'page' : undefined}><Icon name={n.icon}/>{n.label}</Link>)}</nav>
    <hr className="nav-divider"/>
    <nav className="nav" aria-label="More">{more.map(n => <Link key={n.href} href={n.href} className={isActive(n.href) ? 'on' : ''} aria-current={isActive(n.href) ? 'page' : undefined}><Icon name={n.icon}/>{n.label}</Link>)}</nav>
-   <div className="side-bottom"><Link href="/settings" className={`profile-link ${isActive('/settings') ? 'on' : ''}`} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</Link><Link href="/profile" className={`profile-link ${isActive('/profile') ? 'on' : ''}`} aria-current={isActive('/profile') ? 'page' : undefined}><Icon name="user"/>My profile</Link>
+   <div className="side-bottom">{featureFlags.settings && <Link href="/settings" className={`profile-link ${isActive('/settings') ? 'on' : ''}`} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</Link>}<Link href="/profile" className={`profile-link ${isActive('/profile') ? 'on' : ''}`} aria-current={isActive('/profile') ? 'page' : undefined}><Icon name="user"/>My profile</Link>
     <div className="me"><div className="avatar"><Icon name="user"/></div><div><strong>{account?.name || 'Your workspace'}</strong><div className="small">{detail}</div></div></div>
    <button type="button" className="btn ghost sm" onClick={signOut}>Sign out</button></div>
   </aside>

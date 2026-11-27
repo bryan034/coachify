@@ -7,6 +7,7 @@ canonical editable tasks, so progress, notes, edits and history are never rewrit
 """
 import copy
 import json
+import logging
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from uuid import NAMESPACE_URL, uuid5
@@ -332,6 +333,10 @@ def first_open_week(state,outline,config,now):
         if week_target(config,now,reservations(state.get('active')),start,end)['target_minutes']:return candidate_week
     return None
 
+def log_rejection(operation_id,attempt,draft,target,errors):
+    logging.getLogger('uvicorn.error').warning('Week draft rejected %s',json.dumps({'operation_id':operation_id,'attempt':attempt,
+        'target_minutes':target['target_minutes'],'task_minutes':[t.duration_minutes for t in draft.tasks],'errors':errors[:5]}))
+
 async def prepare_week(app,row,account,read_context,*,initial=False,into=None):
     """Write, check and place one week, and store it as the preview in `into`, or in the planner state.
 
@@ -384,12 +389,14 @@ async def prepare_week(app,row,account,read_context,*,initial=False,into=None):
         if errors:await set_stage(app,row,account['id'],'correcting')
         draft=await app.state.model.generate(WeekDraft,WEEK_INSTRUCTIONS,{**context,'validation_errors':errors},max_tokens=PLAN_MAX_TOKENS)
         errors=check_week(draft,outline,config,existing,routines,pending,target,scope,feedback=feedback,diagnostics=diagnostics)
-        if errors:continue
+        if errors:
+            log_rejection(operation_id,attempt,draft,target,errors);continue
         carryover=build_carryover(draft,pending,config)
         records=[task_record({**t.model_dump(mode='json'),'schedule':[]},str(uuid5(NAMESPACE_URL,operation_id+':week-task:'+t.key)),outline,week) for t in draft.tasks]
         placed,unplaced=arrange(config,now,existing,start,end,routines,carryover,records)
         errors=[f"Task '{t['generated_key']}' could not be scheduled: {t['estimated_minutes']} minutes do not fit the free study time left this week. Shorten or remove it." for t in unplaced]
         if not errors:break
+        log_rejection(operation_id,attempt,draft,target,errors)
     else:raise Problem('The proposed week did not fit your schedule. Your accepted work is unchanged. '+errors[0],502,'week_validation')
     scheduled=sum(slot['duration_minutes'] for task in routines+placed for slot in task['schedule'])+sum(slot['duration_minutes'] for entry in carryover for slot in entry['schedule'])
     if scheduled<target['target_minutes']:

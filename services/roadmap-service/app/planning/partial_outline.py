@@ -7,7 +7,7 @@ def recover_outline(draft,assessment,existing=None):
     """Drop invalid reference rows and their dependants, retaining an audit for review.
 
     The recovered draft must still pass normal validation before it can be shown. The model's
-    deadline claim is never rewritten: a recovery that would contradict it fails instead.
+    deadline claim is never reversed: a recovery that would remove all beyond-deadline work fails instead.
     """
     data=draft.model_dump(mode='json')
     originally_placed={key for m in data['milestones']+data['beyond_deadline'] for key in m['gap_ids']}
@@ -62,7 +62,7 @@ def recover_outline(draft,assessment,existing=None):
             beyond.append(item)
     data['beyond_deadline']=beyond
     if not data['milestones'] or not data['weeks']:return None,None
-    if draft.beyond_deadline and not beyond and not data['deadline_outcome']['fits_in_runway']:return None,None
+    if draft.beyond_deadline and not beyond:return None,None
     covered_ids={key for m in data['milestones']+data['beyond_deadline'] for key in m['gap_ids']}
     orphaned={g['id'] for g in data['gaps'] if g['id'] in originally_placed and g['id'] not in covered_ids}
     for gap in data['gaps']:

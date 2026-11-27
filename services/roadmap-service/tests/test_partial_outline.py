@@ -110,11 +110,13 @@ def test_partially_recovered_coverage_still_passes_full_validation():
     assert errors==[]
 
 
-def test_recovery_does_not_waive_unrelated_deadline_validation():
-    bad=mixed_outline();bad['deadline_outcome']['fits_in_runway']=False
-    model=Scripted([bad,bad])
+def test_a_model_fit_claim_that_contradicts_beyond_deadline_work_is_replaced():
+    later={'title':'Python depth later','gap_ids':['python'],'reason':'After the target.','estimated_minutes':60}
+    claimed=draft(beyond_deadline=[later]);claimed['deadline_outcome']['fits_in_runway']=True
+    model=Scripted([claimed])
     with client_for(model) as client:
         state=generate(client,configure(client))
-        assert state['operation']['status']=='failed'
-        assert 'fits_in_runway' in state['operation']['error']['detail']
-        assert state['planner']['outline_candidate'] is None
+        assert state['operation']['status']=='succeeded',state['operation']
+        assert len(model.sent('OutlineDraft'))==1
+        outline=state['planner']['outline_candidate']
+        assert outline['deadline_outcome']['fits_in_runway'] is False and outline['partial_review'] is None

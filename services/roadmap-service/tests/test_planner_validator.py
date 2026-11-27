@@ -82,10 +82,15 @@ def test_priorities_must_be_placed_or_explicitly_excluded():
     assert 'exclusion_without_quote' in codes(excluded)
     assert codes(excluded,instruction='Please skip it. Skip Python for now.')==set()
 
-def test_deadline_outcome_must_match_work_beyond_the_deadline():
+def test_the_backend_derives_whether_the_outline_fits_the_runway():
     later={'title':'Advanced Python','gap_ids':['python'],'reason':'Exceeds the runway.','estimated_minutes':600}
-    assert 'deadline_outcome_inconsistent' in codes(outline(beyond_deadline=[later]))
-    assert 'deadline_outcome_inconsistent' in codes(outline(deadline_outcome={'summary':'Not everything fits.','achievable_by_target':[],'fits_in_runway':False}))
+    claimed_fit=OutlineDraft.model_validate(outline(beyond_deadline=[later]))
+    assert claimed_fit.deadline_outcome.fits_in_runway is False
+    assert codes(outline(beyond_deadline=[later]))==set()
+    claimed_overflow=OutlineDraft.model_validate(outline(deadline_outcome={'summary':'All fits.','achievable_by_target':[],'fits_in_runway':False}))
+    assert claimed_overflow.deadline_outcome.fits_in_runway is True
+    omitted=outline(deadline_outcome={'summary':'All fits.','achievable_by_target':[]})
+    assert OutlineDraft.model_validate(omitted).deadline_outcome.fits_in_runway is True
 
 def test_a_milestone_with_completed_sessions_must_stay():
     session={'id':'done','milestone_key':'earlier','date':'2030-01-09','start_time':'19:00','duration_minutes':60,'status':'completed'}

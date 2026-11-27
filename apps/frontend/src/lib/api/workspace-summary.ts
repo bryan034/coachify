@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { skillCardGroups, skillCards } from '@/features/cv-ingestion/skill-cards';
 import { deviceTimeZone } from '@/features/profile/planning-preferences';
 import type { Workspace } from '@/features/roadmap/types';
@@ -13,13 +13,16 @@ import { errorText } from '@/lib/errors';
 
 export type Section<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 'error'; message: string };
 
+/** Loads one section for the signed-in account. A reload for the same account keeps showing the loaded data until it is replaced. */
 export function useSection<T>(load: (token: string, signal: AbortSignal) => Promise<T>, token: string | undefined) {
  const [state, setState] = useState<Section<T>>({ status: 'loading' });
  const [attempt, setAttempt] = useState(0);
+ const loadedFor = useRef<string | undefined>(undefined);
  useEffect(() => {
   if (!token) return;
-  const controller = new AbortController();
-  setState({ status: 'loading' });
+  const controller = new AbortController(), same = loadedFor.current === token;
+  loadedFor.current = token;
+  setState(previous => same && previous.status === 'ready' ? previous : { status: 'loading' });
   load(token, controller.signal).then(data => {
    if (!controller.signal.aborted) setState({ status: 'ready', data });
   }).catch((cause: unknown) => {

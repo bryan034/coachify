@@ -38,8 +38,8 @@ or removal of milestones with saved work means recovery fails safely. Explicit
 `partial_review` metadata records omissions and uncovered assessment priorities;
 only those recorded omissions permit partial weekly/priority coverage. The UI shows
 them before acceptance and retains the notice on the accepted roadmap. Recovery
-replaces whole-plan outcome claims with a partial-coverage explanation but never changes
-`fits_in_runway`; if removing beyond-deadline rows would contradict it, recovery fails.
+replaces whole-plan outcome claims with a partial-coverage explanation but never turns a
+plan with beyond-deadline work into one that fits; if it would remove every beyond-deadline row, recovery fails.
 Omitted beyond-deadline rows have content-derived IDs. Editing and
 accepting a partial outline still use the ordinary authenticated validation and CAS
 paths. Provider transport/JSON-format repair handling remains unchanged.
@@ -128,7 +128,7 @@ The model owns gaps, priorities, prerequisite order, effort, milestones, task co
 - **Milestones:** unique keys, valid windows inside the runway, known acyclic prerequisites finishing first, assignment minutes within effort, and retained if they have completed sessions. For every date range, the remaining effort of milestones wholly inside it must fit usable capacity.
 - **Gaps:** `confirmed_gap` needs an Assessment `confirmed_shortfall` or a self-reported "no experience". `uncertain` and `partial` are `unknown`. Supported requirements, satisfied alternatives and non-learning constraints are not study gaps. Inferred requirements are labelled, explained and `unknown` unless the user says otherwise. A material unknown needs a diagnostic of at most 30 minutes or a confirmation question.
 - **Competence:** job-skill outcomes may carry Assessment's planning estimate (`competence_score`, where 10 means the evidence meets the goal's level), `demonstrated_score`/`required_score` and linked `profile_skills`. The model uses them to size effort and order work only; they never change a gap's status.
-- **Coverage:** every Assessment priority is in a milestone, in `beyond_deadline`, or excluded with an exact quote from the current user message. `fits_in_runway` is false exactly when work remains beyond the deadline.
+- **Coverage:** every Assessment priority is in a milestone, in `beyond_deadline`, or excluded with an exact quote from the current user message. The backend derives `fits_in_runway`: it is false exactly when `beyond_deadline` lists work, and any value in a draft is replaced.
 
 ## Proposals, progress and evidence
 

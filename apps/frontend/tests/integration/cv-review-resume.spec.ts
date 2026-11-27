@@ -22,7 +22,7 @@ test('uploaded CV review saves and resumes the same question after leaving and r
   await page.getByLabel('CV document', {exact: true}).setInputFiles(
     path.resolve(__dirname, '../fixtures/synthetic-clarification-cv.docx'),
   );
-  const upload = page.getByRole('button', {name: 'Upload CV', exact: true});
+  const upload = page.getByRole('button', {name: 'Analyse CV', exact: true});
   await expect(upload).toBeEnabled();
   await upload.click();
   await expect(page).toHaveURL(/\/cv\?review=/);

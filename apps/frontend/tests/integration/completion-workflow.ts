@@ -20,7 +20,7 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  async function upload() {
   const before = (await (await account.get('/api/v1/cv')).json()).cvs.map((cv: {id: string}) => cv.id);
   await page.getByLabel('CV document', { exact: true }).setInputFiles(path.join(repo, 'apps/frontend/tests/fixtures/synthetic-completion-cv.docx'));
-  await page.getByRole('button', { name: 'Upload CV', exact: true }).click();
+  await page.getByRole('button', { name: 'Analyse CV', exact: true }).click();
   let id = '';
   await expect.poll(async () => { const data = await (await account.get('/api/v1/cv')).json(); const cv = data.cvs.find((cv: {id: string}) => !before.includes(cv.id)); id = cv?.id ?? ''; return cv?.status; }, { timeout: 40_000 }).toBe('ready');
   await openCvReviewTools(page);

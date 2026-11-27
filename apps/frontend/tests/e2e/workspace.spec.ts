@@ -102,7 +102,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.locator('[aria-label="Month calendar"] .dh')).toHaveCount(7);
  await expect(page.getByRole('button',{name:'+ Add',exact:true})).toHaveCount(0);
  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Skills Profile'}).click();
- await expect(page.getByRole('button',{name:'Upload CV',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Analyse CV',exact:true})).toBeDisabled();
  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Roadmap',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Finish these first'})).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/cv"]')).toBeVisible();

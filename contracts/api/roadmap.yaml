@@ -5292,14 +5292,15 @@
           },
           "fits_in_runway": {
             "type": "boolean",
-            "title": "Fits In Runway"
+            "title": "Fits In Runway",
+            "description": "Set by elo: false exactly when beyond_deadline lists work. A value sent in a draft is replaced.",
+            "default": true
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "summary",
-          "fits_in_runway"
+          "summary"
         ],
         "title": "DeadlineOutcome"
       },

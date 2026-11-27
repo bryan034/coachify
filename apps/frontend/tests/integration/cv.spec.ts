@@ -9,7 +9,7 @@ async function uploadCv(page: Page, files: Parameters<ReturnType<Page['getByLabe
  await expect(page.locator('.cv-workspace')).toHaveAttribute('aria-busy', 'false');
  await expect(page.locator('form[aria-busy="true"]')).toHaveCount(0);
  await page.getByLabel('CV document', { exact: true }).setInputFiles(files);
- const upload = page.getByRole('button', { name: 'Upload CV', exact: true });
+ const upload = page.getByRole('button', { name: 'Analyse CV', exact: true });
  await expect(upload).toBeEnabled();
  await upload.click();
 }

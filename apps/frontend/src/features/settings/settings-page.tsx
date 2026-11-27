@@ -6,13 +6,14 @@ import { roadmapApi } from '@/lib/api/roadmap';
 import type { PlannerConfig, Workspace } from '@/features/roadmap/types';
 import { days } from '@/features/roadmap/settings-panel';
 import { errorText } from '@/lib/errors';
+import { featureFlags } from '@/lib/feature-flags';
 import { applyAppearance, type Appearance } from './theme-preference';
 import '@/styles/roadmap.css';
 
 export function SettingsPage() {
  const [mode, setMode] = useState<Appearance>('system');
  useEffect(() => {try {const saved = localStorage.getItem('elo-appearance'); if (saved === 'light' || saved === 'dark') setMode(saved);} catch {}}, []);
- return <section className="roadmap-adviser settings-page"><h1>Settings</h1><section className="review-card"><h2>Appearance</h2><label>Colour mode <select value={mode} onChange={e => {const next = e.target.value as Appearance; setMode(next); try {localStorage.setItem('elo-appearance', next);} catch {} applyAppearance(next); window.dispatchEvent(new Event('elo-appearance'));}}><option value="system">Follow system</option><option value="light">Light</option><option value="dark">Dark</option></select></label><p className="small">Follow system switches automatically when your device changes appearance. This preference is saved on this browser.</p></section><Link className="review-card settings-destination" href="/settings/roadmap"><h2>Roadmap</h2><p>Set your planning week, session limits and unfinished-work preferences.</p></Link></section>;
+ return <section className="roadmap-adviser settings-page"><h1>Settings</h1><section className="review-card"><h2>Appearance</h2><label>Colour mode <select value={mode} onChange={e => {const next = e.target.value as Appearance; setMode(next); try {localStorage.setItem('elo-appearance', next);} catch {} applyAppearance(next); window.dispatchEvent(new Event('elo-appearance'));}}><option value="system">Follow system</option><option value="light">Light</option><option value="dark">Dark</option></select></label><p className="small">Follow system switches automatically when your device changes appearance. This preference is saved on this browser.</p></section>{featureFlags.settings && featureFlags.roadmapSettings && <Link className="review-card settings-destination" href="/settings/roadmap"><h2>Roadmap</h2><p>Set your planning week, session limits and unfinished-work preferences.</p></Link>}</section>;
 }
 export function RoadmapSettingsPage() {
  const { token } = useProfile(); const [workspace,setWorkspace] = useState<Workspace | null>(null); const [draft,setDraft] = useState<PlannerConfig | null>(null); const [error,setError] = useState(''); const [busy,setBusy] = useState(false); const [saved,setSaved] = useState(false);

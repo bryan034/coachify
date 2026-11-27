@@ -265,13 +265,14 @@
           "type": "array"
         },
         "fits_in_runway": {
+          "default": true,
+          "description": "Set by elo: false exactly when beyond_deadline lists work. A value sent in a draft is replaced.",
           "title": "Fits In Runway",
           "type": "boolean"
         }
       },
       "required": [
-        "summary",
-        "fits_in_runway"
+        "summary"
       ],
       "title": "DeadlineOutcome",
       "type": "object"

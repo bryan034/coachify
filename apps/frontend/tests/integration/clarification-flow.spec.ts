@@ -26,7 +26,7 @@ test('confirmed Career targets drive saved project, work and skill clarification
 
  await page.goto('/cv');await openCvReviewTools(page);
  await page.getByLabel('CV document', { exact: true }).setInputFiles(path.join(process.cwd(), 'tests/fixtures/synthetic-clarification-cv.docx'));
- await page.getByRole('button', { name: 'Upload CV', exact: true }).click();
+ await page.getByRole('button', { name: 'Analyse CV', exact: true }).click();
  let cvId = '';
  await expect.poll(async () => {
   const value = await (await account.get('/api/v1/cv')).json();
