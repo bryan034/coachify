@@ -103,6 +103,7 @@ export function TaskList({ day, items, context, editor, nextId = null, canAdd = 
     <div className="rv-task-body">
      {editor ? <button type="button" className="rv-ttl" aria-expanded={open} onClick={() => editor.open(session.id)}>{session.title}</button> : <div className="rv-ttl">{session.title}</div>}
      <div className="rv-task-meta"><span>{timeRange(session)}</span><span>{shortLength(session.duration_minutes)}</span>
+      {session.label && <span className="rv-tag">{session.label}</span>}
       {session.skills.map(skill => <span className="rv-tag sk" key={skill.name}>{skill.name}</span>)}
       {session.id === nextId && !done && <span className="rv-tag dk">Up next</span>}
       {session.kind === 'diagnostic' && <span className="rv-tag">Diagnostic</span>}

@@ -63,6 +63,13 @@ it('shows carry decisions and future objective changes, allowing reviewed overri
  const w=week();w.carryover=[{task_id:'old',title:'Finish tests',action:'split',minutes:25,reason:'Spread the workload.',schedule:[]}];w.objective_changes=[{...outline().weeks![1],previous:outline().weeks![1],objective:'Review error cases',reason:'More practice needed.'}];
  serve(workspace({planner:planner({outline_active:outline(),week_candidate:w})}));render(<RoadmapPlanner/>);await screen.findByText('Finish tests');expect(screen.getByText(/remaining work stays/)).toBeVisible();expect(screen.getByText('Previously: Test edge cases')).toBeVisible();fireEvent.change(screen.getByLabelText('What happens next'),{target:{value:'defer'}});await waitFor(()=>expect(api.mock.calls.find(c=>c[0]==='/planner/weeks/week/carryover')?.[2]).toMatchObject({decisions:[{task_id:'old',action:'defer'}]}));
 });
+it('shows what each previewed task is for, its steps and its named materials',async()=>{
+ const w=week();w.tasks[0]={...w.tasks[0],label:'LeetCode: arrays and hashing',description:'1. Solve each problem.\n2. Review your fastest solution.',materials:['LeetCode 1. Two Sum','LeetCode 49. Group Anagrams']};
+ serve(workspace({planner:planner({outline_active:outline(),week_candidate:w})}));render(<RoadmapPlanner/>);
+ expect(await screen.findByText('LeetCode: arrays and hashing')).toBeInTheDocument();
+ expect(screen.getByText(/1\. Solve each problem\./)).toBeInTheDocument();
+ expect(screen.getByText('LeetCode 49. Group Anagrams')).toBeInTheDocument();
+});
 it('keeps acceptance disabled when tasks do not fit the reviewed schedule',async()=>{
  serve(workspace({planner:planner({outline_active:outline(),week_candidate:{...week(),unplaced:[{id:'x',title:'Too large'}]}})}));render(<RoadmapPlanner/>);expect(await screen.findByRole('button',{name:'Accept week'})).toBeDisabled();expect(screen.getByText(/Some tasks no longer fit/)).toBeVisible();
 });

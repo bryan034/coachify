@@ -9,6 +9,13 @@ export type SkillOption = { name: string; group: string };
 const DURATIONS = [15, 30, 45, 60, 90, 120, 150];
 const emptyNotes = (): NotesDocument => ({ blocks: [] });
 
+export function TaskGuide({ description, materials }: { description?: string | null; materials?: string[] }) {
+ return <>
+  {description && <div><span className="rv-flab">Steps</span><p className="rv-steps">{description}</p></div>}
+  {!!materials?.length && <div><span className="rv-flab">Materials</span><ul className="rv-materials">{materials.map(item => <li key={item}>{item}</li>)}</ul></div>}
+ </>;
+}
+
 export const draftOf = (session: Session): TaskDraft => ({ title: session.title, doneWhen: session.completion_criterion, skills: session.skills.map(skill => skill.name), time: session.start_time, minutes: session.duration_minutes, notes: session.notes ?? emptyNotes(), confidence: session.confidence ?? null, difficulty: session.difficulty ?? null });
 export const blankDraft = (time: string | null): TaskDraft => ({ title: '', doneWhen: '', skills: [], time, minutes: 30, notes: emptyNotes(), confidence: null, difficulty: null });
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -119,6 +126,7 @@ export function TaskForm({ mode, draft, base, session, date, where, others, conf
    {clash && !tooLate && <p className="rv-clash">Overlaps “{clash.title}” ({timeRange(clash)}). You can still keep it.</p>}
    {tooLate && <p className="rv-clash" role="alert">A task must end by midnight. Choose an earlier start or a shorter duration.</p>}
   </div>
+  {mode === 'edit' && session && <TaskGuide description={session.description} materials={session.materials} />}
   <div><span className="rv-flab">Your notes</span><NotesEditor label={mode === 'new' ? 'Notes for the new task' : `Notes for ${base.title}`} value={base.notes} disabled={disabled} onDraft={notes => onChange({ notes })} /></div>
   {mode === 'edit' && <>
    <Scale label="How confident are you that you could do this again on your own?" value={draft.confidence} low="Not yet" high="Completely" onChange={confidence => onChange({ confidence })} />
