@@ -1045,19 +1045,167 @@
       }
     },
     "/api/v1/assessments/skills/chat": {
+      "get": {
+        "summary": "Skill Chat History",
+        "description": "The saved Skills Helper conversation about one skill, oldest turn first.",
+        "operationId": "skill_chat_history_api_v1_assessments_skills_chat_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "title": "Name"
+            }
+          },
+          {
+            "name": "canonical_skill_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Canonical Skill Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillChatHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "summary": "Skill Chat",
-        "description": "Talk through one skill's saved judgement. Reads only the saved evaluation and never writes; new experience the\nperson describes comes back as `evidence` for them to save and re-evaluate.",
+        "description": "Answer the person's next message about one skill's saved judgement, reading the earlier turns from the saved\nconversation. Saves the message and reply together; never changes the evaluation. New experience the person\ndescribes comes back as `evidence` for them to save and re-evaluate.",
         "operationId": "skill_chat_api_v1_assessments_skills_chat_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SkillChatInput"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1160,12 +1308,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/assessments/{identifier}": {
@@ -2370,6 +2513,74 @@
         ],
         "title": "Result"
       },
+      "SkillChatEntry": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "person",
+              "elo"
+            ],
+            "title": "Role"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillLevelChange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "text",
+          "created_at"
+        ],
+        "title": "SkillChatEntry",
+        "description": "A saved turn. `evidence` is experience elo offered to save; `level` marks elo's re-judgement of the skill."
+      },
+      "SkillChatHistory": {
+        "properties": {
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/SkillChatEntry"
+            },
+            "type": "array",
+            "title": "Turns"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "turns"
+        ],
+        "title": "SkillChatHistory",
+        "description": "The newest saved turns of one skill's Skills Helper conversation, oldest first."
+      },
       "SkillChatInput": {
         "properties": {
           "name": {
@@ -2391,24 +2602,21 @@
             ],
             "title": "Canonical Skill Id"
           },
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/SkillChatTurn"
-            },
-            "type": "array",
-            "maxItems": 20,
-            "minItems": 1,
-            "title": "Messages"
+          "message": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Message"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "name",
-          "messages"
+          "message"
         ],
         "title": "SkillChatInput",
-        "description": "A Skills Helper conversation about one skill's saved judgement. The person speaks last."
+        "description": "The person's next message to the Skills Helper about one skill. Earlier turns come from the saved conversation."
       },
       "SkillChatReply": {
         "properties": {
@@ -2436,30 +2644,38 @@
         ],
         "title": "SkillChatReply"
       },
-      "SkillChatTurn": {
+      "SkillLevelChange": {
         "properties": {
-          "role": {
-            "type": "string",
-            "enum": [
-              "person",
-              "elo"
+          "before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Role"
+            "title": "Before"
           },
-          "text": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Text"
+          "after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "role",
-          "text"
+          "before",
+          "after"
         ],
-        "title": "SkillChatTurn"
+        "title": "SkillLevelChange"
       },
       "SkillProfile": {
         "properties": {

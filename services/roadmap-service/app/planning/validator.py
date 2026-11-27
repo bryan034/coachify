@@ -93,7 +93,4 @@ def check_gaps(draft,assessment,confirmations,instruction,authorized_exclusions=
         if ref in uncovered_requirements:continue
         gap=by_ref.get(ref)
         if ref not in excluded and (not gap or gap.id not in placed):errors.append(issue('priority_not_covered',f"Priority requirement '{ref}' must appear in a milestone or in beyond_deadline."))
-    fits=draft.deadline_outcome.fits_in_runway
-    if fits and draft.beyond_deadline:errors.append(issue('deadline_outcome_inconsistent','fits_in_runway is true, but work is listed beyond the deadline.'))
-    if not fits and not draft.beyond_deadline:errors.append(issue('deadline_outcome_inconsistent','fits_in_runway is false, but no work is listed beyond the deadline.'))
     return errors

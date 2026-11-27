@@ -33,8 +33,3 @@ export function SkeletonRows({ rows = 4 }: { rows?: number }) {
  const widths = [36, 28, 42, 32, 38];
  return <div className="skeleton-rows" aria-hidden="true">{Array.from({ length: rows }, (_, index) => <div key={index} className="skeleton-row"><span className="sk dot" /><span className="sk" style={{ width: `${widths[index % widths.length]}%` }} /><span className="sk small" /><span className="sk pill" /></div>)}</div>;
 }
-
-export function SkeletonRoad({ stops = 3 }: { stops?: number }) {
- const widths = [[34, 72], [42, 64], [30, 68]];
- return <ol className="skeleton-road" aria-hidden="true">{Array.from({ length: stops }, (_, index) => <li key={index}><div className="skeleton-rail"><i /></div><div className="skeleton-stop"><span className="sk" style={{ width: `${widths[index % 3][0]}%` }} /><span className="sk thin" style={{ width: `${widths[index % 3][1]}%` }} /></div></li>)}</ol>;
-}

@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { FreeTimes, Workspace } from '@/features/roadmap/types';
-import { reevaluateSkill, skillChat, type SkillChatReply, type SkillChatTurn } from '@/lib/api/assessment';
+import { reevaluateSkill, skillChat, skillChatHistory, type SkillChatEntry, type SkillChatReply } from '@/lib/api/assessment';
 import { cvApi } from '@/lib/api/cv';
 import { roadmapApi } from '@/lib/api/roadmap';
 import { loadRoadmap } from '@/lib/api/workspace-summary';
@@ -26,7 +26,7 @@ type Props = {
  mode?: 'talk' | 'build'; onRoadmapChanged?: () => void;
 };
 type Message = { id: number; kind: 'elo' | 'me' | 'task' | 'alert' | 'result' | 'wait'; body: ReactNode };
-type Reply = { label: string; solid?: boolean; href?: string; run?: () => void };
+type Reply = { label: string; solid?: boolean; href?: string; run?: () => void; retry?: boolean };
 
 const words = (value: string) => value.trim().split(/\s+/).filter(Boolean);
 export function ratingReason(skill: Pick<TalkSkill, 'name' | 'level' | 'sources' | 'note' | 'estimated'>) {
@@ -40,22 +40,34 @@ export function ratingReason(skill: Pick<TalkSkill, 'name' | 'level' | 'sources'
  return `${base} ${named}.`;
 }
 const taskTitle = (value: string) => value.trim().split(/\s+/).slice(0, 19).join(' ').slice(0, 160);
+const levelChange = (name: string, before: number | null, after: number | null) =>
+ before === after ? `${name}: stays at ${after ?? 'Not rated'}` : `${name}: ${before ?? 'Not rated'} → ${after ?? 'Not rated'}`;
+function savedMessages(name: string, turns: SkillChatEntry[]): Message[] {
+ return turns.flatMap((turn, index): Message[] => {
+  const id = -(turns.length - index) * 3;
+  if (turn.role === 'person') return [{ id, kind: 'me', body: turn.text }];
+  if (turn.level) return [{ id, kind: 'result', body: levelChange(name, turn.level.before, turn.level.after) }, { id: id + 1, kind: 'elo', body: turn.text }];
+  return [{ id, kind: 'elo', body: turn.text }, ...(turn.evidence ? [{ id: id + 1, kind: 'result' as const, body: `Your experience: “${turn.evidence}”` }] : [])];
+ });
+}
 
 export function TalkItThrough(props: Props) {
  const { skill, onClose } = props;
- const close = useRef<HTMLButtonElement>(null), opener = useRef<Element | null>(null);
+ const close = useRef<HTMLButtonElement>(null), drawer = useRef<HTMLElement>(null), opener = useRef<Element | null>(null);
+ const closing = useRef(onClose);
+ closing.current = onClose;
  const open = !!skill;
  useEffect(() => {
   if (!open) return;
   opener.current = document.activeElement;
-  const timer = setTimeout(() => close.current?.focus(), 60);
-  const key = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+  const timer = setTimeout(() => { if (!drawer.current?.contains(document.activeElement)) close.current?.focus(); }, 60);
+  const key = (event: KeyboardEvent) => { if (event.key === 'Escape') closing.current(); };
   document.addEventListener('keydown', key);
   return () => { clearTimeout(timer); document.removeEventListener('keydown', key); (opener.current as HTMLElement | null)?.focus?.(); };
- }, [open, onClose]);
+ }, [open]);
  return <>
   <div className={`ws-scrim${open ? ' on' : ''}`} onClick={onClose}/>
-  <aside className={`ws-drawer${open ? ' on' : ''}`} role="dialog" aria-modal="true" aria-label={skill?.name ?? 'Skill helper'} aria-hidden={!open}>
+  <aside ref={drawer} className={`ws-drawer${open ? ' on' : ''}`} role="dialog" aria-modal="true" aria-label={skill?.name ?? 'Skill helper'} aria-hidden={!open}>
    <HelperHeader title="Skills Helper" onClose={onClose} closeRef={close}/>
    {skill && <HelperStatus><strong>{skill.name}</strong> · {levelText(skill.level, skill.target)}</HelperStatus>}
    {skill && <Conversation key={skill.key} {...props} skill={skill}/>}
@@ -64,54 +76,68 @@ export function TalkItThrough(props: Props) {
 }
 
 function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged }: Props & { skill: TalkSkill }) {
- const [messages, setMessages] = useState<Message[]>([]);
+ const [messages, setMessages] = useState<Message[]>([]), [past, setPast] = useState<Message[] | null>(token ? null : []);
  const [replies, setReplies] = useState<Reply[]>([]);
  const [draft, setDraft] = useState(''), [busy, setBusy] = useState(false);
- const next = useRef(0), transcript = useRef<SkillChatTurn[]>([]);
+ const next = useRef(0);
  const lifetime = useRef(new AbortController()), list = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
  useEffect(() => { if (lifetime.current.signal.aborted) lifetime.current = new AbortController(); return () => lifetime.current.abort(); }, []);
+ useEffect(() => {
+  if (!token) return;
+  const signal = lifetime.current.signal;
+  skillChatHistory(token, { name: skill.name, canonical_skill_id: skill.canonicalId ?? null }, signal)
+   .then(saved => { if (!signal.aborted) setPast(savedMessages(skill.name, saved.turns)); })
+   .catch(() => { if (!signal.aborted) setPast([{ id: -1, kind: 'alert', body: 'Your earlier messages couldn’t be loaded. You can keep talking.' }]); });
+ }, []);
  const push = (kind: Message['kind'], body: ReactNode) => setMessages(all => [...all.filter(item => item.kind !== 'wait'), { id: next.current++, kind, body }]);
- useEffect(() => { const node = list.current; if (node) node.scrollTop = node.scrollHeight; }, [messages, replies]);
+ useEffect(() => { const node = list.current; if (node) node.scrollTop = node.scrollHeight; }, [past, messages, replies]);
  useEffect(() => { if (mode !== 'build') input.current?.focus(); }, [mode]);
  useEffect(() => { if (mode === 'build') build('Help me build it');  }, []);
  const done = (): Reply[] => [{ label: 'Close', solid: true, run: onClose }];
 
- async function share(what: string) {
+ async function share(what: string, again = false) {
   if (!token || busy) return;
-  push('me', what); setDraft(''); setBusy(true); push('wait', 'Thinking…');
+  if (!again) push('me', what);
+  setDraft(''); setReplies(all => all.filter(reply => !reply.retry)); setBusy(true); push('wait', 'Thinking…');
   const signal = lifetime.current.signal;
-  const before = skill.level, asked: SkillChatTurn[] = [...transcript.current, { role: 'person' as const, text: what }].slice(-20);
   let answer: SkillChatReply;
   try {
-   answer = await skillChat(token, { name: skill.name, canonical_skill_id: skill.canonicalId ?? null, messages: asked }, signal);
+   answer = await skillChat(token, { name: skill.name, canonical_skill_id: skill.canonicalId ?? null, message: what }, signal);
    if (signal.aborted) return;
   } catch (cause) {
-   if (!signal.aborted) { push('alert', errorText(cause, 'elo couldn’t reply just now. Try again.')); setDraft(what); setBusy(false); }
+   if (!signal.aborted) {
+    push('alert', errorText(cause, 'elo couldn’t reply just now. Try again.'));
+    setReplies(all => [...all, { label: 'Try again', solid: true, retry: true, run: () => void share(what, true) }]); setBusy(false);
+   }
    return;
   }
-  transcript.current = [...asked, { role: 'elo' as const, text: answer.reply }].slice(-20);
   push('elo', answer.reply);
-  const evidence = answer.evidence;
-  if (!evidence) { setBusy(false); return; }
+  if (answer.evidence) await saveEvidence(answer.evidence);
+  else setBusy(false);
+ }
+
+ async function saveEvidence(evidence: string) {
+  if (!token) return;
+  const signal = lifetime.current.signal, before = skill.level;
+  setReplies(all => all.filter(reply => !reply.retry)); setBusy(true);
   push('result', `Saving to your Skills Profile: “${evidence}”`); push('wait', 'Saving your answer…');
   try {
    const current = await cvApi.declarations(token, signal);
    const match = current.declarations.find(item => item.name.trim().toLowerCase() === skill.name.trim().toLowerCase());
    await cvApi.addDeclaration({ expected_version: current.version, mutation_id: crypto.randomUUID(), name: match?.name ?? skill.name, description: evidence.slice(0, 2000), mode: match ? 'attach' : 'new', ...(match ? { attach_to_id: match.id } : {}) }, token, signal);
    if (signal.aborted) return;
-   transcript.current = [...transcript.current, { role: 'elo' as const, text: `Saved to your Skills Profile: ${evidence}`.slice(0, 2000) }].slice(-20);
   } catch (cause) {
-   if (!signal.aborted) { push('alert', errorText(cause, 'Your answer could not be saved. Try again.')); setDraft(what); setBusy(false); }
+   if (!signal.aborted) {
+    push('alert', errorText(cause, 'Your answer could not be saved. Try again.'));
+    setReplies(all => [...all, { label: 'Try saving again', solid: true, retry: true, run: () => void saveEvidence(evidence) }]); setBusy(false);
+   }
    return;
   }
   push('wait', `Checking ${skill.name} again…`);
   try {
    const result = await reevaluateSkill(token, { name: skill.name, canonical_skill_id: skill.canonicalId ?? null }, signal);
    if (signal.aborted) return;
-   const after = result.skill.competence_score;
-   const change = before === after ? `${skill.name}: stays at ${after ?? 'Not rated'}` : `${skill.name}: ${before ?? 'Not rated'} → ${after ?? 'Not rated'}`;
-   push('result', change); push('elo', result.skill.explanation);
-   transcript.current = [...transcript.current, { role: 'elo' as const, text: `I re-judged ${skill.name} with what you told me. ${change}. ${result.skill.explanation}`.slice(0, 2000) }].slice(-20);
+   push('result', levelChange(skill.name, before, result.skill.competence_score)); push('elo', result.skill.explanation);
   } catch (cause) {
    if (!signal.aborted) push('alert', cause && typeof cause === 'object' && 'status' in cause && cause.status === 409
     ? 'Your answer is saved. Your level updates the next time your skills are evaluated.'
@@ -180,7 +206,8 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
      <li>How confident you feel</li>
     </ul>
    </HelperOpening>
-   {messages.map(message => message.kind === 'result'
+   {past === null && <div className="ws-m result" role="status"><span className="ws-spin" aria-hidden="true"/>Loading your conversation…</div>}
+   {[...(past ?? []), ...messages].map(message => message.kind === 'result'
     ? <div key={message.id} className="ws-m result">{message.body}</div>
     : message.kind === 'wait' ? <div key={message.id} className="ws-m result" role="status"><span className="ws-spin" aria-hidden="true"/>{message.body}</div>
     : <div key={message.id} className={`ws-m ${message.kind}`} role={message.kind === 'alert' ? 'alert' : undefined}>{message.body}</div>)}

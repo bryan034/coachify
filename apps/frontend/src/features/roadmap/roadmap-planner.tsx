@@ -22,7 +22,7 @@ import '@/styles/evaluate.css';
 import { errorText, friendlyOperationError } from '@/lib/errors';
 import { loadSkills, useSection } from '@/lib/api/workspace-summary';
 import { PageSkeleton } from '@/components/ui/workspace-ui';
-import { ProcessingCard, SkeletonRoad, type ProcessingStep } from '@/components/ui/processing-card';
+import { ProcessingCard, type ProcessingStep } from '@/components/ui/processing-card';
 
 const explanation = (error: unknown) => errorText(error, 'Your saved work could not be confirmed. Retry to recover it.');
 
@@ -279,7 +279,7 @@ function GenerationProgress({ active, stage, context }: { active: boolean; stage
   {context.goal && <div className="processing-using-row"><h3>Career goal</h3><span className="processing-chip goal">{context.goal.role}</span>{context.goal.company && <span className="processing-chip">{context.goal.company}</span>}</div>}
   {context.cv?.name && <div className="processing-using-row"><h3>CV</h3><span className="processing-chip">{context.cv.name}</span></div>}
   <p className="small">Your plan is locked while elo generates. Nothing is lost if you leave this page.</p></section>}<ProcessingCard dark title="Generating your roadmap" progressLabel={step ? 'Building your plan' : 'Starting: saving your settings'} percent={percent} steps={steps}
-  footer={<p>You can leave this page. Your roadmap will be here when it’s done.</p>}/><SkeletonRoad /></div>;
+  footer={<p>You can leave this page. Your roadmap will be here when it’s done.</p>}/></div>;
 }
 
 const requirements = [

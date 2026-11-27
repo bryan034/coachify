@@ -685,8 +685,8 @@ body.cv-rail-dragging{ cursor: col-resize; user-select: none; }
 @media (max-width: 820px) { .page.on.career-agent-page{ height: calc(100dvh - 76px); } }
 @media (max-width: 640px) { .app .career-agent-page .agent-compose-row{ padding: 4px 10px; } }
 
-.app .agent-compose-row > button, .app .adviser-composer .adviser-compose-foot > button.btn, .app .cv-chat-composer-footer > button[type="submit"], .app .cv-workspace .cv-chat .cv-chat-composer-footer > button.btn[type="submit"]{ font-size: 0; line-height: 0; display: inline-flex; align-items: center; justify-content: center; gap: 0; padding: 0; }
-.app .agent-compose-row > button::after, .app .adviser-composer .adviser-compose-foot > button.btn::after, .app .cv-chat-composer-footer > button[type="submit"] > span, .app .cv-workspace .cv-chat .cv-chat-composer-footer > button.btn[type="submit"] > span{
+.app .agent-compose-row > button, .app .adviser-composer .adviser-compose-foot > button.btn, .app .cv-chat-composer-footer > button[type="submit"], .app .cv-workspace .cv-chat .cv-chat-composer-footer > button.btn[type="submit"], .app .helper-compose-foot > button{ font-size: 0; line-height: 0; display: inline-flex; align-items: center; justify-content: center; gap: 0; padding: 0; }
+.app .agent-compose-row > button::after, .app .adviser-composer .adviser-compose-foot > button.btn::after, .app .cv-chat-composer-footer > button[type="submit"] > span, .app .cv-workspace .cv-chat .cv-chat-composer-footer > button.btn[type="submit"] > span, .app .helper-compose-foot > button::after{
   content: ""; display: block; flex: none; margin: 0; width: 20px; height: 20px; font-size: 0; background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 19V5M5 12l7-7 7 7'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 19V5M5 12l7-7 7 7'/%3E%3C/svg%3E") center / contain no-repeat;
@@ -747,7 +747,7 @@ body.cv-rail-dragging{ cursor: col-resize; user-select: none; }
 :root[data-theme="dark"] .token.off{ background: var(--cloud); }
 :root[data-theme="dark"] .cv-card.is-active{ background: var(--mint-mist); }
 :root[data-theme="dark"] .cv-state-pill.is-failed{ background: var(--build-bg); }
-:root[data-theme="dark"] .cv-library-meter, :root[data-theme="dark"] .skeleton-rail::before{ background: var(--haze); }
+:root[data-theme="dark"] .cv-library-meter{ background: var(--haze); }
 :root[data-theme="dark"] .ai-made-legend .ai-made{ background: var(--gap-bg); }
 :root[data-theme="dark"] .side-bottom .me .avatar{ background: var(--cloud); }
 :root[data-theme="dark"] .app .evaluate-banner, :root[data-theme="dark"] .app .evaluate-banner-mark.is-busy{ border-color: var(--line); }

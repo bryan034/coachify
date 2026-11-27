@@ -33,7 +33,7 @@ test('saved CV upload, explicit selection, correction, declaration and reload',a
   return route.fulfill({json:cv});
  });
  await page.goto('/cv');await openCvReviewTools(page);await expect(page.getByLabel('CV cv-one',{exact:true}).getByText('Active CV',{exact:true})).toBeVisible();
- await page.getByLabel('CV document',{exact:true}).setInputFiles({name:'resume.pdf',mimeType:'application/pdf',buffer:Buffer.from('synthetic fixture; API mocked')});await page.getByRole('button',{name:'Upload CV',exact:true}).click();
+ await page.getByLabel('CV document',{exact:true}).setInputFiles({name:'resume.pdf',mimeType:'application/pdf',buffer:Buffer.from('synthetic fixture; API mocked')});await page.getByRole('button',{name:'Analyse CV',exact:true}).click();
  await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();await page.getByRole('button',{name:'Save and review later'}).click();
  await page.getByLabel('CV cv-two',{exact:true}).getByRole('button',{name:'View extracted results',exact:true}).click();await expect(page.getByRole('heading',{name:'Extracted results',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Skills Profile',exact:true}).click();await expect(page.getByLabel('CV cv-two',{exact:true})).toBeVisible();await expect(page.getByLabel('CV cv-one',{exact:true}).getByText('Active CV',{exact:true})).toBeVisible();
@@ -127,7 +127,7 @@ test('upload opens the review and save for later restores the same question afte
  expect(opens).toBe(0);
  await page.screenshot({path:testInfo.outputPath('skills-summary-desktop.png'),fullPage:true});
  await page.getByLabel('CV document',{exact:true}).setInputFiles({name:'synthetic-profile.pdf',mimeType:'application/pdf',buffer:Buffer.from('Synthetic CV; extraction APIs mocked.')});
- await page.getByRole('button',{name:'Upload CV',exact:true}).click();
+ await page.getByRole('button',{name:'Analyse CV',exact:true}).click();
  await expect(page).toHaveURL(/review=uploaded-profile-cv/);
  await expect(page.getByRole('progressbar',{name:'Reading your CV'})).toBeVisible();
  expect(opens).toBe(0);expect(reviewStarts).toBe(0);

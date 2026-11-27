@@ -30,7 +30,7 @@ export async function assessmentApi<T>(path: string, token: string, body?: unkno
  const value = await response.json();
  if (!response.ok) {
   if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired', {detail: token}));
-  throw Object.assign(new Error('Your comparison could not be completed. Reload and try again.'), {code: value.code, status: response.status});
+  throw Object.assign(new Error(typeof value?.detail === 'string' ? value.detail : 'Your comparison could not be completed. Reload and try again.'), {code: value?.code, status: response.status});
  }
  return value as T;
 }
@@ -53,11 +53,15 @@ export const rateSkill = (token: string, body: { expected_version: number; name:
 export type ReevaluatedSkill = { version: number; skill: { name: string; canonical_skill_id: string | null; competence_score: number | null; required_score: number | null; relevance: string; explanation: string } };
 export const reevaluateSkill = (token: string, body: { name: string; canonical_skill_id: string | null }, signal?: AbortSignal) =>
  assessmentApi<ReevaluatedSkill>('/skills/reevaluate', token, body, signal);
-/** One turn of a Skills Helper conversation about a saved skill judgement. */
-export type SkillChatTurn = { role: 'person' | 'elo'; text: string };
-/** elo's reply; `evidence` is new first-person experience to save and re-evaluate, or null. */
+/** A saved turn of one skill's Skills Helper conversation; `level` marks elo re-judging the skill. */
+export type SkillChatEntry = { role: 'person' | 'elo'; text: string; evidence: string | null; level: { before: number | null; after: number | null } | null; created_at: string };
+type ChatSkill = { name: string; canonical_skill_id: string | null };
+/** The saved conversation about one skill, oldest turn first. */
+export const skillChatHistory = (token: string, skill: ChatSkill, signal?: AbortSignal) =>
+ assessmentApi<{ turns: SkillChatEntry[] }>(`/skills/chat?${new URLSearchParams(skill.canonical_skill_id ? { name: skill.name, canonical_skill_id: skill.canonical_skill_id } : { name: skill.name })}`, token, undefined, signal);
+/** elo's reply; `evidence` is new first-person experience to save and re-evaluate, or null. The service saves both turns. */
 export type SkillChatReply = { reply: string; evidence: string | null };
-export const skillChat = (token: string, body: { name: string; canonical_skill_id: string | null; messages: SkillChatTurn[] }, signal?: AbortSignal) =>
+export const skillChat = (token: string, body: ChatSkill & { message: string }, signal?: AbortSignal) =>
  assessmentApi<SkillChatReply>('/skills/chat', token, body, signal);
 export const ratingKey = (skill: { canonicalId?: string | null; name: string }) => skill.canonicalId || skill.name.trim().toLowerCase();
 

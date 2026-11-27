@@ -35,7 +35,7 @@ test('creates an active roadmap without review, keeps progress and settings, and
   }
   return route.fulfill({json:state});
  });
- await page.goto('/roadmap');await expect(page.getByLabel('Break minutes per hour of study')).toHaveValue('10');await expect(page.getByText('Backup blocks',{exact:true})).toHaveCount(0);
+ await page.goto('/roadmap');await expect(page.getByLabel('Break minutes per hour of study')).toHaveValue('10');await expect(page.getByRole('link',{name:'More roadmap settings'})).toHaveCount(0);await expect(page.getByText('Backup blocks',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Create roadmap'}).click();await expect(page.getByRole('navigation',{name:'Roadmap views'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Review your roadmap'})).toHaveCount(0);
  await expect(page.getByText('Handle error cases',{exact:true})).toHaveCount(0);
@@ -43,8 +43,8 @@ test('creates an active roadmap without review, keeps progress and settings, and
  await page.setViewportSize({width:390,height:844});expect(await noOverflow(page)).toBe(true);
  for(const view of ['Today','Week','Month','Milestones','Progress']){await page.getByRole('navigation',{name:'Roadmap views'}).getByRole('button',{name:view,exact:true}).click();expect(await noOverflow(page)).toBe(true);await expect(page.getByText('Handle error cases',{exact:true})).toHaveCount(0);}
  await page.getByRole('navigation',{name:'Roadmap views'}).getByRole('button',{name:'Today',exact:true}).click();await page.getByRole('button',{name:'Mark done: Write one tested Python endpoint.'}).click();await page.reload();await expect(page.getByRole('button',{name:'Mark not done: Write one tested Python endpoint.'})).toBeVisible();
- await page.goto('/settings/roadmap');await page.getByLabel('Break minutes per hour',{exact:true}).fill('15');await page.getByRole('button',{name:'Save settings'}).click();await expect(page.getByText('Settings saved')).toBeVisible();await page.reload();await expect(page.getByLabel('Break minutes per hour',{exact:true})).toHaveValue('15');expect(await noOverflow(page)).toBe(true);
- await page.goto('/settings');await page.getByLabel('Colour mode').selectOption('dark');await expect(page.locator('html')).toHaveAttribute('data-theme','dark');await page.screenshot({path:test.info().outputPath('settings-dark-mobile.png'),fullPage:true});await page.reload();await expect(page.getByLabel('Colour mode')).toHaveValue('dark');
+ await page.goto('/settings/roadmap');await expect(page.getByRole('heading',{name:'Roadmap settings'})).toHaveCount(0);await expect(page.getByLabel('Break minutes per hour',{exact:true})).toHaveCount(0);
+ await page.goto('/roadmap');await expect(page.getByRole('link',{name:'Settings',exact:true})).toHaveCount(0);await page.goto('/settings');await expect(page.getByRole('heading',{name:'Settings',exact:true})).toHaveCount(0);await expect(page.getByLabel('Colour mode')).toHaveCount(0);
  expect(requests.some(p=>p.includes('/months')||p==='/planner/generate'||p==='/planner/roll-forward')).toBe(false);
 });
 

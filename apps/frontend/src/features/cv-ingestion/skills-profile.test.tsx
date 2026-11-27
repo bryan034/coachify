@@ -53,7 +53,7 @@ it('accepts a dropped CV and starts guided review automatically',async()=>{
  render(<ResumePreview/>);
  await screen.findByLabelText('CV document');
  fireEvent.drop(screen.getByText('Drag a file here, or choose one from your device.').parentElement!,{dataTransfer:{files:[new File(['synthetic CV'],'profile.pdf')]}});
- fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));
+ fireEvent.click(screen.getByRole('button',{name:'Analyse CV'}));
  await screen.findByRole('heading',{name:'Review your CV'});
  await waitFor(()=>expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:cv.id,purpose:'skills_profile'}),'synthetic-token',expect.any(AbortSignal)));
  await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat',expect.objectContaining({command:'review'}),'synthetic-token',expect.any(AbortSignal)));

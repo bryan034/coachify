@@ -121,17 +121,27 @@ step have no `skill_profile`. These are planning estimates, not tested mastery.
 
 ### Skills Helper chat
 
-`POST /skills/chat` (`name`, optional `canonical_skill_id`, `messages`: 1–20 turns of
-`person` or `elo`, the last from the person) answers one message about one skill. The
-model reads only the saved evaluation: the role, that skill's judgement (null when it
+`POST /skills/chat` (`name`, optional `canonical_skill_id`, `message`) answers one
+message about one skill. The model reads the newest saved turns of that skill's
+conversation (at most 19, plus the new message) and the saved evaluation: the role, that skill's judgement (null when it
 was never judged, such as a goal skill with no evidence), its sources without refs and
 marked `cited` when the judgement relied on them, and the goal requirements the
 judgement links to (by name when there is no judgement). It explains the level against
 the understanding scale and never sets a score. `evidence` is a faithful first-person
-restatement of new experience the person described, or null. The route never writes
-and never reads upstream services; the client saves `evidence` as a declaration and
-calls `POST /skills/reevaluate`. It needs a configured model (`503 model_unavailable`)
-and a finished evaluation (`409 evaluation_required`).
+restatement of new experience the person described, or null. Saved turns that offered
+evidence or recorded a level check are spelled out to the model, so it does not offer to
+save the same experience twice. The route never changes the evaluation and never reads
+upstream services; the client saves `evidence` as a declaration and calls
+`POST /skills/reevaluate`. It needs a configured model (`503 model_unavailable`) and a
+finished evaluation (`409 evaluation_required`).
+
+Conversations are saved per account and skill (registry identity, else the case-folded
+name) in `skill_chats`, keeping the newest 40 turns. A reply saves the person's message
+and elo's reply together; a failed model call saves nothing. A successful
+`POST /skills/reevaluate` adds an elo turn with the explanation and the level `before`
+and `after`. `GET /skills/chat` (`name`, optional `canonical_skill_id`) returns the saved
+turns oldest first, each with `role`, `text`, `evidence`, `level` and `created_at`.
+Development reset deletes them with the rest of the account's data.
 
 ## Explicit evaluation and goal-skill competence
 

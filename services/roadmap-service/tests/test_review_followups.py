@@ -81,7 +81,6 @@ def test_partial_recovery_never_rewrites_the_deadline_claim():
     value=bare_outline(mixed_outline())
     value['weeks']=[{'week_start':'2030-01-07','objective':'Build endpoints','expected_outcome':'Test passes','estimated_minutes':60,'milestone_key':'m1','gap_ids':['python']}]
     value['beyond_deadline']=[{'title':'Infrastructure later','gap_ids':['invalid'],'reason':'After the target.','estimated_minutes':60}]
-    value['deadline_outcome']={**value['deadline_outcome'],'fits_in_runway':False}
     assert recover_outline(OutlineDraft.model_validate(value),assessment())==(None,None)
     value['beyond_deadline'].append({'title':'Python depth later','gap_ids':['python'],'reason':'After the target.','estimated_minutes':60})
     recovered,review=recover_outline(OutlineDraft.model_validate(value),assessment())
