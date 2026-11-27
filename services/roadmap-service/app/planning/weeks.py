@@ -8,6 +8,7 @@ canonical editable tasks, so progress, notes, edits and history are never rewrit
 import copy
 import json
 import logging
+import re
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from uuid import NAMESPACE_URL, uuid5
@@ -28,7 +29,20 @@ from app.schemas.weeks import GenerateWeek, ReviewCarryover, WeekDraft
 
 WEEK_INSTRUCTIONS='''Plan one week of a personal study roadmap. Write only this week's tasks; the service schedules them, so never give dates or times.
 
-Tasks. Advance this week's objective and the supplied milestones. Each task has a short actionable title of at most 11 whitespace-separated words (under 12 words) that starts with a verb, a brief instructions summary, a detailed description, one observable completion_outcome the user can check for themselves, and duration_minutes for the whole task. The title must effectively summarise the action, not contain the full instructions. description must explain what the task is about and give numbered steps in order, including how to perform them, useful approaches or tools appropriate to the supplied context, and how to check the final result against completion_outcome. Make the guidance specific and usable without inventing resources or URLs. A task longer than session_minutes is split into sessions with breaks by the service, so size tasks by the work, not by the session. New tasks must total no more than new_task_minutes and should come close to it while real work remains in remaining_scope; never invent work only to fill time. Do not repeat routines, saved work or removed work. Use a diagnostic task of at most 30 minutes for each gap in diagnostics_needed.
+Filling the week. New tasks must total new_task_minutes, within a few minutes, so the user's weekly hours are used in full. The service spreads sessions across every day that has study time, so never hold time back as rest; the user chooses rest through their study times and rest-day setting. When remaining_scope runs short, add work that deepens the same goal, such as more practice problems at the next difficulty, the next step or an extension of a project, a mock interview, or targeted review of weak areas from progress. Never add busywork unrelated to the goal. Do not repeat routines, saved work or removed work. Use a diagnostic task of at most 30 minutes for each gap in diagnostics_needed.
+
+Tasks. Advance this week's objective and the supplied milestones. Each task has:
+- title: short and actionable, at most 11 whitespace-separated words, starting with a verb. It summarises the action and does not hold the instructions.
+- label: what the task is for, such as 'Portfolio project: expense tracker API', 'LeetCode: arrays and hashing' or 'System design reading'. Every task that is a step of one project, problem set or course uses exactly the same label.
+- instructions: a one or two sentence summary.
+- description: what the task is about, then numbered steps that say exactly what to do: the files, commands, functions, concepts, problem numbers, chapters or sections involved, how to carry out each step and how to check it. End with how to check the result against completion_outcome.
+- materials: the specific resources to use, each named precisely. For coding practice, give every problem by platform, number and title, such as 'LeetCode 1. Two Sum' or 'LeetCode 49. Group Anagrams'. For reading, give the book or official documentation with its chapter or section. For projects, give the libraries, tools, official tutorials or datasets. Name only well-known resources you are sure exist, and never give URLs.
+- completion_outcome: one observable result the user can check for themselves.
+- duration_minutes: the whole task. A task longer than session_minutes is split by the service into sessions on one or more days, so size tasks by the work, not by the session.
+
+Projects. When the user names a project in settings.learning_notes, settings.learning_topics, the goal or the objective, guide them through it: break it into ordered tasks, one per concrete step (for example scope the features, set up the repository, build the data model, implement each feature, add tests, deploy and write the README), list them in the order they should be done, and give them all the project's label. Later weeks continue from the last completed step in progress.
+
+Be specific. Never write vague tasks such as 'practise LeetCode problems', 'revise SQL' or 'work on your project'. Name the exact problems, sections, features or exercises, so the user knows what to open and what to do without searching.
 
 Adapting. progress and last_week show what the user actually did: completed, in-progress and unfinished tasks, their own difficulty and confidence ratings, and their feedback about workload. Use them to set this week's difficulty, pace and focus. Finishing a task is self-reported progress, not proof of skill.
 
@@ -149,7 +163,7 @@ def revision_basis(active,block,now,config):
 
 def task_record(item,identifier,outline,week,*,routine_id=None):
     gap=next((g for g in outline['gaps'] if g['id']==item.get('gap_id')),None)
-    result={'id':identifier,'title':item['title'],'instructions':item['instructions'],'description':item['description'],
+    result={'id':identifier,'title':item['title'],'label':item.get('label'),'materials':list(item.get('materials') or []),'instructions':item['instructions'],'description':item['description'],
         'completion_outcome':item['completion_outcome'],'estimated_minutes':item['duration_minutes'],
         'requirement_refs':[gap['requirement_ref']] if gap and gap.get('requirement_ref') else [],'requirement_source_hash':outline['assessment_hash'],
         'requirement_source_id':outline['assessment_id'],'prerequisites':[],
@@ -180,7 +194,7 @@ def routine_occurrences(outline,config,start,end,now,existing):
                 index=sum(1 for n in range((day-first).days+1) if (first+timedelta(days=n)).weekday() in weekdays)-1
                 title=' '.join(str(v).strip() for v in (rule['activity'],rule.get('difficulty'),topics[index%len(topics)] if topics else None) if v and str(v).strip())
                 if len(title)>160 or len(title.split())>11:raise Problem('Shorten the routine activity, topic or difficulty to fit a task title.',422,'routine_title')
-                item={'key':ident,'milestone_key':rule['milestone_key'],'title':title,'instructions':f"{rule['activity']}. Review your work and record one lesson.",
+                item={'key':ident,'milestone_key':rule['milestone_key'],'title':title,'label':rule['activity'] if len(rule['activity'])<=160 else title,'instructions':f"{rule['activity']}. Review your work and record one lesson.",
                     'description':f"1. Prepare your practice material for {title}. Choose an exercise suited to this topic and difficulty.\n2. Work through the exercise, checking your approach as you go and noting questions or mistakes.\n3. Review the result, correct mistakes, and save your work with a brief reflection on one lesson.",
                     'completion_outcome':'Save your work and a brief reflection.','duration_minutes':rule['duration_minutes'],'schedule':schedule}
                 output.append(task_record(item,ident,outline,placer.capacity.week(day),routine_id=rule['id']))
@@ -201,22 +215,23 @@ def carry_limit(config):
     return config.max_carry_minutes if config.max_carry_minutes is not None else (config.weekly_minutes or 0)//2
 
 def arrange(config,now,existing,start,end,routines,carryover,tasks):
-    """Place carried work, then new tasks. What cannot fit is deferred or listed, never dropped or squeezed in."""
+    """Place carried work, then new tasks, spread across the week's study days. What cannot fit is deferred or listed, never dropped or squeezed in."""
     placer=Placer(config,now,reservations(existing)+[slot for task in routines for slot in task['schedule']],start,end)
     limit=carry_limit(config);carried=0
+    placer.spread(sum(entry['minutes'] if entry['action']=='split' else entry['estimated_minutes'] for entry in carryover if entry['action'] in ('carry','split'))+sum(task['estimated_minutes'] for task in tasks))
     for entry in carryover:
         entry['schedule']=[]
         if entry['action'] not in ('carry','split'):continue
         minutes=entry['minutes'] if entry['action']=='split' else entry['estimated_minutes']
         if carried+minutes>limit:
             entry.update(action='defer',adjusted=True,reason=f'Kept in your backlog: carrying it would put more than {limit} minutes of unfinished work into one week.');continue
-        schedule=placer.place(minutes)
+        schedule=placer.place_spread(minutes)
         if not schedule:
             entry.update(action='defer',adjusted=True,reason='Kept in your backlog: no free study time this week can hold it.');continue
         entry['schedule']=schedule;carried+=minutes
     placed=[];unplaced=[]
     for task in tasks:
-        schedule=placer.place(task['estimated_minutes'])
+        schedule=placer.place_spread(task['estimated_minutes'])
         if schedule:placed.append({**task,'schedule':schedule})
         else:unplaced.append({**task,'schedule':[]})
     return placed,unplaced
@@ -231,7 +246,7 @@ def check_week(draft,outline,config,existing,routines,pending,target,scope,*,fee
     saved=ensure_tasks(copy.deepcopy(existing)) if existing else []
     normal=lambda text:' '.join(text.casefold().split())
     blocked={(t.get('milestone_key'),normal(t.get('title',''))) for t in [*saved,*routines]}
-    new_minutes=0;effort={}
+    new_minutes=0
     for item in draft.tasks:
         label=f"Task '{item.key}'"
         if item.key in keys:errors.append(f'{label} repeats a key.')
@@ -246,9 +261,8 @@ def check_week(draft,outline,config,existing,routines,pending,target,scope,*,fee
             errors.append(f'{label} links a gap outside its milestone.')
         if item.kind=='diagnostic' and not item.gap_id:errors.append(f'{label} needs a specific gap for its diagnostic.')
         if item.kind=='diagnostic' and item.duration_minutes>30:errors.append(f'{label} is a diagnostic and must take at most 30 minutes.')
-        new_minutes+=item.duration_minutes;effort[item.milestone_key]=effort.get(item.milestone_key,0)+item.duration_minutes
-    for key,minutes in effort.items():
-        if minutes>scope.get(key,0):errors.append(f"Tasks for milestone '{key}' exceed its remaining estimated effort of {scope.get(key,0)} minutes.")
+        if unnumbered_practice(item):errors.append(f"{label} mentions LeetCode without naming problems. List each problem in materials by number and title, such as 'LeetCode 1. Two Sum'.")
+        new_minutes+=item.duration_minutes
     known={task['id']:task for task in pending};seen=set()
     for entry in draft.carryover:
         task=known.get(entry.task_id)
@@ -264,11 +278,11 @@ def check_week(draft,outline,config,existing,routines,pending,target,scope,*,fee
         if entry['action'] in ('carry','split') and minutes and carried+minutes<=carry_limit(config):carried+=minutes
     room=max(0,target['target_minutes']-sum(t['estimated_minutes'] for t in routines)-carried)
     if new_minutes>room:errors.append(f'New tasks total {new_minutes} minutes but this week has room for {room} after routines and carried work.')
-    wanted=min(room,sum(scope.values()))
+    wanted=room if scope else 0
     if feedback and feedback.get('workload')=='too_much':wanted=wanted*7//10
     slack=max(shortest_session(config),target['target_minutes']//10)
     if not errors and new_minutes<wanted-slack:
-        errors.append(f'This week is {wanted-new_minutes} minutes under the agreed hours while work remains. Add tasks that advance the objective, up to {room} minutes of new work in total.')
+        errors.append(f'This week is {wanted-new_minutes} minutes under the user\'s weekly hours. Add specific tasks that advance the goal until new work totals close to {room} minutes.')
     for gap_id in diagnostics:
         if not any(t.kind=='diagnostic' and t.gap_id==gap_id for t in draft.tasks):
             errors.append(f"Gap '{gap_id}' needs a diagnostic of at most 30 minutes in the first planned week.")
@@ -297,6 +311,11 @@ def check_week(draft,outline,config,existing,routines,pending,target,scope,*,fee
             if not set(change.gap_ids)<=set(milestone.get('gap_ids',[])):errors.append('A revised objective names skills outside its milestone.')
         if change.estimated_minutes>available.get(change.week_start.isoformat(),0):errors.append('A revised objective exceeds that week’s available study capacity.')
     return errors[:60]
+
+def unnumbered_practice(item):
+    """A task that mentions LeetCode but names no problem number."""
+    text=' '.join([item.title,item.label,item.instructions,item.description,*item.materials])
+    return bool(re.search(r'leet\s*code',text,re.I)) and not re.search(r'leet\s*code\s*(?:#|no\.?\s*|problem\s*)?\d{1,4}\b',text,re.I)
 
 def snapshot(task):
     return {key:copy.deepcopy(task.get(key)) for key in ('id','status','removed','schedule','anytime_date','estimated_minutes','title','instructions','description','completion_outcome','milestone_key','prerequisites','requirement_refs','overrides','history','notes','self_rating','definition_review_required')}
@@ -369,7 +388,7 @@ async def prepare_week(app,row,account,read_context,*,initial=False,into=None):
     diagnostics=[g['id'] for g in outline['gaps'] if g.get('status')=='unknown' and g.get('plan_impact')=='material' and g.get('resolution')=='diagnostic'] if first else []
     await set_stage(app,row,account['id'],'scheduling' if initial else 'writing')
     tasks=[t for t in (ensure_tasks(copy.deepcopy(existing)) if existing else []) if not t.get('removed')]
-    brief=lambda t:{'task_id':t['id'],'title':t['title'],'milestone_key':t.get('milestone_key'),'status':t['status'],'estimated_minutes':t['estimated_minutes'],
+    brief=lambda t:{'task_id':t['id'],'title':t['title'],'label':t.get('label'),'milestone_key':t.get('milestone_key'),'status':t['status'],'estimated_minutes':t['estimated_minutes'],
         'difficulty':(t.get('self_rating') or {}).get('difficulty'),'confidence':(t.get('self_rating') or {}).get('confidence')}
     objectives=sorted(outline.get('weeks',[]),key=lambda w:w['week_start'])
     routine_minutes=sum(t['estimated_minutes'] for t in routines)
@@ -414,7 +433,7 @@ async def prepare_week(app,row,account,read_context,*,initial=False,into=None):
         'revision':(block.get('revision',1)+1 if block else 1),'replaces_block_id':block['id'] if block else None,'replaced_task_ids':replaced,
         'summary':draft.summary,'feedback':feedback,'target':target,'routine_task_ids':[t['id'] for t in routines],
         'tasks':routines+placed,'unplaced':[],'carryover':carryover,'objective_changes':changes,
-        'created_at':stamp(),'generation':{'attempts':attempt,'prompt_version':'roadmap-week-v1'}}
+        'created_at':stamp(),'generation':{'attempts':attempt,'prompt_version':'roadmap-week-v2'}}
     bounded_size(candidate,MAX_WEEK_BYTES,'This week is too large to review safely. Reduce the number or length of tasks and retry.')
     state=destination();state['config']=config.model_dump(mode='json');state['week_candidate']=candidate;state['week_notice']=None
     return True

@@ -7,6 +7,7 @@ from .notes import NotesDocument
 Clock=Annotated[str,StringConstraints(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')]
 Key=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
 Title=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=160)]
+Material=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=200)]
 def validate_task_title(value: str) -> str:
     """Enforce the word limit on new or changed titles, not historical reads."""
     if len(value.split()) > 11:
@@ -185,6 +186,8 @@ class EditableTask(Contract):
     backlog_moved_at:str|None=None
     week_start:str|None=Field(default=None,description='The planned week this generated task was written for.')
     deferred_week:str|None=Field(default=None,description='Set when a week review left this unfinished task in the backlog; it is offered again next week.')
+    label:str|None=Field(default=None,description='What the task is for: the project, problem set or topic it belongs to. Steps of one project share a label.')
+    materials:list[str]=Field(default_factory=list,description='Named resources to use, such as a LeetCode problem number and title or a documentation section.')
 
 class ReadinessReason(Contract):
     code:str

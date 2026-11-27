@@ -455,6 +455,8 @@ class SessionView(Contract):
     title:str
     instructions:str
     description:Text|None=Field(default=None,description='Detailed task steps and completion guidance; null for older tasks.')
+    label:str|None=Field(default=None,description='What the task is for, such as a project or problem set; null for older or user tasks.')
+    materials:list[str]=Field(default_factory=list,description='Named resources for the task.')
     completion_criterion:str
     date:str
     start_time:str|None=Field(description='Null when the task can be done at any time that day.')

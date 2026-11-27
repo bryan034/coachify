@@ -4,6 +4,7 @@ import { Backlog, ReschedulePanel } from './backlog';
 import { BusyLabels, DayTimeline, TaskList, Tick, studyBlockLine, type TaskEditor, type ViewContext } from './day-list';
 import { addDays, addMonths, dayOfMonth, fullDate, monthKey, monthName, monthTitle, monthWeeks, shortDate, weekColumns, weekDates, weekStart, weekdayName } from './roadmap-calendar';
 import { currentMilestone, inDays, isDone, listOrder, milestoneProgress, minutesOf, nextCheckpoint, onDay, orderedMilestones, shortLength, studyBlocks, timeRange, toMinutes, weekSummary } from './roadmap-day';
+import { TaskGuide } from './task-form';
 import type { Session } from './types';
 
 const Chevron = ({ back = false }: { back?: boolean }) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d={back ? 'm15 6-6 6 6 6' : 'm9 6 6 6-6 6'} /></svg>;
@@ -220,9 +221,10 @@ export function MonthView({ context, day }: { context: ViewContext; day: string 
    {session && status && <section className="rv-card" style={{ border: '2px solid var(--ink)' }} aria-labelledby="td-h">
     <div className="rv-row-between"><span className={`rv-tag ${status[1]}`} style={{ fontWeight: 600 }}>{status[0]}</span><button className="rv-ico" type="button" aria-label="Close task details" onClick={() => pick(null)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button></div>
     <h2 id="td-h" style={{ marginTop: 10, fontSize: 19, lineHeight: 1.35 }}>{session.title}</h2>
-    <dl className="rv-dl-list"><dt>When</dt><dd>{dayTitle(session.date)}, {session.start_time ? timeRange(session) : 'any time'}</dd><dt>Length</dt><dd>{shortLength(session.duration_minutes)}</dd><dt>Skills</dt><dd>{session.skills.length ? session.skills.map(skill => skill.name).join(', ') : 'No specific skill'}</dd><dt>Milestone</dt><dd>{milestoneOf(session)}</dd></dl>
+    <dl className="rv-dl-list"><dt>When</dt><dd>{dayTitle(session.date)}, {session.start_time ? timeRange(session) : 'any time'}</dd><dt>Length</dt><dd>{shortLength(session.duration_minutes)}</dd>{session.label && <><dt>For</dt><dd>{session.label}</dd></>}<dt>Skills</dt><dd>{session.skills.length ? session.skills.map(skill => skill.name).join(', ') : 'No specific skill'}</dd><dt>Milestone</dt><dd>{milestoneOf(session)}</dd></dl>
     <h3 style={{ margin: '18px 0 4px', fontSize: 14, fontWeight: 600 }}>Done when</h3>
     <p className="rv-note" style={{ fontSize: 14, color: 'var(--ink)' }}>{session.completion_criterion}</p>
+    <div className="rv-guide"><TaskGuide description={session.description} materials={session.materials} /></div>
     {session.missed && <p className="rv-rs-rest" style={{ marginTop: 16, fontSize: 14 }}>You didn’t tick this off. It’s waiting in your backlog.</p>}
     <div className="rv-chips" style={{ marginTop: 18 }}>
      {!isDone(session) && <button className="rv-btn sm pri" type="button" disabled={frozen} onClick={() => void actions.setDone(session, true)}>Mark done</button>}

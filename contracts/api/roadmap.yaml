@@ -5983,6 +5983,26 @@
             ],
             "title": "Deferred Week",
             "description": "Set when a week review left this unfinished task in the backlog; it is offered again next week."
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "What the task is for: the project, problem set or topic it belongs to. Steps of one project share a label."
+          },
+          "materials": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Materials",
+            "description": "Named resources to use, such as a LeetCode problem number and title or a documentation section."
           }
         },
         "additionalProperties": false,
@@ -10537,6 +10557,26 @@
             "title": "Description",
             "description": "Detailed task steps and completion guidance; null for older tasks."
           },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "What the task is for, such as a project or problem set; null for older or user tasks."
+          },
+          "materials": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Materials",
+            "description": "Named resources for the task."
+          },
           "completion_criterion": {
             "type": "string",
             "title": "Completion Criterion"
@@ -12084,6 +12124,26 @@
             ],
             "title": "Deferred Week",
             "description": "Set when a week review left this unfinished task in the backlog; it is offered again next week."
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "What the task is for: the project, problem set or topic it belongs to. Steps of one project share a label."
+          },
+          "materials": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Materials",
+            "description": "Named resources to use, such as a LeetCode problem number and title or a documentation section."
           },
           "readiness": {
             "$ref": "#/components/schemas/TaskReadiness"

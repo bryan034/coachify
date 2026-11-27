@@ -258,12 +258,13 @@ class Placer:
     splits work into sessions no longer than the configured session length, leaves the
     configured break after each one, and keeps every session inside a free window from
     `Capacity`. Study blocks are filled first, in date order; extra time is used only when
-    they are full, and is spread across the least busy days.
+    they are full, and is spread across the least busy days. After `spread`, each day takes
+    about an even share of the week's work, so the whole week is used.
     """
     def __init__(self,config,now,reserved,start,end):
         self.config=config;self.start=start;self.end=end
         self.capacity=Capacity(config,now,reserved)
-        self.busy={};self.day_used={};self.week_used={}
+        self.busy={};self.day_used={};self.week_used={};self.share=None
         for slot in reserved:
             day=date.fromisoformat(str(slot['date']))
             if slot.get('start_time') is not None:
@@ -286,6 +287,7 @@ class Placer:
         if self.week_used.get(week,0)+minutes>self.capacity.week_left(week):return False
         limit=self.config.max_daily_minutes
         if limit is not None and self.day_used.get(day,0)+minutes>limit:return False
+        if self.share and self.day_used.get(day,0)+minutes>self.share:return False
         if self.config.rest_days_per_week and not self.day_used.get(day):
             used=sum(1 for offset in range(7) if self.day_used.get(week+timedelta(days=offset)))
             if used>=7-self.config.rest_days_per_week:return False
@@ -327,8 +329,21 @@ class Placer:
             and shortest_session(self.config)<=minutes<=self.config.preferred_session_minutes
             and self.allowed(day,minutes) and self.capacity.fits(day,begin,begin+minutes)
             and self.clear(day,begin,minutes))
-    def place(self,minutes,only=None):
-        """Place all of a task, splitting further when shorter windows require it."""
+    def spread(self,minutes):
+        """Share `minutes` of new work, plus saved work, evenly across the days with study time."""
+        days=[day for day in self.days() if self.capacity.eligible(day)]
+        if not days:self.share=None;return
+        total=sum(self.day_used.get(day,0) for day in days)+minutes
+        self.share=max(self.config.preferred_session_minutes,-(-total//len(days)//STEP)*STEP)
+    def place_spread(self,minutes):
+        """Place whole sessions within each day's share, or anywhere the rules allow when the shares are full."""
+        schedule=self.place(minutes,fragment=False)
+        if schedule or not self.share:return schedule
+        share,self.share=self.share,None
+        try:return self.place(minutes)
+        finally:self.share=share
+    def place(self,minutes,only=None,fragment=True):
+        """Place all of a task, splitting further when shorter windows require it and `fragment` allows."""
         minimum=shortest_session(self.config)
         if minutes<minimum:return None
         taken=[]
@@ -343,6 +358,7 @@ class Placer:
         else:
             return [{'date':day.isoformat(),'start_time':to_clock(begin),'duration_minutes':size} for day,begin,size in sorted(taken)]
         rollback()
+        if not fragment:return None
         remaining=minutes;minimum=shortest_session(self.config)
         while remaining:
             found=None
